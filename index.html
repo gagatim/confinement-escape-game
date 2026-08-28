@@ -113,8 +113,18 @@
       <h2 style="font-size:16px;color:var(--cyan-bright)">3. 玩家人數</h2>
       <div class="row"><input type="range" id="playerCount" min="4" max="8" value="6"><span class="mono" id="valPlayers">6</span> 人（你 + AI）</div>
     </div>
-    <div style="margin-top:16px"><button class="btn" id="startBtn" disabled>開始遊戲</button>
+    <div style="margin-top:16px"><button class="btn" id="startBtn" disabled>下一步：選擇出生點</button>
       <span class="muted" id="startHint" style="margin-left:10px">請先選擇職業</span></div>
+  </div>
+
+  <!-- ============ SPAWN SELECT ============ -->
+  <div id="spawnSelect" class="hidden">
+    <div class="card">
+      <h2 style="font-size:16px;color:var(--cyan-bright)">秘密選擇紅色出生點</h2>
+      <p class="muted" style="font-size:12.5px">依照規則，玩家在第一輪開始前秘密選擇一個紅色出生點出發。其他玩家（AI）也各自秘密選擇中，你不會看到他們選了哪裡。</p>
+      <div class="prof-grid" id="spawnGrid"></div>
+      <div style="margin-top:14px"><button class="btn" id="confirmSpawnBtn" disabled>確認出生點，開始第一輪</button></div>
+    </div>
   </div>
 
   <!-- ============ GAME ============ -->
@@ -260,10 +270,14 @@ const ROOMS = {
   "B701":R("B701","停屍間",8,0,{special:"mortuary",draw:3,stock:{}})
 };
 const FLOOR_LABEL = {0:"2F",1:"1F",2:"B1",3:"B2",4:"B3",5:"B4",6:"B5",7:"B6",8:"B7"};
+// Re-derived room-by-room from img1.jpg using a shared 9-column grid per floor (see commit notes):
+// the atrium/chasm blocks left-cluster <-> right-cluster adjacency on every floor EXCEPT B1, which
+// has a visible footbridge (B105<->B106). Wide rooms (spanning multiple columns, e.g. B206/B501/B503)
+// connect to every room whose column they overlap, above and below.
 const ADJ = {
-  "201":["102"], "202":["104"],
-  "101":["102","B102"], "102":["101","201","B104"], "103":["104","B106"], "104":["103","202","B107"],
-  "B101":["B102","B201"], "B102":["B101","B103","101","B202"], "B103":["B102","B104","B203"],
+  "201":["102"], "202":["104","103"],
+  "101":["102","B102"], "102":["101","201","B104","B103"], "103":["104","B106","202"], "104":["103","202","B107"],
+  "B101":["B102","B201"], "B102":["B101","B103","101","B202"], "B103":["B102","B104","B203","102"],
   "B104":["B103","B105","102","B204"], "B105":["B104","B106","B205"], "B106":["B105","B107","103","B206"],
   "B107":["B106","104","B206"],
   "B201":["B101","B202","B301"], "B202":["B201","B203","B102","B302"], "B203":["B202","B204","B103","B303"],
@@ -271,16 +285,17 @@ const ADJ = {
   "B301":["B302","B201","B501"], "B302":["B301","B303","B202","B501"], "B303":["B302","B304","B203","B401"],
   "B304":["B303","B305","B204","B402"], "B305":["B304","B205","B402"],
   "B306":["B307","B206","B403"], "B307":["B306","B308","B206","B404"], "B308":["B307","B206","B405"],
-  "B501":["B301","B302","B401","B502"], "B401":["B501","B402","B303","B502"],
-  "B402":["B401","B403","B304","B305","B503"], "B403":["B402","B404","B306","B504"],
-  "B404":["B403","B405","B307","B504"], "B405":["B404","B308","B505"],
-  "B502":["B501","B503","B401","B601"], "B503":["B502","B504","B402","B602"],
-  "B504":["B503","B505","B403","B404","B603"], "B505":["B504","B405","B604"],
-  "B601":["B502","B602"], "B602":["B601","B603","B503","B701"], "B603":["B602","B604","B504"],
-  "B604":["B603","B505"], "B701":["B602"]
+  "B501":["B301","B302","B401","B502","B601"], "B401":["B501","B402","B303","B502"],
+  "B402":["B401","B304","B305","B503"], "B403":["B404","B306","B504"],
+  "B404":["B403","B405","B307","B504","B505"], "B405":["B404","B308","B505"],
+  "B502":["B501","B503","B401","B601"], "B503":["B502","B402","B602"],
+  "B504":["B505","B403","B404","B604"], "B505":["B504","B405","B604","B404"],
+  "B601":["B502","B602","B501"], "B602":["B601","B603","B503","B701"], "B603":["B602","B604"],
+  "B604":["B603","B505","B504"], "B701":["B602"]
 };
 const MEETING_ROOM = "B204"; // 會議室 hub: treated as the assembly room players return to between rounds
 const HELI_TARGETS = ["B101","101","B103","201","B105"];
+const SPAWN_ROOMS = ["103","B103","B303","B307","B402","B603"]; // 紅色出生點 marked on img1.jpg
 const AIRDROP_SCHEDULE = [null,["knife","knife"],["wine","wine"],["water","food"],["pistol"],["adrenaline"],["pill"]];
 
 function bfsPath(from,to,maxSteps){
@@ -460,13 +475,14 @@ function makePlayer(id,isAI,profId,stats,name){
     isAI, prof:profId,
     power:stats.power, speed:stats.speed, carry:stats.carry,
     hp:10, maxhp:10, alive:true, ghost:false, ghostDrainTotal:0,
-    room: MEETING_ROOM, stepsLeft:0,
+    room: MEETING_ROOM, spawnRoom:null, stepsLeft:0,
     inv:[], // array of item ids
     flags:{gamblerUses:0, gamblerWinUses:0, gamblerForceWin:false, gamblerBonusOps:0,
       scavengerUses:0, truckerUses:0, truckerDoubled:false, truckerDiscardedNonTrash:false,
       chemistUses:0, embalmerUses:0, hackerUses:0, hackerUsedRooms:[],
       tamerUses:0, geneUses:0, climberDietUsed:false, adrenalineRound:0, dietThisRound:false,
-      goldUsedThisRound:false, visited102:false, pendingHeli:false, remoteRoomOverride:null},
+      goldUsedThisRound:false, visited102:false, pendingHeli:false, remoteRoomOverride:null,
+      pendingItemUses:[]},
     pendingActions:{targetRoom:null, movementDone:false, roomActed:false},
     weaponWeightless: profId==="merc",
     weightlessGold: profId==="tycoon",
@@ -548,12 +564,53 @@ function startGame(){
       ROOMS["B601"].stock.wine=Math.max(0,(ROOMS["B601"].stock.wine||0)-2);
     }
   });
+  // AI players secretly pick a spawn now; human picks via the spawn-select screen next.
+  players.filter(p=>p.isAI).forEach(p=>{ p.spawnRoom=chooseAISpawn(p); });
   document.getElementById("setup").classList.add("hidden");
+  renderSpawnGrid();
+  document.getElementById("spawnSelect").classList.remove("hidden");
+}
+
+/* ---------- spawn point selection (紅色出生點) ---------- */
+function chooseAISpawn(p){
+  // weighted random: rooms closer to rooms with starting stock score higher, plus a flat random component
+  const weights=SPAWN_ROOMS.map(r=>{
+    let w=1.5;
+    Object.values(ROOMS).forEach(room=>{
+      if(Object.values(room.stock).some(v=>v>0)){
+        const d=bfsDist(r,room.id);
+        if(d!==Infinity) w+=3/(1+d);
+      }
+    });
+    return w;
+  });
+  const total=weights.reduce((a,b)=>a+b,0);
+  let roll=Math.random()*total;
+  for(let i=0;i<SPAWN_ROOMS.length;i++){ roll-=weights[i]; if(roll<=0) return SPAWN_ROOMS[i]; }
+  return SPAWN_ROOMS[SPAWN_ROOMS.length-1];
+}
+function renderSpawnGrid(){
+  const grid=document.getElementById("spawnGrid"); grid.innerHTML="";
+  SPAWN_ROOMS.forEach(r=>{
+    const div=document.createElement("div");
+    div.className="prof-card"; div.dataset.room=r;
+    div.innerHTML=`<h3>${r} ${ROOMS[r].name||""}</h3><div class="sk">紅色出生點</div>`;
+    div.addEventListener("click",()=>{
+      document.querySelectorAll("#spawnGrid .prof-card").forEach(c=>c.classList.remove("selected"));
+      div.classList.add("selected");
+      you().spawnRoom=r;
+      document.getElementById("confirmSpawnBtn").disabled=false;
+    });
+    grid.appendChild(div);
+  });
+}
+document.getElementById("confirmSpawnBtn").addEventListener("click",()=>{
+  document.getElementById("spawnSelect").classList.add("hidden");
   document.getElementById("game").classList.remove("hidden");
   logRound(1);
-  log("遊戲開始！你的職業：<b>"+PROFESSIONS[you.prof].name+"</b>。所有人於「會議室」集結。");
+  log("遊戲開始！你的職業：<b>"+PROFESSIONS[you().prof].name+"</b>。你秘密選擇了出生點「"+you().spawnRoom+" "+(ROOMS[you().spawnRoom].name||"")+"」。");
   beginRound();
-}
+});
 
 /* ===================== ROUND FLOW ===================== */
 function you(){ return STATE.players[0]; }
@@ -563,7 +620,7 @@ function playersInRoom(room,excludeGhosts){
 }
 function beginRound(){
   STATE.players.forEach(p=>{
-    p.room=MEETING_ROOM;
+    p.room = (STATE.round===1 && p.spawnRoom) ? p.spawnRoom : MEETING_ROOM;
     p.stepsLeft = p.speed;
     if(p.flags.adrenalineRound===STATE.round-1+1){} // no-op placeholder
     p.flags.goldUsedThisRound=false;
@@ -731,30 +788,41 @@ function openControlModal(p){
 }
 
 /* ===================== ITEM USE ===================== */
+// 附錄二: 水/糧/藥片/腎上腺素/酒 are all "結算階段公開使用" — clicking them during the action
+// phase only DECLARES intent; the actual effect is resolved publicly during settlement
+// (resolvePendingItemUses), same pattern as the rocket launcher's queued targeting.
+const SETTLEMENT_TIMED_ITEMS=["water","food","pill","adrenaline","wine"];
 function useItem(p,item){
+  if(!SETTLEMENT_TIMED_ITEMS.includes(item)) return; // passive-hold items are never "used" via click
   if(!removeItem(p,item)) return;
-  STATE.discardPile.push(item);
-  switch(item){
-    case "water": case "food": p.flags["consumed_"+item]=true; log(p.name+" 使用了"+ITEMS[item].name+"。"); break;
-    case "pill": p.hp=Math.min(p.maxhp,p.hp+2); log(p.name+" 服用藥片，恢復2點生命。","heal"); break;
-    case "adrenaline":
-      p.flags.adrenalineActive=true; log(p.name+" 注射腎上腺素：下輪速度變10，本輪不會致死。","heal"); break;
-    case "wine": {
-      const roll=Math.floor(Math.random()*6)+1;
-      let msg="酒(擲骰"+roll+"): ";
-      if(roll===1){ p.inv=[]; msg+="丟棄所有道具卡！"; }
-      else if(roll===2){ msg+="無事發生。"; }
-      else if(roll===3){ p.power++; msg+="武力永久+1。"; }
-      else if(roll===4){ p.speed++; msg+="速度永久+1。"; }
-      else if(roll===5){ p.carry++; msg+="負重永久+1。"; }
-      else { p.hp=Math.min(p.maxhp,p.hp+2); msg+="生命值+2。"; }
-      log(p.name+" "+msg,"heal");
-      break;
-    }
-    case "gasmask": p.inv.push("gasmask"); flashMsg("防毒面具需持有以生效（已放回背包）"); break;
-    default: break;
-  }
+  p.flags.pendingItemUses.push(item);
+  log(p.name+" 宣告使用「"+ITEMS[item].name+"」（結算階段公開生效）。");
   renderAll();
+}
+function resolvePendingItemUses(p){
+  const uses=p.flags.pendingItemUses||[];
+  uses.forEach(item=>{
+    STATE.discardPile.push(item);
+    switch(item){
+      case "water": case "food": p.flags["consumed_"+item]=true; log(p.name+" 結算：使用了"+ITEMS[item].name+"。"); break;
+      case "pill": p.hp=Math.min(p.maxhp,p.hp+2); log(p.name+" 結算：服用藥片，恢復2點生命。","heal"); break;
+      case "adrenaline":
+        p.flags.adrenalineActive=true; log(p.name+" 結算：注射腎上腺素，下輪速度變10，本輪不會致死。","heal"); break;
+      case "wine": {
+        const roll=Math.floor(Math.random()*6)+1;
+        let msg="結算：酒(擲骰"+roll+"): ";
+        if(roll===1){ p.inv=[]; msg+="丟棄所有道具卡！"; }
+        else if(roll===2){ msg+="無事發生。"; }
+        else if(roll===3){ p.power++; msg+="武力永久+1。"; }
+        else if(roll===4){ p.speed++; msg+="速度永久+1。"; }
+        else if(roll===5){ p.carry++; msg+="負重永久+1。"; }
+        else { p.hp=Math.min(p.maxhp,p.hp+2); msg+="生命值+2。"; }
+        log(p.name+" "+msg,"heal");
+        break;
+      }
+    }
+  });
+  p.flags.pendingItemUses=[];
 }
 function useGoldAtRoom(p){
   if(p.flags.goldUsedThisRound){ flashMsg("每回合限用1根金條"); return; }
@@ -966,11 +1034,11 @@ function runAIRound(){
     if(room.draw>0){ drawFromRoom(p,p.room,room.draw); }
     if(room.special==="gene"){ p.power++; p.speed++; p.carry++; }
     if(room.special==="respec"){ /* AI keeps stats */ }
-    // simple item usage: heal if low hp
-    if(p.hp<=4 && countItem(p,"pill")>0){ removeItem(p,"pill"); p.hp=Math.min(p.maxhp,p.hp+2); STATE.discardPile.push("pill"); }
+    // simple item usage: declare now, effect resolves at settlement (same as the human path)
+    if(p.hp<=4 && countItem(p,"pill")>0){ removeItem(p,"pill"); p.flags.pendingItemUses.push("pill"); }
     if(STATE.round>=2){
-      if(countItem(p,"water")>0){ removeItem(p,"water"); p.flags.consumed_water=true; STATE.discardPile.push("water"); }
-      if(countItem(p,"food")>0){ removeItem(p,"food"); p.flags.consumed_food=true; STATE.discardPile.push("food"); }
+      if(countItem(p,"water")>0){ removeItem(p,"water"); p.flags.pendingItemUses.push("water"); }
+      if(countItem(p,"food")>0){ removeItem(p,"food"); p.flags.pendingItemUses.push("food"); }
     }
     // poison vote: avoid own room, pick a random room not own
     const voteRoom=Object.keys(ROOMS).filter(r=>r!==p.room)[Math.floor(Math.random()*(Object.keys(ROOMS).length-1))];
@@ -1031,58 +1099,17 @@ function poisonDamageForRound(){
 }
 function settleRound(){
   STATE.phase="settlement";
-  resolvePoisonVote();
-  const baseDmg=poisonDamageForRound() + (STATE.poisonBoost?2:0);
+  log("<b>── 進入結算階段 ──</b>");
 
-  // laser
-  STATE.players.forEach(p=>{
-    if(p.alive && p.pendingLaser){ damagePlayer(p,1,"激光室"); p.pendingLaser=false; }
-  });
+  // 1) queued item-card effects (水/糧/藥片/腎上腺素/酒 — all "結算階段公開使用")
+  STATE.players.forEach(p=>{ if(p.alive) resolvePendingItemUses(p); });
 
-  // poison
-  STATE.players.forEach(p=>{
-    if(!p.alive || p.ghost) return;
-    if(STATE.poisoned.has(p.room)){
-      let dmg=baseDmg;
-      if(p.room===STATE.poisonReduceRoom) dmg=Math.max(0,dmg-2);
-      if(p.inv.includes("gasmask")) dmg=0;
-      if(p.room==="202") dmg=0;
-      if(p.prof==="chemist") dmg=Math.max(0,dmg-1);
-      damagePlayer(p,dmg,"毒氣");
-      if(dmg>0) log(p.name+" 在毒氣區受到 "+dmg+" 點傷害。","dmg");
-    }
-  });
-  STATE.poisonReduceRoom=null; STATE.poisonBoost=false;
-
-  // rocket
-  (STATE.rocketTargets||[]).forEach(r=>{
-    playersInRoom(r,true).forEach(p=>{
-      let dmg=4;
-      if(p.prof==="bomb") dmg=Math.max(0,dmg-1);
-      damagePlayer(p,dmg,"火箭筒");
-      log(p.name+" 被火箭筒轟炸於「"+r+"」，受到 "+dmg+" 點傷害。","dmg");
-    });
-  });
-  STATE.rocketTargets=[];
-
-  // hunger (round>=2)
-  if(STATE.round>=2){
-    STATE.players.forEach(p=>{
-      if(!p.alive || p.ghost) return;
-      if(p.flags.dietThisRound || p.room==="B204") return;
-      let missing=0;
-      if(!p.flags.consumed_water) missing++;
-      if(!p.flags.consumed_food) missing++;
-      if(missing>0){ damagePlayer(p,missing,"飢餓"); log(p.name+" 缺水/糧，受到 "+missing+" 點傷害。","dmg"); }
-    });
-  }
-
-  // surgery healing
+  // surgery healing (triggered earlier when the room was visited; resolves alongside items)
   STATE.players.forEach(p=>{
     if(p.flags.__surgeryHeal){ p.hp=Math.min(p.maxhp,p.hp+4); p.flags.__surgeryHeal=false; log(p.name+" 於手術室恢復4點生命。","heal"); }
   });
 
-  // combat resolution per room
+  // 2) combat resolution per room
   const roomGroups={};
   STATE.players.forEach(p=>{ if(p.alive && !p.ghost){ (roomGroups[p.room]=roomGroups[p.room]||[]).push(p); } });
   Object.entries(roomGroups).forEach(([r,group])=>{
@@ -1105,7 +1132,18 @@ function settleRound(){
     group.filter(p=>p.prof==="outsider" && group.length>=3).forEach(p=>{ p.hp=Math.min(p.maxhp,p.hp+1); });
   });
 
-  // trucker ram
+  // rocket launcher (declared during action phase, resolves as part of this round's violence)
+  (STATE.rocketTargets||[]).forEach(r=>{
+    playersInRoom(r,true).forEach(p=>{
+      let dmg=4;
+      if(p.prof==="bomb") dmg=Math.max(0,dmg-1);
+      damagePlayer(p,dmg,"火箭筒");
+      log(p.name+" 被火箭筒轟炸於「"+r+"」，受到 "+dmg+" 點傷害。","dmg");
+    });
+  });
+  STATE.rocketTargets=[];
+
+  // trucker ram (declared during action phase via 卸載加速, resolves here too)
   STATE.players.forEach(p=>{
     if(p.flags.truckerJustUsed){
       playersInRoom(p.room,true).filter(x=>x.id!==p.id).forEach(x=>{ damagePlayer(x,1,"貨車司機猛烈衝撞"); });
@@ -1114,7 +1152,41 @@ function settleRound(){
     }
   });
 
-  // ghost drains
+  // 3) poison
+  resolvePoisonVote();
+  const baseDmg=poisonDamageForRound() + (STATE.poisonBoost?2:0);
+  STATE.players.forEach(p=>{
+    if(!p.alive || p.ghost) return;
+    if(STATE.poisoned.has(p.room)){
+      let dmg=baseDmg;
+      if(p.room===STATE.poisonReduceRoom) dmg=Math.max(0,dmg-2);
+      if(p.inv.includes("gasmask")) dmg=0;
+      if(p.room==="202") dmg=0;
+      if(p.prof==="chemist") dmg=Math.max(0,dmg-1);
+      damagePlayer(p,dmg,"毒氣");
+      if(dmg>0) log(p.name+" 在毒氣區受到 "+dmg+" 點傷害。","dmg");
+    }
+  });
+  STATE.poisonReduceRoom=null; STATE.poisonBoost=false;
+
+  // 4) hunger (round>=2)
+  if(STATE.round>=2){
+    STATE.players.forEach(p=>{
+      if(!p.alive || p.ghost) return;
+      if(p.flags.dietThisRound || p.room==="B204") return;
+      let missing=0;
+      if(!p.flags.consumed_water) missing++;
+      if(!p.flags.consumed_food) missing++;
+      if(missing>0){ damagePlayer(p,missing,"飢餓"); log(p.name+" 缺水/糧，受到 "+missing+" 點傷害。","dmg"); }
+    });
+  }
+
+  // 5) laser room
+  STATE.players.forEach(p=>{
+    if(p.alive && p.pendingLaser){ damagePlayer(p,1,"激光室"); p.pendingLaser=false; }
+  });
+
+  // 6) ghost drains
   STATE.players.forEach(g=>{
     if(!g.ghost) return;
     const victims=playersInRoom(g.room,true).filter(x=>!x.ghost);
@@ -1238,6 +1310,11 @@ function renderAll(){
   invEl.querySelectorAll("[data-gold]").forEach(b=>b.onclick=()=>useGoldAtRoom(p));
   invEl.querySelectorAll("[data-rocket]").forEach(b=>b.onclick=()=>useRocket(p));
   invEl.querySelectorAll("[data-recycle]").forEach(b=>b.onclick=()=>useRecycleDevice(p));
+  if(p.flags.pendingItemUses && p.flags.pendingItemUses.length){
+    const pend=document.createElement("div"); pend.className="muted mono"; pend.style.fontSize="11px"; pend.style.marginTop="6px";
+    pend.textContent="本輪已宣告使用（結算階段生效）: "+p.flags.pendingItemUses.map(i=>ITEMS[i].name).join("、");
+    invEl.appendChild(pend);
+  }
 
   // skills
   const skEl=document.getElementById("skillList"); skEl.innerHTML="";
