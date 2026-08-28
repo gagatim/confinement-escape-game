@@ -1,0 +1,1324 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>禁閉逃殺</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Noto+Sans+TC:wght@400;500;700;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0a0e17; --bg-deep:#05070c; --panel:#121a2c; --panel-2:#0e1524; --line:#263252;
+    --cyan:#4cd6e0; --cyan-bright:#9df3fa; --violet:#7c6cf0; --amber:#e0a83c; --amber-bright:#ffce6b;
+    --toxic:#6ee06b; --toxic-bright:#a8ffa0; --ember:#e0524c; --ember-bright:#ff8a7a;
+    --ink:#e7edf7; --muted:#7c8bab; --gold:#e8c15a;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;min-height:100%;background:var(--bg-deep);color:var(--ink)}
+  body{font-family:"Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif;
+    background:radial-gradient(ellipse 900px 500px at 50% -8%,#1a2542 0%,transparent 60%),
+      radial-gradient(ellipse 700px 420px at 90% 100%,#1c1230 0%,transparent 55%), var(--bg-deep);
+    padding:16px; padding-bottom:60px;}
+  h1,h2,h3{font-family:"Orbitron","Noto Sans TC",sans-serif; margin:0}
+  .wrap{max-width:1180px;margin:0 auto}
+  .eyebrow{font-family:"JetBrains Mono",monospace;font-size:11px;letter-spacing:.22em;color:var(--violet)}
+  .hidden{display:none !important}
+  button{font-family:inherit;cursor:pointer}
+  .btn{background:linear-gradient(180deg,var(--cyan-bright),var(--cyan));border:none;border-radius:8px;
+    color:#04141a;font-weight:700;padding:10px 18px;font-size:14px;box-shadow:0 4px 0 #1f7b82;}
+  .btn:active{transform:translateY(3px);box-shadow:0 1px 0 #1f7b82}
+  .btn:disabled{background:linear-gradient(180deg,#445064,#313c4e);color:#8998b3;box-shadow:0 4px 0 #232b39;cursor:not-allowed}
+  .btn.small{padding:6px 12px;font-size:12px;border-radius:6px}
+  .btn.ghost{background:transparent;border:1px solid var(--line);color:var(--ink);box-shadow:none}
+  .btn.warn{background:linear-gradient(180deg,var(--ember-bright),var(--ember));box-shadow:0 4px 0 #7a201c;color:#280807}
+  .btn.gold{background:linear-gradient(180deg,#ffe8a0,var(--gold));box-shadow:0 4px 0 #8a6b1c;color:#2a1e02}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px}
+  .muted{color:var(--muted)}
+  .mono{font-family:"JetBrains Mono",monospace}
+
+  /* ---- setup ---- */
+  #setup .prof-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px;margin:14px 0}
+  .prof-card{border:2px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--panel-2);transition:.15s}
+  .prof-card.selected{border-color:var(--cyan-bright);box-shadow:0 0 0 1px var(--cyan-bright),0 0 18px rgba(76,214,224,.35)}
+  .prof-card h3{font-size:15px;color:var(--cyan-bright)}
+  .prof-card .sk{font-size:11.5px;color:var(--muted);margin-top:6px;line-height:1.5}
+  .prof-card .sk b{color:var(--amber-bright)}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .statbar{display:flex;align-items:center;gap:8px;margin:6px 0}
+  .statbar label{width:90px;font-size:13px}
+  .statbar input[type=range]{flex:1}
+  .pill{background:var(--panel-2);border:1px solid var(--line);border-radius:999px;padding:3px 10px;font-size:12px}
+
+  /* ---- game layout ---- */
+  #game{display:grid;grid-template-columns:300px 1fr 300px;gap:12px}
+  @media (max-width:1000px){#game{grid-template-columns:1fr}}
+  .panel-title{font-size:13px;letter-spacing:.08em;color:var(--violet);margin-bottom:8px;font-family:"Orbitron",sans-serif}
+  .hpbar-outer{background:#1a2333;border-radius:6px;height:10px;overflow:hidden;border:1px solid var(--line)}
+  .hpbar-inner{height:100%;background:linear-gradient(90deg,var(--ember),var(--toxic))}
+  .inv-item{display:flex;justify-content:space-between;align-items:center;background:var(--panel-2);border:1px solid var(--line);
+    border-radius:8px;padding:6px 10px;margin:4px 0;font-size:12.5px}
+  .inv-item .actions{display:flex;gap:4px}
+  .floor-row{display:flex;flex-wrap:wrap;gap:5px;margin:4px 0;align-items:center}
+  .floor-label{width:32px;font-size:10px;color:var(--muted);font-family:"JetBrains Mono",monospace}
+  .room-chip{border:1px solid var(--line);background:var(--panel-2);border-radius:6px;padding:5px 7px;font-size:11px;
+    cursor:pointer;position:relative;min-width:52px;text-align:center;line-height:1.3}
+  .room-chip small{display:block;font-size:9px;color:var(--muted)}
+  .room-chip.reachable{border-color:var(--cyan);box-shadow:0 0 8px rgba(76,214,224,.3)}
+  .room-chip.here{border-color:var(--amber-bright);background:#2a2410;box-shadow:0 0 10px rgba(255,206,107,.4)}
+  .room-chip.poison{border-color:var(--toxic);background:#122313;color:var(--toxic-bright)}
+  .room-chip.dead{opacity:.35;cursor:default}
+  .room-chip .occ{position:absolute;top:-7px;right:-7px;background:var(--ember);color:#fff;border-radius:999px;
+    font-size:9px;padding:1px 5px;font-family:"JetBrains Mono",monospace}
+  #log{height:230px;overflow-y:auto;font-size:12px;line-height:1.6;background:var(--panel-2);border:1px solid var(--line);
+    border-radius:8px;padding:8px}
+  #log div{border-bottom:1px dashed #1f2942;padding:3px 0}
+  #log .r{color:var(--violet);font-weight:700}
+  #log .dmg{color:var(--ember-bright)}
+  #log .heal{color:var(--toxic-bright)}
+  .skillbtn{width:100%;text-align:left;margin:4px 0;padding:8px 10px;border-radius:8px;border:1px solid var(--line);
+    background:var(--panel-2);color:var(--ink);font-size:12px}
+  .skillbtn:disabled{opacity:.4;cursor:not-allowed}
+  .skillbtn b{color:var(--amber-bright);display:block;font-size:12.5px}
+  .topbar{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+  .badge{font-family:"JetBrains Mono",monospace;font-size:12px;background:var(--panel-2);border:1px solid var(--line);
+    border-radius:6px;padding:4px 10px}
+  .rank-row{display:flex;justify-content:space-between;padding:8px 10px;border-bottom:1px solid var(--line);font-size:14px}
+  .rank-row:first-child{color:var(--gold);font-weight:900}
+  #modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px}
+  #modal{max-width:520px;width:100%;max-height:80vh;overflow-y:auto}
+  .tag{display:inline-block;font-size:10px;padding:1px 6px;border-radius:4px;background:var(--panel-2);border:1px solid var(--line);margin-left:4px}
+</style>
+
+<div class="wrap">
+  <div class="topbar">
+    <div>
+      <span class="eyebrow">CONFINEMENT ESCAPE · 禁閉逃殺</span>
+      <h1 style="font-size:22px">禁閉逃殺</h1>
+    </div>
+    <div id="topStatus" class="row"></div>
+  </div>
+
+  <!-- ============ SETUP ============ -->
+  <div id="setup">
+    <div class="card">
+      <h2 style="font-size:16px;color:var(--cyan-bright)">1. 選擇職業</h2>
+      <div class="prof-grid" id="profGrid"></div>
+    </div>
+    <div class="card" style="margin-top:12px">
+      <h2 style="font-size:16px;color:var(--cyan-bright)">2. 基因點數分配（<span id="ptsTotal">10</span> 點）</h2>
+      <div class="statbar"><label>武力值</label><input type="range" id="allocPower" min="0" max="10" value="4"><span class="mono" id="valPower">4</span></div>
+      <div class="statbar"><label>移動步數</label><input type="range" id="allocSpeed" min="0" max="10" value="3"><span class="mono" id="valSpeed">3</span></div>
+      <div class="statbar"><label>背包空間</label><input type="range" id="allocCarry" min="0" max="10" value="3"><span class="mono" id="valCarry">3</span></div>
+      <div class="muted mono" id="allocRemain" style="margin-top:6px">剩餘 0 點</div>
+    </div>
+    <div class="card" style="margin-top:12px">
+      <h2 style="font-size:16px;color:var(--cyan-bright)">3. 玩家人數</h2>
+      <div class="row"><input type="range" id="playerCount" min="4" max="8" value="6"><span class="mono" id="valPlayers">6</span> 人（你 + AI）</div>
+    </div>
+    <div style="margin-top:16px"><button class="btn" id="startBtn" disabled>開始遊戲</button>
+      <span class="muted" id="startHint" style="margin-left:10px">請先選擇職業</span></div>
+  </div>
+
+  <!-- ============ GAME ============ -->
+  <div id="game" class="hidden">
+    <div>
+      <div class="card">
+        <div class="panel-title">你的狀態</div>
+        <div id="youName" style="font-size:15px;color:var(--cyan-bright);font-weight:700"></div>
+        <div class="muted mono" id="youProf" style="font-size:11px;margin-bottom:6px"></div>
+        <div class="hpbar-outer"><div class="hpbar-inner" id="hpBar" style="width:100%"></div></div>
+        <div class="mono" id="hpText" style="font-size:12px;margin:4px 0 8px">HP 10/10</div>
+        <div class="row mono" style="font-size:11px;gap:14px">
+          <span>武力 <b id="stPower"></b></span><span>速度 <b id="stSpeed"></b></span><span>負重 <b id="stCarry"></b></span>
+        </div>
+        <div class="muted mono" style="font-size:11px;margin-top:6px">所在: <span id="curRoom"></span> ｜ 剩餘步數 <span id="stepsLeft"></span></div>
+      </div>
+      <div class="card" style="margin-top:10px">
+        <div class="panel-title">背包 (<span id="carryUsed">0</span>/<span id="carryCap">0</span>)</div>
+        <div id="inventory"></div>
+      </div>
+      <div class="card" style="margin-top:10px">
+        <div class="panel-title">職業技能</div>
+        <div id="skillList"></div>
+      </div>
+    </div>
+
+    <div>
+      <div class="card">
+        <div class="row" style="justify-content:space-between">
+          <div class="panel-title" style="margin-bottom:0">地圖 － 第 <span id="roundNo">1</span>/6 輪 ｜ <span id="phaseName">佈局階段</span></div>
+          <div class="row">
+            <button class="btn small ghost" id="voteBtn">投票毒區</button>
+          </div>
+        </div>
+        <div id="mapArea" style="margin-top:8px"></div>
+      </div>
+      <div class="card" style="margin-top:10px">
+        <div class="panel-title">房間動作</div>
+        <div id="roomActions" class="row"></div>
+      </div>
+      <div class="card" style="margin-top:10px">
+        <div class="row" style="justify-content:space-between">
+          <div class="panel-title" style="margin-bottom:0">同房間玩家</div>
+        </div>
+        <div id="hereList" class="mono muted" style="font-size:12px"></div>
+        <div class="row" style="margin-top:8px">
+          <button class="btn small ghost" id="tradeBtn">交易</button>
+        </div>
+      </div>
+      <div style="margin-top:10px" class="row">
+        <button class="btn" id="endTurnBtn">結束本回合行動</button>
+      </div>
+    </div>
+
+    <div>
+      <div class="card">
+        <div class="panel-title">事件紀錄</div>
+        <div id="log"></div>
+      </div>
+      <div class="card" style="margin-top:10px">
+        <div class="panel-title">全體玩家</div>
+        <div id="allPlayers" class="mono" style="font-size:12px"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ END ============ -->
+  <div id="endScreen" class="hidden card" style="margin-top:14px">
+    <h2 style="color:var(--gold);font-family:Orbitron">六輪結束 － 最終排名</h2>
+    <div id="rankList"></div>
+    <button class="btn" id="replayBtn" style="margin-top:12px">重新開始</button>
+  </div>
+</div>
+
+<div id="modal-bg" class="hidden"><div class="card" id="modal"></div></div>
+
+<script>
+"use strict";
+/* ===================== DATA: ITEMS ===================== */
+const ITEMS = {
+  water:{name:"水",weapon:false,gun:false},
+  food:{name:"糧食",weapon:false,gun:false},
+  pill:{name:"藥片",weapon:false,gun:false},
+  adrenaline:{name:"腎上腺素",weapon:false,gun:false},
+  wine:{name:"酒",weapon:false,gun:false},
+  gold:{name:"金條",weapon:false,gun:false},
+  knife:{name:"刀",weapon:true,gun:false,power:2},
+  pistol:{name:"手槍",weapon:true,gun:true,power:2},
+  shotgun:{name:"霰彈槍",weapon:true,gun:true,power:4},
+  rope:{name:"繩索",weapon:false,gun:false},
+  gasmask:{name:"防毒面具",weapon:false,gun:false},
+  rocket:{name:"火箭筒",weapon:false,gun:false},
+  dimpocket:{name:"次元口袋",weapon:false,gun:false},
+  recycledevice:{name:"循環回收裝置",weapon:false,gun:false},
+  trash:{name:"垃圾",weapon:false,gun:false}
+};
+
+/* ===================== DATA: ROOMS ===================== */
+// floor: display row (0=top/201·202 ... 8=B701). order: left-right position within that row for rendering.
+function R(id,name,floor,order,opts){ return Object.assign({id,name,floor,order,neighbors:[],draw:0,stock:{}},opts||{}); }
+const ROOMS = {
+  "201":R("201","基因庫",0,0,{special:"gene"}),
+  "202":R("202","停機坪",0,1,{special:"helipad"}),
+  "101":R("101","水塔",1,0,{draw:4,stock:{water:10}}),
+  "102":R("102","激光室",1,1,{special:"laser"}),
+  "103":R("103","",1,2,{}),
+  "104":R("104","",1,3,{}),
+  "B101":R("B101","控制室",2,0,{special:"control"}),
+  "B102":R("B102","",2,1,{}),
+  "B103":R("B103","",2,2,{}),
+  "B104":R("B104","",2,3,{}),
+  "B105":R("B105","回收站",2,4,{special:"slide"}),
+  "B106":R("B106","",2,5,{}),
+  "B107":R("B107","武器庫",2,6,{draw:2,stock:{knife:5,pistol:2,shotgun:1}}),
+  "B201":R("B201","",3,0,{}),
+  "B202":R("B202","手術室",3,1,{special:"surgery"}),
+  "B203":R("B203","",3,2,{}),
+  "B204":R("B204","餐廳",3,3,{special:"canteen"}),
+  "B205":R("B205","",3,4,{}),
+  "B206":R("B206","金庫",3,5,{draw:2,stock:{gold:4}}),
+  "B301":R("B301","藥房",4,0,{draw:2,stock:{pill:3,adrenaline:3}}),
+  "B302":R("B302","",4,1,{}),
+  "B303":R("B303","",4,2,{}),
+  "B304":R("B304","操作室",4,3,{special:"respec"}),
+  "B305":R("B305","",4,4,{}),
+  "B306":R("B306","",4,5,{}),
+  "B307":R("B307","",4,6,{}),
+  "B308":R("B308","",4,7,{}),
+  "B501":R("B501","大倉庫",5,0,{draw:3,stock:{water:5,food:5,knife:3,wine:2,pill:2,adrenaline:2,pistol:1,gold:1,shotgun:1},poisonRequires:["B401","B502"]}),
+  "B401":R("B401","",5,1,{}),
+  "B402":R("B402","",5,2,{}),
+  "B403":R("B403","傳送室",5,3,{special:"teleport"}),
+  "B404":R("B404","",5,4,{}),
+  "B405":R("B405","",5,5,{}),
+  "B502":R("B502","",6,1,{}),
+  "B503":R("B503","垃圾場",6,2,{draw:5,stock:{trash:20,rope:1,gasmask:1,rocket:1,dimpocket:1,recycledevice:1},noGold:true,dumpCap:2}),
+  "B504":R("B504","",6,4,{}),
+  "B505":R("B505","糧倉",6,5,{draw:4,stock:{food:10}}),
+  "B601":R("B601","酒窖",7,0,{draw:2,stock:{wine:6}}),
+  "B602":R("B602","",7,1,{}),
+  "B603":R("B603","",7,2,{}),
+  "B604":R("B604","",7,3,{}),
+  "B701":R("B701","停屍間",8,0,{special:"mortuary",draw:3,stock:{}})
+};
+const FLOOR_LABEL = {0:"2F",1:"1F",2:"B1",3:"B2",4:"B3",5:"B4",6:"B5",7:"B6",8:"B7"};
+const ADJ = {
+  "201":["102"], "202":["104"],
+  "101":["102","B102"], "102":["101","201","B104"], "103":["104","B106"], "104":["103","202","B107"],
+  "B101":["B102","B201"], "B102":["B101","B103","101","B202"], "B103":["B102","B104","B203"],
+  "B104":["B103","B105","102","B204"], "B105":["B104","B106","B205"], "B106":["B105","B107","103","B206"],
+  "B107":["B106","104","B206"],
+  "B201":["B101","B202","B301"], "B202":["B201","B203","B102","B302"], "B203":["B202","B204","B103","B303"],
+  "B204":["B203","B205","B104","B304"], "B205":["B204","B105","B305"], "B206":["B106","B107","B306","B307","B308"],
+  "B301":["B302","B201","B501"], "B302":["B301","B303","B202","B501"], "B303":["B302","B304","B203","B401"],
+  "B304":["B303","B305","B204","B402"], "B305":["B304","B205","B402"],
+  "B306":["B307","B206","B403"], "B307":["B306","B308","B206","B404"], "B308":["B307","B206","B405"],
+  "B501":["B301","B302","B401","B502"], "B401":["B501","B402","B303","B502"],
+  "B402":["B401","B403","B304","B305","B503"], "B403":["B402","B404","B306","B504"],
+  "B404":["B403","B405","B307","B504"], "B405":["B404","B308","B505"],
+  "B502":["B501","B503","B401","B601"], "B503":["B502","B504","B402","B602"],
+  "B504":["B503","B505","B403","B404","B603"], "B505":["B504","B405","B604"],
+  "B601":["B502","B602"], "B602":["B601","B603","B503","B701"], "B603":["B602","B604","B504"],
+  "B604":["B603","B505"], "B701":["B602"]
+};
+const MEETING_ROOM = "B204"; // 會議室 hub: treated as the assembly room players return to between rounds
+const HELI_TARGETS = ["B101","101","B103","201","B105"];
+const AIRDROP_SCHEDULE = [null,["knife","knife"],["wine","wine"],["water","food"],["pistol"],["adrenaline"],["pill"]];
+
+function bfsPath(from,to,maxSteps){
+  if(from===to) return [from];
+  let q=[[from]], seen=new Set([from]);
+  while(q.length){
+    const path=q.shift();
+    const node=path[path.length-1];
+    if(path.length-1>=maxSteps) continue;
+    for(const n of (ADJ[node]||[])){
+      if(seen.has(n)) continue;
+      seen.add(n);
+      const np=[...path,n];
+      if(n===to) return np;
+      q.push(np);
+    }
+  }
+  return null;
+}
+function bfsDist(from,to){
+  if(from===to) return 0;
+  let q=[[from,0]], seen=new Set([from]);
+  while(q.length){
+    const [node,d]=q.shift();
+    for(const n of (ADJ[node]||[])){
+      if(seen.has(n)) continue;
+      seen.add(n);
+      if(n===to) return d+1;
+      q.push([n,d+1]);
+    }
+  }
+  return Infinity;
+}
+function reachableRooms(from,maxSteps){
+  let out={[from]:0}, q=[[from,0]];
+  while(q.length){
+    const [node,d]=q.shift();
+    if(d>=maxSteps) continue;
+    for(const n of (ADJ[node]||[])){
+      if(out[n]===undefined || out[n]>d+1){ out[n]=d+1; q.push([n,d+1]); }
+    }
+  }
+  return out;
+}
+
+/* ===================== DATA: PROFESSIONS ===================== */
+const PROFESSIONS = {
+  fatty:{name:"肥宅", skills:[
+    {name:"肥肉坦克", desc:"受到近戰傷害、槍械傷害時，最終傷害 -2。", passive:true},
+    {name:"肥宅味", desc:"所有玩家會得知你目前所在的房間。", passive:true}
+  ]},
+  bomb:{name:"防爆小組", skills:[
+    {name:"防爆盾牌", desc:"永久抵擋槍械傷害 3 點。", passive:true},
+    {name:"爆破緩衝", desc:"火箭筒傷害 -1。", passive:true}
+  ]},
+  gambler:{name:"賭徒", skills:[
+    {name:"好賭成性", desc:"技能使用階段可使用，擲骰：1-2失敗(本輪無法房間操作)；3-4無事；5-6成功(本輪房間可操作兩次)。整局限用3次。", uses:3},
+    {name:"逢賭必贏", desc:"整局限用1次，使用時【好賭成性】必定成功。", uses:1}
+  ]},
+  scavenger:{name:"拾荒者", skills:[
+    {name:"拾荒嗅覺", desc:"你的垃圾不佔負重，每次在房間抽取物品有50%機率額外獲得1個垃圾（由垃圾場扣除）。", passive:true},
+    {name:"變廢為寶", desc:"行動階段可使用，將背包內的垃圾隨機轉為水或糧，每局限用2次。", uses:2}
+  ]},
+  trucker:{name:"貨車司機", skills:[
+    {name:"卸載加速", desc:"移動階段可使用，丟棄1張非垃圾道具卡，本輪速度變為兩倍(上限10)。整局限用3次。", uses:3},
+    {name:"猛烈衝撞", desc:"（被動）使用卸載加速後強制觸發：抵達房間時，房內其他存活玩家各扣1點生命，房間強制公開。整局限用3次。", passive:true}
+  ]},
+  bartender:{name:"飲品師", skills:[
+    {name:"特調精釀", desc:"你的所有果汁(酒)不佔負重，酒窖的2張果汁為你初始所有。使用前可剔除三種效果後再隨機抽取。", passive:true},
+    {name:"舉杯共飲", desc:"道具使用階段，你的果汁可對其他存活玩家使用。", passive:true}
+  ]},
+  chemist:{name:"化學家", skills:[
+    {name:"毒性調和", desc:"移動階段可使用：指定1個已充滿毒氣房間本輪毒氣傷害-2(最低0)；或本輪毒氣樓層傷害+2。整局限用2次。", uses:2},
+    {name:"抗毒", desc:"（永久被動）進入毒氣房間受到的毒氣傷害永久-1。", passive:true}
+  ]},
+  embalmer:{name:"入殮師", skills:[
+    {name:"蠱耗感應", desc:"每當有玩家變成暗影，你的負重永久+1。道具放入停屍間前，你可隨機獲得1張，每輪最多1張。", passive:true},
+    {name:"亡者遺贈", desc:"整局限用1次，道具放入停屍間前可放棄隨機獲得，改為自行選擇一張。", uses:1}
+  ]},
+  hacker:{name:"黑客", skills:[
+    {name:"系統監控", desc:"（永久被動）可查看任意1個房間目前人數與各玩家武力值(無法得知是否持槍)。", passive:true},
+    {name:"遠端操控", desc:"移動階段可使用，放棄本回合房間功能，改為在任意位置使用基因室/總控室/操作室其一。整局限用2次，不可重複房間。", uses:2}
+  ]},
+  tycoon:{name:"富豪", skills:[
+    {name:"腰纏萬貫", desc:"你的金條不佔負重。金庫2根+大倉庫1根金條，遊戲開始即歸你所有。每回合限用1根金條。", passive:true}
+  ]},
+  shade:{name:"暗影使者", skills:[
+    {name:"暗影共鳴", desc:"免疫暗影吸血。存活時，每當其他暗影吸血，你恢復1點生命。", passive:true},
+    {name:"暗影親和", desc:"（被動）成為暗影時，移動速度永久+2。", passive:true}
+  ]},
+  tamer:{name:"馴獸師", skills:[
+    {name:"巡迴獵犬", desc:"武力和負重永久+1。移動階段可使用，派遣獵犬至距離5以內有庫存的房間隨機抽1張道具(不可超過負重)。整局限用4次。", uses:4}
+  ]},
+  merc:{name:"雇傭兵", skills:[
+    {name:"武器精通", desc:"你的武器(刀/手槍/霰彈槍)不佔負重。刀與手槍效果相同(武力數值不變)。", passive:true}
+  ]},
+  geneFreak:{name:"基因怪人", skills:[
+    {name:"先天優勢", desc:"初始可分配基因點數為12點，武力上限為5點。", passive:true},
+    {name:"基因重組", desc:"技能使用階段可使用，可重新分配點數，整局限用2次。", uses:2}
+  ]},
+  outsider:{name:"邊緣人", skills:[
+    {name:"邊緣存在感", desc:"（被動）所在房間存活玩家3人以上時：你不參與戰鬥結算，但火箭筒傷害仍有效。你自動恢復1點生命值(固定)。", passive:true}
+  ]},
+  climber:{name:"攀岩者", skills:[
+    {name:"垂直攀爬", desc:"發動技能支付1點生命值，該回合可直接上下移動樓層，移動仍需消耗步數。", uses:99},
+    {name:"節食", desc:"整局限用1次，該回合不需支付水/糧。", uses:1}
+  ]}
+};
+
+/* ===================== GAME STATE ===================== */
+let STATE=null;
+
+function log(msg,cls){
+  const el=document.getElementById("log");
+  const d=document.createElement("div");
+  if(cls) d.className=cls;
+  d.innerHTML=msg;
+  el.appendChild(d);
+  el.scrollTop=el.scrollHeight;
+}
+function logRound(n){ log(`<span class="r">── 第 ${n} 輪 ──</span>`); }
+
+/* ---------- setup screen wiring ---------- */
+const profGrid=document.getElementById("profGrid");
+let selectedProf=null;
+Object.entries(PROFESSIONS).forEach(([id,p])=>{
+  const div=document.createElement("div");
+  div.className="prof-card"; div.dataset.id=id;
+  div.innerHTML=`<h3>${p.name}</h3>`+p.skills.map(s=>`<div class="sk"><b>${s.name}</b>｜${s.desc}</div>`).join("");
+  div.addEventListener("click",()=>{
+    document.querySelectorAll(".prof-card").forEach(c=>c.classList.remove("selected"));
+    div.classList.add("selected"); selectedProf=id;
+    document.getElementById("startHint").textContent="";
+    updateAllocMax();
+    validateStart();
+  });
+  profGrid.appendChild(div);
+});
+function updateAllocMax(){
+  const max = selectedProf==="geneFreak" ? 12 : 10;
+  document.getElementById("ptsTotal").textContent=max;
+  ["allocPower","allocSpeed","allocCarry"].forEach(id=>document.getElementById(id).max=max);
+  clampAlloc();
+}
+function clampAlloc(){
+  const max = selectedProf==="geneFreak" ? 12 : 10;
+  const powCap = selectedProf==="geneFreak" ? 5 : 99;
+  let p=+document.getElementById("allocPower").value, s=+document.getElementById("allocSpeed").value, c=+document.getElementById("allocCarry").value;
+  if(p>powCap){ p=powCap; document.getElementById("allocPower").value=p; }
+  document.getElementById("valPower").textContent=p;
+  document.getElementById("valSpeed").textContent=s;
+  document.getElementById("valCarry").textContent=c;
+  const remain=max-p-s-c;
+  document.getElementById("allocRemain").textContent="剩餘 "+remain+" 點"+(remain<0?"（超出！請調整）":"");
+  validateStart();
+}
+["allocPower","allocSpeed","allocCarry"].forEach(id=>document.getElementById(id).addEventListener("input",clampAlloc));
+document.getElementById("playerCount").addEventListener("input",e=>{
+  document.getElementById("valPlayers").textContent=e.target.value;
+});
+function validateStart(){
+  const max = selectedProf==="geneFreak" ? 12 : 10;
+  let p=+document.getElementById("allocPower").value, s=+document.getElementById("allocSpeed").value, c=+document.getElementById("allocCarry").value;
+  const ok = selectedProf && (p+s+c===max);
+  document.getElementById("startBtn").disabled=!ok;
+  document.getElementById("startHint").textContent = !selectedProf ? "請先選擇職業" : (p+s+c!==max ? "請把點數剛好分配完" : "");
+}
+document.getElementById("startBtn").addEventListener("click",startGame);
+document.getElementById("replayBtn").addEventListener("click",()=>location.reload());
+
+/* ---------- player factory ---------- */
+const AI_NAMES=["阿凱","小美","老周","阿德","阿珍","小胖","阿宏","阿玲"];
+function makePlayer(id,isAI,profId,stats,name){
+  const prof=PROFESSIONS[profId];
+  const p={
+    id, name: name || (isAI? AI_NAMES[id%AI_NAMES.length]+"#"+id : "你"),
+    isAI, prof:profId,
+    power:stats.power, speed:stats.speed, carry:stats.carry,
+    hp:10, maxhp:10, alive:true, ghost:false, ghostDrainTotal:0,
+    room: MEETING_ROOM, stepsLeft:0,
+    inv:[], // array of item ids
+    flags:{gamblerUses:0, gamblerWinUses:0, gamblerForceWin:false, gamblerBonusOps:0,
+      scavengerUses:0, truckerUses:0, truckerDoubled:false, truckerDiscardedNonTrash:false,
+      chemistUses:0, embalmerUses:0, hackerUses:0, hackerUsedRooms:[],
+      tamerUses:0, geneUses:0, climberDietUsed:false, adrenalineRound:0, dietThisRound:false,
+      goldUsedThisRound:false, visited102:false, pendingHeli:false, remoteRoomOverride:null},
+    pendingActions:{targetRoom:null, movementDone:false, roomActed:false},
+    weaponWeightless: profId==="merc",
+    weightlessGold: profId==="tycoon",
+    weightlessTrash: profId==="scavenger",
+    weightlessWine: profId==="bartender"
+  };
+  return p;
+}
+function effectiveCarryCap(p){
+  return p.carry + (p.inv.includes("dimpocket") ? 9999 : 0);
+}
+function usedCarry(p){
+  let n=0;
+  for(const it of p.inv){
+    if(it==="trash" && p.weightlessTrash) continue;
+    if(it==="gold" && p.weightlessGold) continue;
+    if(it==="wine" && p.weightlessWine) continue;
+    if(ITEMS[it].weapon && p.weaponWeightless) continue;
+    n++;
+  }
+  return n;
+}
+function carryRoom(p){ return effectiveCarryCap(p)-usedCarry(p); }
+function addItem(p,item,qty){
+  qty=qty||1;
+  for(let i=0;i<qty;i++){
+    if(item!=="__forced" && carryRoom(p)<=0 && effectiveCarryCap(p)<9000) return false;
+    p.inv.push(item);
+  }
+  return true;
+}
+function removeItem(p,item){
+  const i=p.inv.indexOf(item);
+  if(i>=0){ p.inv.splice(i,1); return true; }
+  return false;
+}
+function countItem(p,item){ return p.inv.filter(x=>x===item).length; }
+function hasGun(p){ return p.inv.some(x=>ITEMS[x].gun); }
+function combatPower(p){
+  let base=p.power;
+  for(const it of p.inv){ if(ITEMS[it].weapon) base+=ITEMS[it].power; }
+  if(p.prof==="tamer") ; // already added at init to base power
+  return base;
+}
+
+/* ===================== GAME SETUP ===================== */
+function startGame(){
+  const n=+document.getElementById("playerCount").value;
+  const stats={power:+document.getElementById("allocPower").value, speed:+document.getElementById("allocSpeed").value, carry:+document.getElementById("allocCarry").value};
+  const you=makePlayer(0,false,selectedProf,stats,"你");
+  const usedProfs=new Set([selectedProf]);
+  const profIds=Object.keys(PROFESSIONS);
+  const players=[you];
+  for(let i=1;i<n;i++){
+    let pool=profIds.filter(x=>!usedProfs.has(x));
+    if(pool.length===0){ pool=profIds; usedProfs.clear(); }
+    const pid=pool[Math.floor(Math.random()*pool.length)];
+    usedProfs.add(pid);
+    const pw=Math.floor(Math.random()*5)+2, sp=Math.floor(Math.random()*4)+1;
+    const cap = pid==="geneFreak"?12:10;
+    let power=Math.min(pw, pid==="geneFreak"?5:99);
+    let speed=sp;
+    let carry=Math.max(1,cap-power-speed);
+    if(power+speed+carry>cap){ carry=Math.max(1,cap-power-speed); }
+    players.push(makePlayer(i,true,pid,{power,speed,carry}));
+  }
+  STATE={round:1, phase:"positioning", players, poisoned:new Set(), voteCounts:{}, discardPile:[], gameOver:false};
+  // profession init effects
+  players.forEach(p=>{
+    if(p.prof==="tamer"){ p.power+=1; p.carry+=1; }
+    if(p.prof==="tycoon"){
+      addItem(p,"__forced"); p.inv.push("gold"); p.inv.push("gold"); p.inv.push("gold");
+      p.inv=p.inv.filter(x=>x!=="__forced");
+      ROOMS["B206"].stock.gold=Math.max(0,(ROOMS["B206"].stock.gold||0)-2);
+      ROOMS["B501"].stock.gold=Math.max(0,(ROOMS["B501"].stock.gold||0)-1);
+    }
+    if(p.prof==="bartender"){
+      p.inv.push("wine"); p.inv.push("wine");
+      ROOMS["B601"].stock.wine=Math.max(0,(ROOMS["B601"].stock.wine||0)-2);
+    }
+  });
+  document.getElementById("setup").classList.add("hidden");
+  document.getElementById("game").classList.remove("hidden");
+  logRound(1);
+  log("遊戲開始！你的職業：<b>"+PROFESSIONS[you.prof].name+"</b>。所有人於「會議室」集結。");
+  beginRound();
+}
+
+/* ===================== ROUND FLOW ===================== */
+function you(){ return STATE.players[0]; }
+function alivePlayers(){ return STATE.players.filter(p=>p.alive); }
+function playersInRoom(room,excludeGhosts){
+  return STATE.players.filter(p=>p.room===room && p.alive && (!excludeGhosts || !p.ghost));
+}
+function beginRound(){
+  STATE.players.forEach(p=>{
+    p.room=MEETING_ROOM;
+    p.stepsLeft = p.speed;
+    if(p.flags.adrenalineRound===STATE.round-1+1){} // no-op placeholder
+    p.flags.goldUsedThisRound=false;
+    p.flags.dietThisRound=false;
+    p.pendingActions={targetRoom:null, movementDone:false, roomActed:false};
+  });
+  STATE.voteCounts={};
+  renderAll();
+}
+document.getElementById("endTurnBtn").addEventListener("click",()=>{
+  runAIRound();
+  settleRound();
+});
+
+/* ---------- movement ---------- */
+function tryMove(p,target){
+  if(p.ghost){ p.room=target; return true; } // ghosts move freely, no step cost enforced strictly
+  const dist=bfsDist(p.room,target);
+  let steps = p.stepsLeft;
+  if(dist===Infinity || dist>steps) return false;
+  p.room=target; p.stepsLeft-=dist;
+  return true;
+}
+function playerEffectiveSpeed(p){
+  let s=p.speed;
+  if(p.flags.truckerDoubled) s=Math.min(10,s*2);
+  return s;
+}
+
+/* ---------- room chip click (human) ---------- */
+function onRoomClick(roomId){
+  const p=you();
+  if(STATE.phase!=="positioning" || STATE.gameOver) return;
+  const dist=bfsDist(p.room,roomId);
+  if(dist===Infinity || dist>p.stepsLeft){ flashMsg("步數不足或無法到達"); return; }
+  p.room=roomId; p.stepsLeft-=dist;
+  if(roomId==="102"){ applyLaser(p); }
+  renderAll();
+}
+function flashMsg(m){ log(`<i class="muted">${m}</i>`); }
+
+/* ===================== ROOM ACTIONS (human) ===================== */
+function drawFromRoom(p,roomId,maxDraw){
+  const room=ROOMS[roomId];
+  let drawn=0;
+  maxDraw = maxDraw!==undefined?maxDraw:room.draw;
+  let gained=[];
+  const isDump=roomId==="B503";
+  let nonTrashGained=0;
+  for(let i=0;i<maxDraw;i++){
+    const stockKeys=Object.keys(room.stock).filter(k=>room.stock[k]>0 && !(isDump && k==="gold"));
+    if(stockKeys.length===0) break;
+    if(isDump && nonTrashGained>=room.dumpCap && stockKeys.some(k=>k!=="trash") && stockKeys.length===1 && stockKeys[0]!=="trash") break;
+    const pick=stockKeys[Math.floor(Math.random()*stockKeys.length)];
+    if(isDump && pick!=="trash" && nonTrashGained>=room.dumpCap) continue;
+    if(carryRoom(p)<=0 && !(pick==="trash"&&p.weightlessTrash) && !(pick==="gold"&&p.weightlessGold) && !(pick==="wine"&&p.weightlessWine) && !(ITEMS[pick].weapon&&p.weaponWeightless)) break;
+    room.stock[pick]--; p.inv.push(pick); gained.push(pick); drawn++;
+    if(pick!=="trash") nonTrashGained++;
+    // 拾荒嗅覺: 50% chance extra trash from junkyard stock (deducted from B503), doesn't cost carry
+    if(p.prof==="scavenger" && Math.random()<0.5 && ROOMS["B503"].stock.trash>0){
+      ROOMS["B503"].stock.trash--; p.inv.push("trash"); gained.push("trash(拾荒嗅覺)");
+    }
+  }
+  return gained;
+}
+function doRoomAction(){
+  const p=you();
+  const room=ROOMS[p.room];
+  if(room.draw>0){
+    let maxDraw=room.draw;
+    if(p.flags.gamblerBonusOps>0){ maxDraw*=2; p.flags.gamblerBonusOps--; }
+    const gained=drawFromRoom(p,p.room,maxDraw);
+    log("在「"+(room.name||p.room)+"」搜索到: "+(gained.length? gained.map(g=>ITEMS[g]?ITEMS[g].name:g).join("、"):"（無收穫）"));
+  }
+  if(room.special) doSpecialRoom(p,room);
+  renderAll();
+}
+function doSpecialRoom(p,room){
+  switch(room.special){
+    case "gene":
+      p.power++; p.speed++; p.carry++;
+      log(p.name+" 於基因庫：三項屬性各永久 +1。");
+      break;
+    case "surgery": {
+      const here=playersInRoom(p.room,true);
+      if(here.length===2){ log(p.room+" 手術室：2人在場，結算階段將各恢復4點生命。"); here.forEach(pl=>pl.flags.__surgeryHeal=true); }
+      else if(here.length>=3){ log(p.room+" 手術室：3人以上，將直接觸發混戰。"); }
+      break;
+    }
+    case "canteen": p.flags.dietThisRound=true; log(p.name+" 於餐廳：本輪免上交水/糧。"); break;
+    case "respec": {
+      const cap = p.prof==="geneFreak"?12:10;
+      openRespecModal(p,cap);
+      break;
+    }
+    case "slide": if(carrySpendStep(p)){ p.room="B503"; log(p.name+" 經回收站滑至垃圾場。"); } break;
+    case "teleport": openTeleportModal(p); break;
+    case "control": openControlModal(p); break;
+    case "helipad": p.flags.pendingHeli=true; log(p.name+" 於停機坪：下一輪可搭乘直昇機。"); collectAirdrop(p); break;
+    case "mortuary": break;
+    case "laser": break;
+  }
+}
+function carrySpendStep(p){
+  if(p.stepsLeft<1) { flashMsg("步數不足"); return false; }
+  p.stepsLeft--; return true;
+}
+function collectAirdrop(p){
+  const sched=AIRDROP_SCHEDULE[STATE.round];
+  if(!sched) return;
+  const bag = ROOMS["202"].airdropBag = ROOMS["202"].airdropBag || [];
+  sched.forEach(it=>bag.push(it));
+  if(bag.length){
+    const pick=bag.shift();
+    if(carryRoom(p)>0){ p.inv.push(pick); log(p.name+" 從停機坪空投獲得: "+ITEMS[pick].name); }
+  }
+}
+
+/* ---- modals ---- */
+function openModal(html){
+  document.getElementById("modal").innerHTML=html;
+  document.getElementById("modal-bg").classList.remove("hidden");
+}
+function closeModal(){ document.getElementById("modal-bg").classList.add("hidden"); }
+function openRespecModal(p,cap){
+  openModal(`<h3>操作室：重新分配基因點數（共 ${cap} 點）</h3>
+    <div class="statbar"><label>武力值</label><input type="number" id="rsPower" min="0" max="${cap}" value="${p.power}"></div>
+    <div class="statbar"><label>移動步數</label><input type="number" id="rsSpeed" min="0" max="${cap}" value="${p.speed}"></div>
+    <div class="statbar"><label>背包空間</label><input type="number" id="rsCarry" min="0" max="${cap}" value="${p.carry}"></div>
+    <button class="btn small" id="rsOk">確認</button> <button class="btn small ghost" id="rsCancel">取消</button>`);
+  document.getElementById("rsOk").onclick=()=>{
+    const a=+document.getElementById("rsPower").value,b=+document.getElementById("rsSpeed").value,c=+document.getElementById("rsCarry").value;
+    if(a+b+c!==cap){ alert("點數需剛好分配完"); return; }
+    p.power=a; p.speed=b; p.carry=c; closeModal(); renderAll();
+    log(p.name+" 於操作室重新分配了基因點數。");
+  };
+  document.getElementById("rsCancel").onclick=closeModal;
+}
+function openTeleportModal(p){
+  const opts=Object.keys(ROOMS).map(id=>`<option value="${id}">${id} ${ROOMS[id].name||""}</option>`).join("");
+  openModal(`<h3>傳送室：選擇目的地</h3><select id="tpSel">${opts}</select><br><br>
+    <button class="btn small" id="tpOk">傳送(消耗1步)</button> <button class="btn small ghost" id="tpCancel">取消</button>`);
+  document.getElementById("tpOk").onclick=()=>{
+    if(!carrySpendStep(p)){ closeModal(); return; }
+    p.room=document.getElementById("tpSel").value; closeModal(); renderAll();
+    log(p.name+" 使用傳送室前往 "+p.room+"。");
+  };
+  document.getElementById("tpCancel").onclick=closeModal;
+}
+function openControlModal(p){
+  const poisonedList=[...STATE.poisoned];
+  openModal(`<h3>控制室</h3>
+    <button class="btn small" id="ctrlVote10">本輪毒氣投票 1票 視為 10票</button><br><br>
+    <div>選一個已中毒房間永久解毒：</div>
+    <select id="ctrlRoom">${poisonedList.length? poisonedList.map(r=>`<option value="${r}">${r}</option>`).join("") : "<option>目前無中毒房間</option>"}</select>
+    <button class="btn small" id="ctrlDetox">解毒</button><br><br>
+    <button class="btn small ghost" id="ctrlCancel">關閉</button>`);
+  document.getElementById("ctrlVote10").onclick=()=>{ p.flags.voteWeight=10; closeModal(); log(p.name+" 於控制室：本輪投票視為10票。"); };
+  document.getElementById("ctrlDetox").onclick=()=>{
+    const r=document.getElementById("ctrlRoom").value;
+    if(r && STATE.poisoned.has(r)){ STATE.poisoned.delete(r); log(p.name+" 於控制室：秘密解毒了 "+r+"。"); }
+    closeModal(); renderAll();
+  };
+  document.getElementById("ctrlCancel").onclick=closeModal;
+}
+
+/* ===================== ITEM USE ===================== */
+function useItem(p,item){
+  if(!removeItem(p,item)) return;
+  STATE.discardPile.push(item);
+  switch(item){
+    case "water": case "food": p.flags["consumed_"+item]=true; log(p.name+" 使用了"+ITEMS[item].name+"。"); break;
+    case "pill": p.hp=Math.min(p.maxhp,p.hp+2); log(p.name+" 服用藥片，恢復2點生命。","heal"); break;
+    case "adrenaline":
+      p.flags.adrenalineActive=true; log(p.name+" 注射腎上腺素：下輪速度變10，本輪不會致死。","heal"); break;
+    case "wine": {
+      const roll=Math.floor(Math.random()*6)+1;
+      let msg="酒(擲骰"+roll+"): ";
+      if(roll===1){ p.inv=[]; msg+="丟棄所有道具卡！"; }
+      else if(roll===2){ msg+="無事發生。"; }
+      else if(roll===3){ p.power++; msg+="武力永久+1。"; }
+      else if(roll===4){ p.speed++; msg+="速度永久+1。"; }
+      else if(roll===5){ p.carry++; msg+="負重永久+1。"; }
+      else { p.hp=Math.min(p.maxhp,p.hp+2); msg+="生命值+2。"; }
+      log(p.name+" "+msg,"heal");
+      break;
+    }
+    case "gasmask": p.inv.push("gasmask"); flashMsg("防毒面具需持有以生效（已放回背包）"); break;
+    default: break;
+  }
+  renderAll();
+}
+function useGoldAtRoom(p){
+  if(p.flags.goldUsedThisRound){ flashMsg("每回合限用1根金條"); return; }
+  const room=ROOMS[p.room];
+  if(room.noGold){ flashMsg("此房間無法使用金條"); return; }
+  if(!removeItem(p,"gold")) return;
+  p.flags.goldUsedThisRound=true;
+  STATE.discardPile.push("gold");
+  const stockKeys=Object.keys(room.stock).filter(k=>room.stock[k]>0 && k!=="gold");
+  openModal(`<h3>金條：額外選擇一張</h3>${stockKeys.length? stockKeys.map(k=>`<button class="btn small" data-k="${k}">${ITEMS[k].name}(${room.stock[k]})</button>`).join(" ") : "此房間無其他庫存"}`);
+  document.querySelectorAll("#modal button[data-k]").forEach(btn=>{
+    btn.onclick=()=>{
+      const k=btn.dataset.k;
+      room.stock[k]--; p.inv.push(k);
+      log(p.name+" 使用金條額外獲得: "+ITEMS[k].name);
+      closeModal(); renderAll();
+    };
+  });
+}
+function useRocket(p){
+  openModal(`<h3>火箭筒：選擇目標房間</h3><select id="rkSel">${Object.keys(ROOMS).map(id=>`<option value="${id}">${id} ${ROOMS[id].name||""}</option>`).join("")}</select>
+    <br><br><button class="btn small warn" id="rkOk">發射</button> <button class="btn small ghost" id="rkCancel">取消</button>`);
+  document.getElementById("rkOk").onclick=()=>{
+    removeItem(p,"rocket"); STATE.discardPile.push("rocket");
+    STATE.rocketTargets=STATE.rocketTargets||[];
+    STATE.rocketTargets.push(document.getElementById("rkSel").value);
+    log(p.name+" 發射火箭筒瞄準 "+document.getElementById("rkSel").value+"（結算時生效）。");
+    closeModal(); renderAll();
+  };
+  document.getElementById("rkCancel").onclick=closeModal;
+}
+function useRecycleDevice(p){
+  if(STATE.discardPile.length===0){ flashMsg("棄牌堆是空的"); return; }
+  if(carryRoom(p)<=0){ flashMsg("負重已滿"); return; }
+  const idx=Math.floor(Math.random()*STATE.discardPile.length);
+  const item=STATE.discardPile.splice(idx,1)[0];
+  p.inv.push(item);
+  log(p.name+" 使用循環回收裝置，獲得: "+ITEMS[item].name);
+  renderAll();
+}
+
+/* ===================== PROFESSION SKILLS (human buttons) ===================== */
+function useProfSkill(p,idx){
+  const prof=PROFESSIONS[p.prof];
+  const sk=prof.skills[idx];
+  if(p.prof==="gambler" && idx===0){
+    if(p.flags.gamblerUses>=3){ flashMsg("已用完3次"); return; }
+    p.flags.gamblerUses++;
+    let roll = p.flags.gamblerForceWin ? 6 : Math.floor(Math.random()*6)+1;
+    p.flags.gamblerForceWin=false;
+    let msg="好賭成性(擲骰"+roll+"): ";
+    if(roll<=2){ p.flags.roomLocked=true; msg+="失敗，本輪無法房間操作。"; }
+    else if(roll<=4){ msg+="無事發生。"; }
+    else { p.flags.gamblerBonusOps=1; msg+="成功！本輪房間可操作兩次。"; }
+    log(p.name+" "+msg);
+  } else if(p.prof==="gambler" && idx===1){
+    if(p.flags.gamblerWinUses>=1){ flashMsg("已用完"); return; }
+    p.flags.gamblerWinUses++; p.flags.gamblerForceWin=true;
+    log(p.name+" 使用逢賭必贏：下次好賭成性必定成功。");
+  } else if(p.prof==="scavenger" && idx===1){
+    if(p.flags.scavengerUses>=2){ flashMsg("已用完2次"); return; }
+    if(countItem(p,"trash")<1){ flashMsg("背包內沒有垃圾"); return; }
+    p.flags.scavengerUses++; removeItem(p,"trash");
+    const gain=Math.random()<0.5?"water":"food";
+    log(p.name+" 使用變廢為寶：垃圾轉為「"+ITEMS[gain].name+"」指示物1個（結算後即消失）。");
+    p.flags["consumed_"+gain]=true;
+  } else if(p.prof==="trucker" && idx===0){
+    if(p.flags.truckerUses>=3){ flashMsg("已用完3次"); return; }
+    const nonTrash=p.inv.find(x=>x!=="trash");
+    if(!nonTrash){ flashMsg("沒有可丟棄的非垃圾道具卡"); return; }
+    removeItem(p,nonTrash); STATE.discardPile.push(nonTrash);
+    p.flags.truckerUses++; p.flags.truckerDoubled=true; p.flags.truckerJustUsed=true;
+    log(p.name+" 使用卸載加速：丟棄「"+ITEMS[nonTrash].name+"」，本輪速度變兩倍。");
+    p.stepsLeft=Math.min(10,p.stepsLeft*2);
+  } else if(p.prof==="chemist" && idx===0){
+    if(p.flags.chemistUses>=2){ flashMsg("已用完2次"); return; }
+    openModal(`<h3>毒性調和</h3>
+      <button class="btn small" id="chA">指定已中毒房間，本輪毒氣傷害-2</button><br><br>
+      <button class="btn small warn" id="chB">本輪毒氣樓層傷害+2</button>`);
+    document.getElementById("chA").onclick=()=>{
+      const r=[...STATE.poisoned][0];
+      if(r){ STATE.poisonReduceRoom=r; log(p.name+" 指定 "+r+" 本輪毒氣傷害-2。"); }
+      p.flags.chemistUses++; closeModal();
+    };
+    document.getElementById("chB").onclick=()=>{
+      STATE.poisonBoost=true; log(p.name+" 令本輪毒氣樓層傷害+2。");
+      p.flags.chemistUses++; closeModal();
+    };
+  } else if(p.prof==="hacker" && idx===1){
+    if(p.flags.hackerUses>=2){ flashMsg("已用完2次"); return; }
+    openModal(`<h3>遠端操控：選擇要使用的房間功能</h3>
+      <button class="btn small" data-r="201">基因庫</button>
+      <button class="btn small" data-r="B101">控制室</button>
+      <button class="btn small" data-r="B304">操作室</button>`);
+    document.querySelectorAll("#modal button[data-r]").forEach(btn=>{
+      btn.onclick=()=>{
+        const r=btn.dataset.r;
+        if(p.flags.hackerUsedRooms.includes(r)){ flashMsg("不可重複選擇同一房間"); return; }
+        p.flags.hackerUsedRooms.push(r); p.flags.hackerUses++;
+        doSpecialRoom(p,ROOMS[r]);
+        log(p.name+" 使用遠端操控：於本回合遠端使用了「"+r+" "+ROOMS[r].name+"」。");
+        closeModal(); renderAll();
+      };
+    });
+  } else if(p.prof==="tamer" && idx===0){
+    if(p.flags.tamerUses>=4){ flashMsg("已用完4次"); return; }
+    const cands=Object.keys(ROOMS).filter(r=> bfsDist(p.room,r)<=5 && bfsDist(p.room,r)>0 && (Object.values(ROOMS[r].stock).some(v=>v>0)||r==="202"));
+    if(cands.length===0){ log(p.name+" 派遣巡迴獵犬：附近沒有可搜索的庫存房間，無功而返。"); p.flags.tamerUses++; return; }
+    const target=cands[Math.floor(Math.random()*cands.length)];
+    p.flags.tamerUses++;
+    if(target==="202"){ log(p.name+" 派遣巡迴獵犬前往停機坪。"); return; }
+    const stockKeys=Object.keys(ROOMS[target].stock).filter(k=>ROOMS[target].stock[k]>0);
+    if(stockKeys.length && carryRoom(p)>0){
+      const pick=stockKeys[Math.floor(Math.random()*stockKeys.length)];
+      ROOMS[target].stock[pick]--; p.inv.push(pick);
+      log(p.name+" 派遣巡迴獵犬前往「"+target+"」，獲得: "+ITEMS[pick].name);
+    } else { log(p.name+" 派遣巡迴獵犬前往「"+target+"」，但無法獲得道具。"); }
+  } else if(p.prof==="geneFreak" && idx===1){
+    if(p.flags.geneUses>=2){ flashMsg("已用完2次"); return; }
+    p.flags.geneUses++;
+    openRespecModal(p,12);
+  } else if(p.prof==="climber" && idx===0){
+    if(p.hp<=1){ flashMsg("生命值不足"); return; }
+    p.hp--; p.flags.climberVertical=true;
+    log(p.name+" 支付1點生命，發動垂直攀爬。","dmg");
+  } else if(p.prof==="climber" && idx===1){
+    if(p.flags.climberDietUsed){ flashMsg("已用完"); return; }
+    p.flags.climberDietUsed=true; p.flags.dietThisRound=true;
+    log(p.name+" 使用節食：本輪不需支付水/糧。");
+  } else if(p.prof==="embalmer" && idx===1){
+    p.flags.embalmerChoiceMode=true;
+    log(p.name+" 啟用亡者遺贈：下次道具進入停屍間時可自行選擇。");
+  }
+  renderAll();
+}
+
+/* ===================== VOTE / TRADE ===================== */
+document.getElementById("voteBtn").addEventListener("click",()=>{
+  const p=you();
+  const opts=Object.keys(ROOMS).map(id=>`<option value="${id}">${id} ${ROOMS[id].name||""}</option>`).join("");
+  openModal(`<h3>投票毒氣區</h3><select id="voteSel">${opts}</select><br><br>
+    <button class="btn small warn" id="voteOk">投票</button> <button class="btn small ghost" id="voteCancel">取消</button>`);
+  document.getElementById("voteOk").onclick=()=>{
+    const r=document.getElementById("voteSel").value;
+    const weight=p.flags.voteWeight||1;
+    STATE.voteCounts[r]=(STATE.voteCounts[r]||0)+weight;
+    p.flags.voteWeight=1;
+    log(p.name+" 投票毒氣區: "+r+"（權重"+weight+"）");
+    closeModal();
+  };
+  document.getElementById("voteCancel").onclick=closeModal;
+});
+document.getElementById("tradeBtn").addEventListener("click",()=>{
+  const p=you();
+  const others=playersInRoom(p.room,true).filter(x=>x.id!==p.id && x.isAI);
+  if(others.length===0){ flashMsg("這裡沒有其他玩家可交易"); return; }
+  const target=others[0];
+  const myItems=[...new Set(p.inv)];
+  if(myItems.length===0){ flashMsg("你沒有道具可交易"); return; }
+  openModal(`<h3>與 ${target.name} 交易</h3>選擇你要給出的道具：
+    <select id="tOffer">${myItems.map(i=>`<option value="${i}">${ITEMS[i].name}</option>`).join("")}</select><br><br>
+    <button class="btn small" id="tOk">提出交易（換取對方隨機1張道具）</button> <button class="btn small ghost" id="tCancel">取消</button>`);
+  document.getElementById("tOk").onclick=()=>{
+    const give=document.getElementById("tOffer").value;
+    if(target.inv.length===0){ log(target.name+" 沒有道具可交換，拒絕交易。"); closeModal(); return; }
+    // AI accepts if it doesn't give away its only weapon/med while player offers "junk"
+    const accept = give==="trash" ? Math.random()<0.3 : Math.random()<0.7;
+    if(accept){
+      removeItem(p,give); target.inv.push(give);
+      const back=target.inv[Math.floor(Math.random()*target.inv.length)];
+      removeItem(target,back); p.inv.push(back);
+      log(p.name+" 與 "+target.name+" 交易：給出「"+ITEMS[give].name+"」換得「"+ITEMS[back].name+"」。");
+    } else { log(target.name+" 拒絕了交易。"); }
+    closeModal(); renderAll();
+  };
+  document.getElementById("tCancel").onclick=closeModal;
+});
+
+/* ===================== AI ===================== */
+function aiChooseTarget(p){
+  const reach=reachableRooms(p.room, playerEffectiveSpeed(p) + p.stepsLeft-p.speed>=0?p.stepsLeft:p.speed);
+  const cands=Object.keys(reach);
+  let best=p.room, bestScore=-Infinity;
+  for(const r of cands){
+    let score=Math.random()*2;
+    const room=ROOMS[r];
+    if(p.hp<=5 && (room.stock.pill||room.stock.adrenaline)) score+=5;
+    if(!hasGun(p) && (room.stock.pistol||room.stock.shotgun||room.stock.knife)) score+=3;
+    if(STATE.round>=2 && (room.stock.water||room.stock.food)) score+=2;
+    if(room.draw>0) score+=1.5;
+    if(STATE.poisoned.has(r)) score-=6;
+    if(r==="102") score-=4;
+    if(r===p.room) score-=0.5;
+    if(score>bestScore){ bestScore=score; best=r; }
+  }
+  return best;
+}
+function runAIRound(){
+  alivePlayers().filter(p=>p.isAI).forEach(p=>{
+    if(p.ghost){ // wander randomly
+      const opts=ADJ[p.room]||[]; if(opts.length) p.room=opts[Math.floor(Math.random()*opts.length)];
+      return;
+    }
+    const target=aiChooseTarget(p);
+    const dist=bfsDist(p.room,target);
+    if(dist!==Infinity && dist<=p.stepsLeft){ p.room=target; p.stepsLeft-=dist; }
+    if(p.room==="102") applyLaser(p);
+    const room=ROOMS[p.room];
+    if(room.draw>0){ drawFromRoom(p,p.room,room.draw); }
+    if(room.special==="gene"){ p.power++; p.speed++; p.carry++; }
+    if(room.special==="respec"){ /* AI keeps stats */ }
+    // simple item usage: heal if low hp
+    if(p.hp<=4 && countItem(p,"pill")>0){ removeItem(p,"pill"); p.hp=Math.min(p.maxhp,p.hp+2); STATE.discardPile.push("pill"); }
+    if(STATE.round>=2){
+      if(countItem(p,"water")>0){ removeItem(p,"water"); p.flags.consumed_water=true; STATE.discardPile.push("water"); }
+      if(countItem(p,"food")>0){ removeItem(p,"food"); p.flags.consumed_food=true; STATE.discardPile.push("food"); }
+    }
+    // poison vote: avoid own room, pick a random room not own
+    const voteRoom=Object.keys(ROOMS).filter(r=>r!==p.room)[Math.floor(Math.random()*(Object.keys(ROOMS).length-1))];
+    STATE.voteCounts[voteRoom]=(STATE.voteCounts[voteRoom]||0)+1;
+  });
+}
+
+/* ===================== SETTLEMENT ===================== */
+function applyLaser(p){
+  p.pendingLaser=true;
+}
+function damagePlayer(p,amount,cause){
+  if(amount<=0) return;
+  if(p.flags.adrenalineActive){ p.hp=Math.max(1,p.hp-amount); return; }
+  p.hp-=amount;
+  if(p.hp<=0){ p.hp=0; killPlayer(p,cause); }
+}
+function killPlayer(p,cause){
+  p.alive=false; p.ghost=true; p.ghostDrainTotal=0;
+  log(p.name+" 死亡（"+cause+"），於停屍間化為暗影...","dmg");
+  // drop items into mortuary
+  const embalmers=STATE.players.filter(x=>x.alive && x.prof==="embalmer");
+  p.inv.forEach(it=>{
+    if(embalmers.length){
+      const e=embalmers[0];
+      if(e.flags.embalmerChoiceMode){ e.inv.push(it); e.flags.embalmerChoiceMode=false; log(e.name+" 以亡者遺贈自行選擇獲得: "+ITEMS[it].name); return; }
+      if(!e.flags.__embalmerGotThisRound){ e.inv.push(it); e.flags.__embalmerGotThisRound=true; log(e.name+" 蠱耗感應獲得: "+ITEMS[it].name); return; }
+    }
+    ROOMS["B701"].stock[it]=(ROOMS["B701"].stock[it]||0)+1;
+  });
+  p.inv=[];
+  p.room="B701";
+  embalmers.forEach(e=>{ e.carry++; });
+  // shade immunity/heal handled in ghost-drain resolution; 暗影親和 speed+2
+  if(p.prof==="shade"){ /* becomes ghost itself, unaffected by others' drains as it's now a ghost too */ }
+  STATE.players.forEach(x=>{ if(x.prof==="shade" && x.alive) {/* passive noted */} });
+  if(p.prof==="shade"){ p.speed+=2; }
+}
+
+function resolvePoisonVote(){
+  let winner=null, best=-1;
+  for(const [r,c] of Object.entries(STATE.voteCounts)){ if(c>best){ best=c; winner=r; } }
+  if(!winner) return;
+  const room=ROOMS[winner];
+  if(room.poisonRequires){
+    if(room.poisonRequires.every(r=>STATE.poisoned.has(r))) STATE.poisoned.add(winner);
+  } else {
+    STATE.poisoned.add(winner);
+  }
+  log("本輪毒氣投票結果：「"+winner+" "+(room.name||"")+"」"+(STATE.poisoned.has(winner)?"淪為毒氣區域！":"（尚未滿足毒氣條件）"));
+}
+function poisonDamageForRound(){
+  const r=STATE.round;
+  if(r===1) return 1;
+  if(r===2||r===3) return 2;
+  if(r===4||r===5) return 3;
+  return 4;
+}
+function settleRound(){
+  STATE.phase="settlement";
+  resolvePoisonVote();
+  const baseDmg=poisonDamageForRound() + (STATE.poisonBoost?2:0);
+
+  // laser
+  STATE.players.forEach(p=>{
+    if(p.alive && p.pendingLaser){ damagePlayer(p,1,"激光室"); p.pendingLaser=false; }
+  });
+
+  // poison
+  STATE.players.forEach(p=>{
+    if(!p.alive || p.ghost) return;
+    if(STATE.poisoned.has(p.room)){
+      let dmg=baseDmg;
+      if(p.room===STATE.poisonReduceRoom) dmg=Math.max(0,dmg-2);
+      if(p.inv.includes("gasmask")) dmg=0;
+      if(p.room==="202") dmg=0;
+      if(p.prof==="chemist") dmg=Math.max(0,dmg-1);
+      damagePlayer(p,dmg,"毒氣");
+      if(dmg>0) log(p.name+" 在毒氣區受到 "+dmg+" 點傷害。","dmg");
+    }
+  });
+  STATE.poisonReduceRoom=null; STATE.poisonBoost=false;
+
+  // rocket
+  (STATE.rocketTargets||[]).forEach(r=>{
+    playersInRoom(r,true).forEach(p=>{
+      let dmg=4;
+      if(p.prof==="bomb") dmg=Math.max(0,dmg-1);
+      damagePlayer(p,dmg,"火箭筒");
+      log(p.name+" 被火箭筒轟炸於「"+r+"」，受到 "+dmg+" 點傷害。","dmg");
+    });
+  });
+  STATE.rocketTargets=[];
+
+  // hunger (round>=2)
+  if(STATE.round>=2){
+    STATE.players.forEach(p=>{
+      if(!p.alive || p.ghost) return;
+      if(p.flags.dietThisRound || p.room==="B204") return;
+      let missing=0;
+      if(!p.flags.consumed_water) missing++;
+      if(!p.flags.consumed_food) missing++;
+      if(missing>0){ damagePlayer(p,missing,"飢餓"); log(p.name+" 缺水/糧，受到 "+missing+" 點傷害。","dmg"); }
+    });
+  }
+
+  // surgery healing
+  STATE.players.forEach(p=>{
+    if(p.flags.__surgeryHeal){ p.hp=Math.min(p.maxhp,p.hp+4); p.flags.__surgeryHeal=false; log(p.name+" 於手術室恢復4點生命。","heal"); }
+  });
+
+  // combat resolution per room
+  const roomGroups={};
+  STATE.players.forEach(p=>{ if(p.alive && !p.ghost){ (roomGroups[p.room]=roomGroups[p.room]||[]).push(p); } });
+  Object.entries(roomGroups).forEach(([r,group])=>{
+    if(group.length<2) return;
+    if(r==="B202"){ if(group.length===2) return; } // healing handled above; 2p no combat
+    // outsider: if room has 3+ alive, they sit out
+    const fighters=group.filter(p=>!(p.prof==="outsider" && group.length>=3));
+    if(fighters.length<2){
+      group.filter(p=>p.prof==="outsider" && group.length>=3).forEach(p=>{ p.hp=Math.min(p.maxhp,p.hp+1); });
+      return;
+    }
+    // free-for-all: everyone compares to the strongest present; simplistic pairwise settlement
+    for(let i=0;i<fighters.length;i++){
+      for(let j=i+1;j<fighters.length;j++){
+        const a=fighters[i], b=fighters[j];
+        if(!a.alive||!b.alive) continue;
+        resolveCombat(a,b,r);
+      }
+    }
+    group.filter(p=>p.prof==="outsider" && group.length>=3).forEach(p=>{ p.hp=Math.min(p.maxhp,p.hp+1); });
+  });
+
+  // trucker ram
+  STATE.players.forEach(p=>{
+    if(p.flags.truckerJustUsed){
+      playersInRoom(p.room,true).filter(x=>x.id!==p.id).forEach(x=>{ damagePlayer(x,1,"貨車司機猛烈衝撞"); });
+      log(p.name+" 觸發猛烈衝撞：房內其他玩家各受到1點傷害，房間強制公開。");
+      p.flags.truckerJustUsed=false; p.flags.truckerDoubled=false;
+    }
+  });
+
+  // ghost drains
+  STATE.players.forEach(g=>{
+    if(!g.ghost) return;
+    const victims=playersInRoom(g.room,true).filter(x=>!x.ghost);
+    victims.forEach(v=>{
+      if(v.prof==="shade"){
+        log(v.name+"（暗影使者）免疫暗影吸血。"); return;
+      }
+      damagePlayer(v,1,"暗影吸血");
+      g.ghostDrainTotal++;
+      log(g.name+"（暗影）吸取了 "+v.name+" 1點生命。","dmg");
+      STATE.players.forEach(sh=>{ if(sh.prof==="shade" && sh.alive && !sh.ghost){ sh.hp=Math.min(sh.maxhp,sh.hp+1); log(sh.name+"（暗影共鳴）恢復1點生命。","heal"); } });
+    });
+    if(g.ghostDrainTotal>=2){
+      g.ghost=false; g.alive=true; g.hp=Math.min(g.maxhp, Math.max(3,g.ghostDrainTotal));
+      log(g.name+" 吸滿2點生命，於「"+g.room+"」復活！(HP "+g.hp+")","heal");
+    }
+  });
+
+  // adrenaline: apply next-round speed, then clear
+  STATE.players.forEach(p=>{
+    if(p.flags.adrenalineActive){
+      p.flags.adrenalineNextSpeed=10;
+    } else {
+      p.flags.adrenalineNextSpeed=null;
+    }
+    p.flags.adrenalineActive=false;
+    p.flags.consumed_water=false; p.flags.consumed_food=false;
+    p.flags.roomLocked=false; p.flags.voteWeight=1;
+    p.flags.__embalmerGotThisRound=false;
+    p.flags.climberVertical=false;
+  });
+
+  renderAll();
+  showRoundSummary();
+}
+function resolveCombat(a,b,roomId){
+  const roomIsOR = roomId==="B202";
+  const aGun=hasGun(a), bGun=hasGun(b);
+  let dmgToA=0, dmgToB=0;
+  if(bGun && !aGun){ dmgToA=combatPower(b); }
+  else if(aGun && !bGun){ dmgToB=combatPower(a); }
+  else {
+    const diff=combatPower(a)-combatPower(b);
+    if(diff>0) dmgToB=diff; else if(diff<0) dmgToA=-diff;
+  }
+  // profession damage reduction (肥宅, 防爆小組 vs gun)
+  const reduce=(p,dmg,attackerHasGun)=>{
+    let d=dmg;
+    if(p.prof==="fatty") d=Math.max(0,d-2);
+    if(p.prof==="bomb" && attackerHasGun) d=Math.max(0,d-3);
+    return d;
+  };
+  dmgToA=reduce(a,dmgToA,bGun);
+  dmgToB=reduce(b,dmgToB,aGun);
+  if(dmgToA>0){ damagePlayer(a,dmgToA,"與"+b.name+"戰鬥"); log(a.name+" 在「"+roomId+"」戰鬥中受到 "+dmgToA+" 點傷害（對手 "+b.name+"）。","dmg"); }
+  if(dmgToB>0){ damagePlayer(b,dmgToB,"與"+a.name+"戰鬥"); log(b.name+" 在「"+roomId+"」戰鬥中受到 "+dmgToB+" 點傷害（對手 "+a.name+"）。","dmg"); }
+  if(dmgToA===0 && dmgToB===0) log(a.name+" 與 "+b.name+" 在「"+roomId+"」武力相同，未分勝負。");
+}
+
+function showRoundSummary(){
+  const alive=alivePlayers();
+  let html="<h3>第 "+STATE.round+" 輪結算</h3><div class='mono' style='font-size:12px'>";
+  STATE.players.forEach(p=>{ html+= p.name+"("+PROFESSIONS[p.prof].name+"): HP "+p.hp+(p.ghost?" [暗影]":p.alive?"":" [死亡]")+"<br>"; });
+  html+="</div><button class='btn small' id='sumOk'>繼續</button>";
+  openModal(html);
+  document.getElementById("sumOk").onclick=()=>{
+    closeModal();
+    if(STATE.round>=6){ endGame(); }
+    else { STATE.round++; STATE.phase="positioning";
+      STATE.players.forEach(p=>{ if(p.flags.adrenalineNextSpeed){ p.speed_backup=p.speed; p.speed=p.flags.adrenalineNextSpeed; p.flags.__adrenalineRestoreNext=true; } else if(p.flags.__adrenalineRestoreNext){ p.speed=p.speed_backup; p.flags.__adrenalineRestoreNext=false; } });
+      logRound(STATE.round); beginRound(); }
+  };
+}
+function endGame(){
+  STATE.gameOver=true;
+  document.getElementById("game").classList.add("hidden");
+  const ranked=[...STATE.players].sort((a,b)=>b.hp-a.hp);
+  const list=document.getElementById("rankList");
+  list.innerHTML="";
+  ranked.forEach((p,i)=>{
+    const div=document.createElement("div"); div.className="rank-row";
+    div.innerHTML="<span>#"+(i+1)+" "+p.name+" ("+PROFESSIONS[p.prof].name+")"+(p.alive?"":" 💀")+"</span><span class='mono'>HP "+p.hp+"</span>";
+    list.appendChild(div);
+  });
+  document.getElementById("endScreen").classList.remove("hidden");
+}
+
+/* ===================== RENDER ===================== */
+function renderAll(){
+  if(STATE.gameOver) return;
+  const p=you();
+  document.getElementById("roundNo").textContent=STATE.round;
+  document.getElementById("phaseName").textContent="行動階段";
+  document.getElementById("youName").textContent=p.name;
+  document.getElementById("youProf").textContent=PROFESSIONS[p.prof].name;
+  document.getElementById("hpBar").style.width=Math.max(0,(p.hp/p.maxhp*100))+"%";
+  document.getElementById("hpText").textContent="HP "+p.hp+"/"+p.maxhp;
+  document.getElementById("stPower").textContent=combatPower(p);
+  document.getElementById("stSpeed").textContent=p.speed;
+  document.getElementById("stCarry").textContent=p.carry;
+  document.getElementById("curRoom").textContent=p.room+" "+(ROOMS[p.room].name||"");
+  document.getElementById("stepsLeft").textContent=p.stepsLeft;
+  document.getElementById("carryUsed").textContent=usedCarry(p);
+  document.getElementById("carryCap").textContent=effectiveCarryCap(p)>9000?"∞":effectiveCarryCap(p);
+
+  // inventory
+  const invEl=document.getElementById("inventory"); invEl.innerHTML="";
+  const counts={};
+  p.inv.forEach(i=>counts[i]=(counts[i]||0)+1);
+  Object.entries(counts).forEach(([id,n])=>{
+    const div=document.createElement("div"); div.className="inv-item";
+    let actions="";
+    if(["water","food","pill","adrenaline","wine"].includes(id)) actions+=`<button class="btn small" data-use="${id}">使用</button>`;
+    if(id==="gold") actions+=`<button class="btn small gold" data-gold="1">用於本房</button>`;
+    if(id==="rocket") actions+=`<button class="btn small warn" data-rocket="1">瞄準</button>`;
+    if(id==="recycledevice") actions+=`<button class="btn small" data-recycle="1">回收抽取</button>`;
+    div.innerHTML=`<span>${ITEMS[id].name} x${n}</span><span class="actions">${actions}</span>`;
+    invEl.appendChild(div);
+  });
+  invEl.querySelectorAll("[data-use]").forEach(b=>b.onclick=()=>useItem(p,b.dataset.use));
+  invEl.querySelectorAll("[data-gold]").forEach(b=>b.onclick=()=>useGoldAtRoom(p));
+  invEl.querySelectorAll("[data-rocket]").forEach(b=>b.onclick=()=>useRocket(p));
+  invEl.querySelectorAll("[data-recycle]").forEach(b=>b.onclick=()=>useRecycleDevice(p));
+
+  // skills
+  const skEl=document.getElementById("skillList"); skEl.innerHTML="";
+  PROFESSIONS[p.prof].skills.forEach((s,idx)=>{
+    const btn=document.createElement("button"); btn.className="skillbtn";
+    let usesLeft="";
+    if(p.prof==="gambler"&&idx===0) usesLeft=" ("+(3-p.flags.gamblerUses)+"/3)";
+    if(p.prof==="gambler"&&idx===1) usesLeft=" ("+(1-p.flags.gamblerWinUses)+"/1)";
+    if(p.prof==="scavenger"&&idx===1) usesLeft=" ("+(2-p.flags.scavengerUses)+"/2)";
+    if(p.prof==="trucker"&&idx===0) usesLeft=" ("+(3-p.flags.truckerUses)+"/3)";
+    if(p.prof==="chemist"&&idx===0) usesLeft=" ("+(2-p.flags.chemistUses)+"/2)";
+    if(p.prof==="hacker"&&idx===1) usesLeft=" ("+(2-p.flags.hackerUses)+"/2)";
+    if(p.prof==="tamer"&&idx===0) usesLeft=" ("+(4-p.flags.tamerUses)+"/4)";
+    if(p.prof==="geneFreak"&&idx===1) usesLeft=" ("+(2-p.flags.geneUses)+"/2)";
+    if(p.prof==="climber"&&idx===1) usesLeft=" ("+(p.flags.climberDietUsed?0:1)+"/1)";
+    btn.innerHTML=`<b>${s.name}${usesLeft}</b>${s.desc}`;
+    if(s.passive){ btn.disabled=true; btn.title="被動技能，自動生效"; }
+    else { btn.onclick=()=>useProfSkill(p,idx); }
+    skEl.appendChild(btn);
+  });
+
+  // map
+  const mapEl=document.getElementById("mapArea"); mapEl.innerHTML="";
+  const reach=reachableRooms(p.room,p.stepsLeft);
+  const floors={};
+  Object.values(ROOMS).forEach(r=>{ (floors[r.floor]=floors[r.floor]||[]).push(r); });
+  Object.keys(floors).sort((a,b)=>a-b).forEach(fl=>{
+    const row=document.createElement("div"); row.className="floor-row";
+    const lbl=document.createElement("span"); lbl.className="floor-label"; lbl.textContent=FLOOR_LABEL[fl];
+    row.appendChild(lbl);
+    floors[fl].sort((a,b)=>a.order-b.order).forEach(r=>{
+      const chip=document.createElement("div"); chip.className="room-chip";
+      if(r.id===p.room) chip.classList.add("here");
+      else if(reach[r.id]!==undefined) chip.classList.add("reachable");
+      if(STATE.poisoned.has(r.id)) chip.classList.add("poison");
+      const occAlive=STATE.players.filter(x=>x.room===r.id && x.alive && !x.ghost);
+      const fattyHere=STATE.players.find(x=>x.prof==="fatty" && x.alive && x.room===r.id);
+      let occTxt="";
+      if(r.id===p.room) occTxt=occAlive.length>1?String(occAlive.length):"";
+      else if(fattyHere) occTxt="肥";
+      chip.innerHTML=`${r.id}${r.name?("<small>"+r.name+"</small>"):""}`+(occTxt?`<span class="occ">${occTxt}</span>`:"");
+      chip.onclick=()=>onRoomClick(r.id);
+      row.appendChild(chip);
+    });
+    mapEl.appendChild(row);
+  });
+
+  // room actions
+  const raEl=document.getElementById("roomActions"); raEl.innerHTML="";
+  const room=ROOMS[p.room];
+  if(room.draw>0 || room.special){
+    const btn=document.createElement("button"); btn.className="btn small";
+    btn.textContent = room.special==="gene"?"使用基因庫" : room.special==="respec"?"重新分配點數" :
+      room.special==="slide"?"滑向垃圾場(1步)" : room.special==="teleport"?"傳送" : room.special==="control"?"控制室功能" :
+      room.special==="helipad"?"領取空投" : room.draw>0?"搜索房間 (最多"+room.draw+"張)" : "使用房間功能";
+    if(p.flags.roomLocked){ btn.disabled=true; btn.title="好賭成性失敗，本輪無法房間操作"; }
+    btn.onclick=doRoomAction;
+    raEl.appendChild(btn);
+  } else {
+    raEl.innerHTML="<span class='muted'>此房間無特殊功能</span>";
+  }
+  if(room.special==="laser") log_once(p,"laser-"+STATE.round,()=>{ applyLaser(p); log(p.name+" 經過激光室，結算時將扣1點生命。","dmg"); });
+
+  // here list
+  const hereEl=document.getElementById("hereList");
+  const others=playersInRoom(p.room,false).filter(x=>x.id!==p.id);
+  hereEl.textContent = others.length? others.map(x=>x.name+(x.ghost?"[暗影]":"")).join("、") : "（無其他玩家）";
+
+  // all players
+  const apEl=document.getElementById("allPlayers"); apEl.innerHTML="";
+  STATE.players.forEach(pl=>{
+    const line=document.createElement("div");
+    line.textContent=pl.name+" ["+PROFESSIONS[pl.prof].name+"] HP:"+pl.hp+(pl.ghost?" 暗影":pl.alive?"":" 💀");
+    apEl.appendChild(line);
+  });
+
+  document.getElementById("topStatus").innerHTML=`<span class="badge">回合 ${STATE.round}/6</span>`;
+}
+function log_once(p,key,fn){
+  p.flags.__onceKeys=p.flags.__onceKeys||new Set();
+  if(p.flags.__onceKeys.has(key)) return;
+  p.flags.__onceKeys.add(key); fn();
+}
+</script>
