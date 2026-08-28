@@ -482,7 +482,7 @@ function makePlayer(id,isAI,profId,stats,name){
       chemistUses:0, embalmerUses:0, hackerUses:0, hackerUsedRooms:[],
       tamerUses:0, geneUses:0, climberDietUsed:false, adrenalineRound:0, dietThisRound:false,
       goldUsedThisRound:false, visited102:false, pendingHeli:false, remoteRoomOverride:null,
-      pendingItemUses:[]},
+      pendingItemUses:[], roomCommitted:false},
     pendingActions:{targetRoom:null, movementDone:false, roomActed:false},
     weaponWeightless: profId==="merc",
     weightlessGold: profId==="tycoon",
@@ -620,11 +620,14 @@ function playersInRoom(room,excludeGhosts){
 }
 function beginRound(){
   STATE.players.forEach(p=>{
-    p.room = (STATE.round===1 && p.spawnRoom) ? p.spawnRoom : MEETING_ROOM;
+    // Round 1 starts at the secretly-chosen spawn room; every later round continues from
+    // wherever the player physically ended up last round — position is NOT reset to a hub.
+    if(STATE.round===1 && p.spawnRoom) p.room=p.spawnRoom;
     p.stepsLeft = p.speed;
     if(p.flags.adrenalineRound===STATE.round-1+1){} // no-op placeholder
     p.flags.goldUsedThisRound=false;
     p.flags.dietThisRound=false;
+    p.flags.roomCommitted=false; // locks once the player acts in a room or explicitly ends movement
     p.pendingActions={targetRoom:null, movementDone:false, roomActed:false};
   });
   STATE.voteCounts={};
@@ -654,10 +657,18 @@ function playerEffectiveSpeed(p){
 function onRoomClick(roomId){
   const p=you();
   if(STATE.phase!=="positioning" || STATE.gameOver) return;
+  if(p.flags.roomCommitted){ flashMsg("本輪已確定停留於此房間，無法再移動（每輪只能在最終抵達的單一房間行動）。"); return; }
   const dist=bfsDist(p.room,roomId);
   if(dist===Infinity || dist>p.stepsLeft){ flashMsg("步數不足或無法到達"); return; }
   p.room=roomId; p.stepsLeft-=dist;
   if(roomId==="102"){ applyLaser(p); }
+  renderAll();
+}
+function commitToRoom(){
+  const p=you();
+  if(p.flags.roomCommitted) return;
+  p.flags.roomCommitted=true;
+  log(p.name+" 確定停留於「"+p.room+" "+(ROOMS[p.room].name||"")+"」，本輪不再移動。");
   renderAll();
 }
 function flashMsg(m){ log(`<i class="muted">${m}</i>`); }
@@ -688,6 +699,7 @@ function drawFromRoom(p,roomId,maxDraw){
 }
 function doRoomAction(){
   const p=you();
+  if(p.flags.roomCommitted){ flashMsg("本輪已使用過房間功能。"); return; }
   const room=ROOMS[p.room];
   if(room.draw>0){
     let maxDraw=room.draw;
@@ -696,6 +708,8 @@ function doRoomAction(){
     log("在「"+(room.name||p.room)+"」搜索到: "+(gained.length? gained.map(g=>ITEMS[g]?ITEMS[g].name:g).join("、"):"（無收穫）"));
   }
   if(room.special) doSpecialRoom(p,room);
+  // using the room's function is itself committing to this room as your single destination this round
+  p.flags.roomCommitted=true;
   renderAll();
 }
 function doSpecialRoom(p,room){
@@ -1021,6 +1035,8 @@ function aiChooseTarget(p){
   return best;
 }
 function runAIRound(){
+  // Same single-destination-per-round rule as the human: the AI computes ONE target room,
+  // makes ONE move to it, then may act only in that room — it never moves again afterward.
   alivePlayers().filter(p=>p.isAI).forEach(p=>{
     if(p.ghost){ // wander randomly
       const opts=ADJ[p.room]||[]; if(opts.length) p.room=opts[Math.floor(Math.random()*opts.length)];
@@ -1034,6 +1050,7 @@ function runAIRound(){
     if(room.draw>0){ drawFromRoom(p,p.room,room.draw); }
     if(room.special==="gene"){ p.power++; p.speed++; p.carry++; }
     if(room.special==="respec"){ /* AI keeps stats */ }
+    p.flags.roomCommitted=true; // final destination for this round — no further movement
     // simple item usage: declare now, effect resolves at settlement (same as the human path)
     if(p.hp<=4 && countItem(p,"pill")>0){ removeItem(p,"pill"); p.flags.pendingItemUses.push("pill"); }
     if(STATE.round>=2){
@@ -1081,14 +1098,16 @@ function killPlayer(p,cause){
 function resolvePoisonVote(){
   let winner=null, best=-1;
   for(const [r,c] of Object.entries(STATE.voteCounts)){ if(c>best){ best=c; winner=r; } }
-  if(!winner) return;
+  if(!winner) return "本輪毒氣投票: 無人投票，本輪無新增毒氣房間。";
   const room=ROOMS[winner];
+  let added;
   if(room.poisonRequires){
-    if(room.poisonRequires.every(r=>STATE.poisoned.has(r))) STATE.poisoned.add(winner);
+    added = room.poisonRequires.every(r=>STATE.poisoned.has(r));
+    if(added) STATE.poisoned.add(winner);
   } else {
-    STATE.poisoned.add(winner);
+    added=true; STATE.poisoned.add(winner);
   }
-  log("本輪毒氣投票結果：「"+winner+" "+(room.name||"")+"」"+(STATE.poisoned.has(winner)?"淪為毒氣區域！":"（尚未滿足毒氣條件）"));
+  return "本輪毒氣投票結果：「"+winner+" "+(room.name||"")+"」"+(added?"淪為毒氣區域！":"（尚未滿足毒氣條件，未淪陷）");
 }
 function poisonDamageForRound(){
   const r=STATE.round;
@@ -1100,6 +1119,7 @@ function poisonDamageForRound(){
 function settleRound(){
   STATE.phase="settlement";
   log("<b>── 進入結算階段 ──</b>");
+  STATE.__report={combat:[], rocket:[], hunger:[], drain:[], poison:""};
 
   // 1) queued item-card effects (水/糧/藥片/腎上腺素/酒 — all "結算階段公開使用")
   STATE.players.forEach(p=>{ if(p.alive) resolvePendingItemUses(p); });
@@ -1134,7 +1154,9 @@ function settleRound(){
 
   // rocket launcher (declared during action phase, resolves as part of this round's violence)
   (STATE.rocketTargets||[]).forEach(r=>{
-    playersInRoom(r,true).forEach(p=>{
+    const hit=playersInRoom(r,true);
+    STATE.__report.rocket.push(r+(hit.length?"（命中 "+hit.map(p=>p.name).join("、")+"）":"（房內無人）"));
+    hit.forEach(p=>{
       let dmg=4;
       if(p.prof==="bomb") dmg=Math.max(0,dmg-1);
       damagePlayer(p,dmg,"火箭筒");
@@ -1153,7 +1175,7 @@ function settleRound(){
   });
 
   // 3) poison
-  resolvePoisonVote();
+  STATE.__report.poison=resolvePoisonVote();
   const baseDmg=poisonDamageForRound() + (STATE.poisonBoost?2:0);
   STATE.players.forEach(p=>{
     if(!p.alive || p.ghost) return;
@@ -1177,7 +1199,7 @@ function settleRound(){
       let missing=0;
       if(!p.flags.consumed_water) missing++;
       if(!p.flags.consumed_food) missing++;
-      if(missing>0){ damagePlayer(p,missing,"飢餓"); log(p.name+" 缺水/糧，受到 "+missing+" 點傷害。","dmg"); }
+      if(missing>0){ damagePlayer(p,missing,"飢餓"); log(p.name+" 缺水/糧，受到 "+missing+" 點傷害。","dmg"); STATE.__report.hunger.push(p.name+" -"+missing); }
     });
   }
 
@@ -1197,6 +1219,7 @@ function settleRound(){
       damagePlayer(v,1,"暗影吸血");
       g.ghostDrainTotal++;
       log(g.name+"（暗影）吸取了 "+v.name+" 1點生命。","dmg");
+      STATE.__report.drain.push(g.name+" → "+v.name);
       STATE.players.forEach(sh=>{ if(sh.prof==="shade" && sh.alive && !sh.ghost){ sh.hp=Math.min(sh.maxhp,sh.hp+1); log(sh.name+"（暗影共鳴）恢復1點生命。","heal"); } });
     });
     if(g.ghostDrainTotal>=2){
@@ -1218,6 +1241,16 @@ function settleRound(){
     p.flags.__embalmerGotThisRound=false;
     p.flags.climberVertical=false;
   });
+
+  // Public settlement broadcast: always print the full fixed set of category lines,
+  // every round, whether or not anything happened in that category.
+  const rep=STATE.__report;
+  log("<b>── 第 "+STATE.round+" 輪結算公告 ──</b>");
+  log("毒氣: "+(rep.poison||"無投票結果"));
+  log("火箭筒: "+(rep.rocket.length? rep.rocket.join("；") : "無人使用"));
+  log("戰鬥: "+(rep.combat.length? rep.combat.join("；") : "無"));
+  log("飢餓扣血: "+(rep.hunger.length? rep.hunger.join("、") : "無"));
+  log("暗影吸血: "+(rep.drain.length? rep.drain.join("、") : "無"));
 
   renderAll();
   showRoundSummary();
@@ -1244,6 +1277,7 @@ function resolveCombat(a,b,roomId){
   if(dmgToA>0){ damagePlayer(a,dmgToA,"與"+b.name+"戰鬥"); log(a.name+" 在「"+roomId+"」戰鬥中受到 "+dmgToA+" 點傷害（對手 "+b.name+"）。","dmg"); }
   if(dmgToB>0){ damagePlayer(b,dmgToB,"與"+a.name+"戰鬥"); log(b.name+" 在「"+roomId+"」戰鬥中受到 "+dmgToB+" 點傷害（對手 "+a.name+"）。","dmg"); }
   if(dmgToA===0 && dmgToB===0) log(a.name+" 與 "+b.name+" 在「"+roomId+"」武力相同，未分勝負。");
+  STATE.__report.combat.push(a.name+" vs "+b.name+" @"+roomId+"（"+a.name+" -"+dmgToA+" / "+b.name+" -"+dmgToB+"）");
 }
 
 function showRoundSummary(){
@@ -1338,7 +1372,7 @@ function renderAll(){
 
   // map
   const mapEl=document.getElementById("mapArea"); mapEl.innerHTML="";
-  const reach=reachableRooms(p.room,p.stepsLeft);
+  const reach = p.flags.roomCommitted ? {} : reachableRooms(p.room,p.stepsLeft);
   const floors={};
   Object.values(ROOMS).forEach(r=>{ (floors[r.floor]=floors[r.floor]||[]).push(r); });
   Object.keys(floors).sort((a,b)=>a-b).forEach(fl=>{
@@ -1362,19 +1396,29 @@ function renderAll(){
     mapEl.appendChild(row);
   });
 
-  // room actions
+  // room actions — a player may only act in the ONE room they finally stop in this round;
+  // using the room's function, or explicitly ending movement, both lock further movement.
   const raEl=document.getElementById("roomActions"); raEl.innerHTML="";
   const room=ROOMS[p.room];
-  if(room.draw>0 || room.special){
-    const btn=document.createElement("button"); btn.className="btn small";
-    btn.textContent = room.special==="gene"?"使用基因庫" : room.special==="respec"?"重新分配點數" :
-      room.special==="slide"?"滑向垃圾場(1步)" : room.special==="teleport"?"傳送" : room.special==="control"?"控制室功能" :
-      room.special==="helipad"?"領取空投" : room.draw>0?"搜索房間 (最多"+room.draw+"張)" : "使用房間功能";
-    if(p.flags.roomLocked){ btn.disabled=true; btn.title="好賭成性失敗，本輪無法房間操作"; }
-    btn.onclick=doRoomAction;
-    raEl.appendChild(btn);
+  if(p.flags.roomCommitted){
+    raEl.innerHTML="<span class='pill' style='color:var(--amber-bright);border-color:var(--amber-bright)'>已確定停留於「"+p.room+" "+(room.name||"")+"」－本輪不可再移動</span>";
   } else {
-    raEl.innerHTML="<span class='muted'>此房間無特殊功能</span>";
+    if(room.draw>0 || room.special){
+      const btn=document.createElement("button"); btn.className="btn small";
+      btn.textContent = room.special==="gene"?"使用基因庫" : room.special==="respec"?"重新分配點數" :
+        room.special==="slide"?"滑向垃圾場(1步)" : room.special==="teleport"?"傳送" : room.special==="control"?"控制室功能" :
+        room.special==="helipad"?"領取空投" : room.draw>0?"搜索房間 (最多"+room.draw+"張)" : "使用房間功能";
+      if(p.flags.roomLocked){ btn.disabled=true; btn.title="好賭成性失敗，本輪無法房間操作"; }
+      btn.onclick=doRoomAction;
+      raEl.appendChild(btn);
+    } else {
+      const span=document.createElement("span"); span.className="muted"; span.textContent="此房間無特殊功能。";
+      raEl.appendChild(span);
+    }
+    const stopBtn=document.createElement("button"); stopBtn.className="btn small ghost";
+    stopBtn.textContent="確定停留於此房間（結束移動）";
+    stopBtn.onclick=commitToRoom;
+    raEl.appendChild(stopBtn);
   }
   if(room.special==="laser") log_once(p,"laser-"+STATE.round,()=>{ applyLaser(p); log(p.name+" 經過激光室，結算時將扣1點生命。","dmg"); });
 
