@@ -489,7 +489,7 @@ function makePlayer(id,isAI,profId,stats,name){
       scavengerUses:0, truckerUses:0, truckerDoubled:false, truckerDiscardedNonTrash:false,
       chemistUses:0, embalmerUses:0, hackerUses:0, hackerUsedRooms:[],
       tamerUses:0, geneUses:0, climberDietUsed:false, adrenalineRound:0, dietThisRound:false,
-      goldUsedThisRound:false, visited102:false, pendingHeli:false, remoteRoomOverride:null,
+      goldUsedThisRound:false, visited102:false, remoteRoomOverride:null,
       pendingItemUses:[], roomCommitted:false},
     pendingActions:{targetRoom:null, movementDone:false, roomActed:false},
     weaponWeightless: profId==="merc",
@@ -686,6 +686,9 @@ function onRoomClick(roomId){
   const p=you();
   if(STATE.phase!=="positioning" || STATE.gameOver) return;
   if(p.flags.roomCommitted){ flashMsg("本輪已確定停留於此房間，無法再移動（每輪只能在最終抵達的單一房間行動）。"); return; }
+  if(p.ghost){ // 暗影無視梯子電梯，能穿牆移動，不受相鄰房間/步數限制
+    p.room=roomId; renderAll(); return;
+  }
   const dist=bfsDist(p.room,roomId);
   if(dist===Infinity || dist>p.stepsLeft){ flashMsg("步數不足或無法到達"); return; }
   p.room=roomId; p.stepsLeft-=dist;
@@ -761,7 +764,7 @@ function doSpecialRoom(p,room){
     case "slide": if(carrySpendStep(p)){ p.room="B503"; log(p.name+" 經回收站滑至垃圾場。"); } break;
     case "teleport": openTeleportModal(p); break;
     case "control": openControlModal(p); break;
-    case "helipad": p.flags.pendingHeli=true; log(p.name+" 於停機坪：下一輪可搭乘直昇機。"); collectAirdrop(p); break;
+    case "helipad": collectAirdrop(p); openHelipadModal(p); break;
     case "mortuary": break;
     case "laser": break;
   }
@@ -811,6 +814,35 @@ function openTeleportModal(p){
     log(p.name+" 使用傳送室前往 "+p.room+"。");
   };
   document.getElementById("tpCancel").onclick=closeModal;
+}
+function openHelipadModal(p){
+  const dests=HELI_TARGETS.filter(id=>id!==p.room);
+  if(!dests.length) return;
+  const opts=dests.map(id=>`<option value="${id}">${id} ${ROOMS[id].name||""}</option>`).join("");
+  openModal(`<h3>停機坪：搭乘直昇機前往遠距離房間</h3><select id="hpSel">${opts}</select><br><br>
+    <button class="btn small" id="hpOk">起飛(消耗1步)</button> <button class="btn small ghost" id="hpCancel">不搭乘</button>`);
+  document.getElementById("hpOk").onclick=()=>{
+    if(!carrySpendStep(p)){ closeModal(); return; }
+    p.room=document.getElementById("hpSel").value; closeModal(); renderAll();
+    log(p.name+" 搭乘直昇機前往 "+p.room+"。");
+  };
+  document.getElementById("hpCancel").onclick=closeModal;
+}
+function openRopeModal(p){
+  const room=ROOMS[p.room];
+  const dests=Object.values(ROOMS).filter(r=>r.floor===room.floor-1||r.floor===room.floor+1);
+  if(!dests.length){ flashMsg("此樓層沒有可直接上下樓的目標。"); return; }
+  const opts=dests.map(r=>`<option value="${r.id}">${FLOOR_LABEL[r.floor]} ${r.id} ${r.name||""}</option>`).join("");
+  openModal(`<h3>繩索：直接上下樓（無需梯子/電梯）</h3><select id="ropeSel">${opts}</select><br><br>
+    <button class="btn small" id="ropeOk">使用(消耗1步)</button> <button class="btn small ghost" id="ropeCancel">取消</button>`);
+  document.getElementById("ropeOk").onclick=()=>{
+    if(p.flags.roomCommitted){ flashMsg("本輪已確定停留於此房間，無法再移動。"); closeModal(); return; }
+    if(!carrySpendStep(p)){ closeModal(); return; }
+    removeItem(p,"rope"); STATE.discardPile.push("rope");
+    p.room=document.getElementById("ropeSel").value; closeModal(); renderAll();
+    log(p.name+" 使用繩索直接上下樓，前往 "+p.room+"。");
+  };
+  document.getElementById("ropeCancel").onclick=closeModal;
 }
 function openControlModal(p){
   const poisonedList=[...STATE.poisoned];
@@ -1066,8 +1098,9 @@ function runAIRound(){
   // Same single-destination-per-round rule as the human: the AI computes ONE target room,
   // makes ONE move to it, then may act only in that room — it never moves again afterward.
   alivePlayers().filter(p=>p.isAI).forEach(p=>{
-    if(p.ghost){ // wander randomly
-      const opts=ADJ[p.room]||[]; if(opts.length) p.room=opts[Math.floor(Math.random()*opts.length)];
+    if(p.ghost){ // 暗影無視梯子電梯、能穿牆，隨機遊蕩至任一房間（不受牆壁限制）
+      const opts=Object.keys(ROOMS).filter(id=>id!==p.room);
+      if(opts.length) p.room=opts[Math.floor(Math.random()*opts.length)];
       return;
     }
     const target=aiChooseTarget(p);
@@ -1078,6 +1111,13 @@ function runAIRound(){
     if(room.draw>0){ drawFromRoom(p,p.room,room.draw); }
     if(room.special==="gene"){ p.power++; p.speed++; p.carry++; }
     if(room.special==="respec"){ /* AI keeps stats */ }
+    if(room.special==="helipad"){
+      collectAirdrop(p);
+      const dests=HELI_TARGETS.filter(id=>id!==p.room);
+      if(dests.length && p.stepsLeft>=1){
+        p.room=dests[Math.floor(Math.random()*dests.length)]; p.stepsLeft--;
+      }
+    }
     p.flags.roomCommitted=true; // final destination for this round — no further movement
     // simple item usage: declare now, effect resolves at settlement (same as the human path)
     if(p.hp<=4 && countItem(p,"pill")>0){ removeItem(p,"pill"); p.flags.pendingItemUses.push("pill"); }
@@ -1324,6 +1364,14 @@ function showRoundSummary(){
 }
 function endGame(){
   STATE.gameOver=true;
+  // 最終結算：手上剩餘的金條每根可換 +1 點血（上限為血量上限）
+  STATE.players.forEach(p=>{
+    const goldCount=countItem(p,"gold");
+    if(goldCount<=0) return;
+    const healed=Math.min(goldCount, p.maxhp-p.hp);
+    for(let i=0;i<goldCount;i++) removeItem(p,"gold");
+    if(healed>0){ p.hp+=healed; log(p.name+" 最終結算：以 "+goldCount+" 根金條換取 +"+healed+" 點血。","heal"); }
+  });
   document.getElementById("game").classList.add("hidden");
   const ranked=[...STATE.players].sort((a,b)=>b.hp-a.hp);
   const list=document.getElementById("rankList");
@@ -1365,6 +1413,7 @@ function renderAll(){
     if(id==="gold") actions+=`<button class="btn small gold" data-gold="1">用於本房</button>`;
     if(id==="rocket") actions+=`<button class="btn small warn" data-rocket="1">瞄準</button>`;
     if(id==="recycledevice") actions+=`<button class="btn small" data-recycle="1">回收抽取</button>`;
+    if(id==="rope") actions+=`<button class="btn small" data-rope="1">直接上下樓</button>`;
     div.innerHTML=`<span>${ITEMS[id].name} x${n}</span><span class="actions">${actions}</span>`;
     invEl.appendChild(div);
   });
@@ -1372,6 +1421,7 @@ function renderAll(){
   invEl.querySelectorAll("[data-gold]").forEach(b=>b.onclick=()=>useGoldAtRoom(p));
   invEl.querySelectorAll("[data-rocket]").forEach(b=>b.onclick=()=>useRocket(p));
   invEl.querySelectorAll("[data-recycle]").forEach(b=>b.onclick=()=>useRecycleDevice(p));
+  invEl.querySelectorAll("[data-rope]").forEach(b=>b.onclick=()=>openRopeModal(p));
   if(p.flags.pendingItemUses && p.flags.pendingItemUses.length){
     const pend=document.createElement("div"); pend.className="muted mono"; pend.style.fontSize="11px"; pend.style.marginTop="6px";
     pend.textContent="本輪已宣告使用（結算階段生效）: "+p.flags.pendingItemUses.map(i=>ITEMS[i].name).join("、");
@@ -1400,7 +1450,9 @@ function renderAll(){
 
   // map
   const mapEl=document.getElementById("mapArea"); mapEl.innerHTML="";
-  const reach = p.flags.roomCommitted ? {} : reachableRooms(p.room,p.stepsLeft);
+  const reach = p.flags.roomCommitted ? {} :
+    p.ghost ? Object.fromEntries(Object.keys(ROOMS).map(id=>[id,0])) : // 暗影能穿牆，任何房間皆可到達
+    reachableRooms(p.room,p.stepsLeft);
   const floors={};
   Object.values(ROOMS).forEach(r=>{ (floors[r.floor]=floors[r.floor]||[]).push(r); });
   Object.keys(floors).sort((a,b)=>a-b).forEach(fl=>{
