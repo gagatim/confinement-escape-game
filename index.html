@@ -65,6 +65,9 @@
   .room-chip.here{border-color:var(--amber-bright);background:#2a2410;box-shadow:0 0 10px rgba(255,206,107,.4)}
   .room-chip.poison{border-color:var(--toxic);background:#122313;color:var(--toxic-bright)}
   .room-chip.dead{opacity:.35;cursor:default}
+  .room-chip.spawn{border-color:var(--ember);background:#2a1113;color:var(--ember-bright)}
+  .static-map .room-chip{cursor:default}
+  .static-map .bridge-note{font-size:11px;color:var(--muted);margin-top:8px}
   .room-chip .occ{position:absolute;top:-7px;right:-7px;background:var(--ember);color:#fff;border-radius:999px;
     font-size:9px;padding:1px 5px;font-family:"JetBrains Mono",monospace}
   #log{height:230px;overflow-y:auto;font-size:12px;line-height:1.6;background:var(--panel-2);border:1px solid var(--line);
@@ -124,6 +127,11 @@
       <p class="muted" style="font-size:12.5px">依照規則，玩家在第一輪開始前秘密選擇一個紅色出生點出發。其他玩家（AI）也各自秘密選擇中，你不會看到他們選了哪裡。</p>
       <div class="prof-grid" id="spawnGrid"></div>
       <div style="margin-top:14px"><button class="btn" id="confirmSpawnBtn" disabled>確認出生點，開始第一輪</button></div>
+      <div style="margin-top:18px;border-top:1px solid var(--line);padding-top:12px">
+        <div class="panel-title" style="margin-bottom:6px">整體地圖（參考用）</div>
+        <div id="spawnMapArea" class="static-map"></div>
+        <div class="bridge-note">紅色為出生點。中央天井僅在 <b>B105↔B106</b> 與 <b>B305↔B306</b> 兩處有天橋可花1步直接通行，其餘樓層天井不可跨越。</div>
+      </div>
     </div>
   </div>
 
@@ -271,9 +279,9 @@ const ROOMS = {
 };
 const FLOOR_LABEL = {0:"2F",1:"1F",2:"B1",3:"B2",4:"B3",5:"B4",6:"B5",7:"B6",8:"B7"};
 // Re-derived room-by-room from img1.jpg using a shared 9-column grid per floor (see commit notes):
-// the atrium/chasm blocks left-cluster <-> right-cluster adjacency on every floor EXCEPT B1, which
-// has a visible footbridge (B105<->B106). Wide rooms (spanning multiple columns, e.g. B206/B501/B503)
-// connect to every room whose column they overlap, above and below.
+// the atrium/chasm blocks left-cluster <-> right-cluster adjacency on every floor EXCEPT the two
+// floors with a visible footbridge: B1 (B105<->B106) and B3 (B305<->B306). Wide rooms (spanning
+// multiple columns, e.g. B206/B501/B503) connect to every room whose column they overlap, above and below.
 const ADJ = {
   "201":["102"], "202":["104","103"],
   "101":["102","B102"], "102":["101","201","B104","B103"], "103":["104","B106","202"], "104":["103","202","B107"],
@@ -283,8 +291,8 @@ const ADJ = {
   "B201":["B101","B202","B301"], "B202":["B201","B203","B102","B302"], "B203":["B202","B204","B103","B303"],
   "B204":["B203","B205","B104","B304"], "B205":["B204","B105","B305"], "B206":["B106","B107","B306","B307","B308"],
   "B301":["B302","B201","B501"], "B302":["B301","B303","B202","B501"], "B303":["B302","B304","B203","B401"],
-  "B304":["B303","B305","B204","B402"], "B305":["B304","B205","B402"],
-  "B306":["B307","B206","B403"], "B307":["B306","B308","B206","B404"], "B308":["B307","B206","B405"],
+  "B304":["B303","B305","B204","B402"], "B305":["B304","B205","B402","B306"],
+  "B306":["B307","B206","B403","B305"], "B307":["B306","B308","B206","B404"], "B308":["B307","B206","B405"],
   "B501":["B301","B302","B401","B502","B601"], "B401":["B501","B402","B303","B502"],
   "B402":["B401","B304","B305","B503"], "B403":["B404","B306","B504"],
   "B404":["B403","B405","B307","B504","B505"], "B405":["B404","B308","B505"],
@@ -481,7 +489,7 @@ function makePlayer(id,isAI,profId,stats,name){
       scavengerUses:0, truckerUses:0, truckerDoubled:false, truckerDiscardedNonTrash:false,
       chemistUses:0, embalmerUses:0, hackerUses:0, hackerUsedRooms:[],
       tamerUses:0, geneUses:0, climberDietUsed:false, adrenalineRound:0, dietThisRound:false,
-      goldUsedThisRound:false, visited102:false, pendingHeli:false, remoteRoomOverride:null,
+      goldUsedThisRound:false, visited102:false, remoteRoomOverride:null,
       pendingItemUses:[], roomCommitted:false},
     pendingActions:{targetRoom:null, movementDone:false, roomActed:false},
     weaponWeightless: profId==="merc",
@@ -603,6 +611,26 @@ function renderSpawnGrid(){
     });
     grid.appendChild(div);
   });
+  renderStaticMap("spawnMapArea", SPAWN_ROOMS);
+}
+// read-only reference map (no click handlers, no live game state) — used on the spawn-select
+// screen so players can see the whole connected building before secretly picking a spawn room.
+function renderStaticMap(containerId, highlightIds){
+  const mapEl=document.getElementById(containerId); mapEl.innerHTML="";
+  const floors={};
+  Object.values(ROOMS).forEach(r=>{ (floors[r.floor]=floors[r.floor]||[]).push(r); });
+  Object.keys(floors).sort((a,b)=>a-b).forEach(fl=>{
+    const row=document.createElement("div"); row.className="floor-row";
+    const lbl=document.createElement("span"); lbl.className="floor-label"; lbl.textContent=FLOOR_LABEL[fl];
+    row.appendChild(lbl);
+    floors[fl].sort((a,b)=>a.order-b.order).forEach(r=>{
+      const chip=document.createElement("div"); chip.className="room-chip";
+      if(highlightIds && highlightIds.includes(r.id)) chip.classList.add("spawn");
+      chip.innerHTML=`${r.id}${r.name?("<small>"+r.name+"</small>"):""}`;
+      row.appendChild(chip);
+    });
+    mapEl.appendChild(row);
+  });
 }
 document.getElementById("confirmSpawnBtn").addEventListener("click",()=>{
   document.getElementById("spawnSelect").classList.add("hidden");
@@ -698,6 +726,9 @@ function onRoomClick(roomId){
   const p=you();
   if(!isMyTurn()){ flashMsg("尚未輪到你的回合。"); return; }
   if(p.flags.roomCommitted){ flashMsg("本輪已確定停留於此房間，無法再移動（每輪只能在最終抵達的單一房間行動）。"); return; }
+  if(p.ghost){ // 暗影無視梯子電梯，能穿牆移動，不受相鄰房間/步數限制
+    p.room=roomId; renderAll(); return;
+  }
   const dist=bfsDist(p.room,roomId);
   if(dist===Infinity || dist>p.stepsLeft){ flashMsg("步數不足或無法到達"); return; }
   p.room=roomId; p.stepsLeft-=dist;
@@ -775,7 +806,7 @@ function doSpecialRoom(p,room){
     case "slide": if(carrySpendStep(p)){ p.room="B503"; log(p.name+" 經回收站滑至垃圾場。"); } break;
     case "teleport": openTeleportModal(p); break;
     case "control": openControlModal(p); break;
-    case "helipad": p.flags.pendingHeli=true; log(p.name+" 於停機坪：下一輪可搭乘直昇機。"); collectAirdrop(p); break;
+    case "helipad": collectAirdrop(p); openHelipadModal(p); break;
     case "mortuary": break;
     case "laser": break;
   }
@@ -826,6 +857,35 @@ function openTeleportModal(p){
   };
   document.getElementById("tpCancel").onclick=closeModal;
 }
+function openHelipadModal(p){
+  const dests=HELI_TARGETS.filter(id=>id!==p.room);
+  if(!dests.length) return;
+  const opts=dests.map(id=>`<option value="${id}">${id} ${ROOMS[id].name||""}</option>`).join("");
+  openModal(`<h3>停機坪：搭乘直昇機前往遠距離房間</h3><select id="hpSel">${opts}</select><br><br>
+    <button class="btn small" id="hpOk">起飛(消耗1步)</button> <button class="btn small ghost" id="hpCancel">不搭乘</button>`);
+  document.getElementById("hpOk").onclick=()=>{
+    if(!carrySpendStep(p)){ closeModal(); return; }
+    p.room=document.getElementById("hpSel").value; closeModal(); renderAll();
+    log(p.name+" 搭乘直昇機前往 "+p.room+"。");
+  };
+  document.getElementById("hpCancel").onclick=closeModal;
+}
+function openRopeModal(p){
+  const room=ROOMS[p.room];
+  const dests=Object.values(ROOMS).filter(r=>r.floor===room.floor-1||r.floor===room.floor+1);
+  if(!dests.length){ flashMsg("此樓層沒有可直接上下樓的目標。"); return; }
+  const opts=dests.map(r=>`<option value="${r.id}">${FLOOR_LABEL[r.floor]} ${r.id} ${r.name||""}</option>`).join("");
+  openModal(`<h3>繩索：直接上下樓（無需梯子/電梯）</h3><select id="ropeSel">${opts}</select><br><br>
+    <button class="btn small" id="ropeOk">使用(消耗1步)</button> <button class="btn small ghost" id="ropeCancel">取消</button>`);
+  document.getElementById("ropeOk").onclick=()=>{
+    if(p.flags.roomCommitted){ flashMsg("本輪已確定停留於此房間，無法再移動。"); closeModal(); return; }
+    if(!carrySpendStep(p)){ closeModal(); return; }
+    removeItem(p,"rope"); STATE.discardPile.push("rope");
+    p.room=document.getElementById("ropeSel").value; closeModal(); renderAll();
+    log(p.name+" 使用繩索直接上下樓，前往 "+p.room+"。");
+  };
+  document.getElementById("ropeCancel").onclick=closeModal;
+}
 function openControlModal(p){
   const poisonedList=[...STATE.poisoned];
   openModal(`<h3>控制室</h3>
@@ -850,6 +910,7 @@ function openControlModal(p){
 const SETTLEMENT_TIMED_ITEMS=["water","food","pill","adrenaline","wine"];
 function useItem(p,item){
   if(!SETTLEMENT_TIMED_ITEMS.includes(item)) return; // passive-hold items are never "used" via click
+  if(!p.flags.roomCommitted){ flashMsg("請先移動並確定停留在房間後，才能使用道具。"); return; }
   if(!removeItem(p,item)) return;
   p.flags.pendingItemUses.push(item);
   log(p.name+" 宣告使用「"+ITEMS[item].name+"」（結算階段公開生效）。");
@@ -881,6 +942,7 @@ function resolvePendingItemUses(p){
   p.flags.pendingItemUses=[];
 }
 function useGoldAtRoom(p){
+  if(!p.flags.roomCommitted){ flashMsg("請先移動並確定停留在房間後，才能使用道具。"); return; }
   if(p.flags.goldUsedThisRound){ flashMsg("每回合限用1根金條"); return; }
   const room=ROOMS[p.room];
   if(room.noGold){ flashMsg("此房間無法使用金條"); return; }
@@ -899,6 +961,7 @@ function useGoldAtRoom(p){
   });
 }
 function useRocket(p){
+  if(!p.flags.roomCommitted){ flashMsg("請先移動並確定停留在房間後，才能使用道具。"); return; }
   openModal(`<h3>火箭筒：選擇目標房間</h3><select id="rkSel">${Object.keys(ROOMS).map(id=>`<option value="${id}">${id} ${ROOMS[id].name||""}</option>`).join("")}</select>
     <br><br><button class="btn small warn" id="rkOk">發射</button> <button class="btn small ghost" id="rkCancel">取消</button>`);
   document.getElementById("rkOk").onclick=()=>{
@@ -911,6 +974,7 @@ function useRocket(p){
   document.getElementById("rkCancel").onclick=closeModal;
 }
 function useRecycleDevice(p){
+  if(!p.flags.roomCommitted){ flashMsg("請先移動並確定停留在房間後，才能使用道具。"); return; }
   if(STATE.discardPile.length===0){ flashMsg("棄牌堆是空的"); return; }
   if(carryRoom(p)<=0){ flashMsg("負重已滿"); return; }
   const idx=Math.floor(Math.random()*STATE.discardPile.length);
@@ -1089,6 +1153,13 @@ function resolveAITurn(p){
   if(room.draw>0){ drawFromRoom(p,p.room,room.draw); }
   if(room.special==="gene"){ p.power++; p.speed++; p.carry++; }
   if(room.special==="respec"){ /* AI keeps stats */ }
+  if(room.special==="helipad"){
+    collectAirdrop(p);
+    const dests=HELI_TARGETS.filter(id=>id!==p.room);
+    if(dests.length && p.stepsLeft>=1){
+      p.room=dests[Math.floor(Math.random()*dests.length)]; p.stepsLeft--;
+    }
+  }
   p.flags.roomCommitted=true; // final destination for this round — no further movement
   // simple item usage: declare now, effect resolves at settlement (same as the human path)
   if(p.hp<=4 && countItem(p,"pill")>0){ removeItem(p,"pill"); p.flags.pendingItemUses.push("pill"); }
@@ -1334,6 +1405,14 @@ function showRoundSummary(){
 }
 function endGame(){
   STATE.gameOver=true;
+  // 最終結算：手上剩餘的金條每根可換 +1 點血（上限為血量上限）
+  STATE.players.forEach(p=>{
+    const goldCount=countItem(p,"gold");
+    if(goldCount<=0) return;
+    const healed=Math.min(goldCount, p.maxhp-p.hp);
+    for(let i=0;i<goldCount;i++) removeItem(p,"gold");
+    if(healed>0){ p.hp+=healed; log(p.name+" 最終結算：以 "+goldCount+" 根金條換取 +"+healed+" 點血。","heal"); }
+  });
   document.getElementById("game").classList.add("hidden");
   const ranked=[...STATE.players].sort((a,b)=>b.hp-a.hp);
   const list=document.getElementById("rankList");
@@ -1368,13 +1447,17 @@ function renderAll(){
   const invEl=document.getElementById("inventory"); invEl.innerHTML="";
   const counts={};
   p.inv.forEach(i=>counts[i]=(counts[i]||0)+1);
+  // 道具卡（繩索、防毒面具除外）須先移動並確定停留在房間後才能使用
+  const needsCommit = !p.flags.roomCommitted;
   Object.entries(counts).forEach(([id,n])=>{
     const div=document.createElement("div"); div.className="inv-item";
     let actions="";
-    if(["water","food","pill","adrenaline","wine"].includes(id)) actions+=`<button class="btn small" data-use="${id}">使用</button>`;
-    if(id==="gold") actions+=`<button class="btn small gold" data-gold="1">用於本房</button>`;
-    if(id==="rocket") actions+=`<button class="btn small warn" data-rocket="1">瞄準</button>`;
-    if(id==="recycledevice") actions+=`<button class="btn small" data-recycle="1">回收抽取</button>`;
+    const dis = id==="rope" ? "" : (needsCommit ? " disabled title=\"請先移動並確定停留在房間後，才能使用道具\"" : "");
+    if(["water","food","pill","adrenaline","wine"].includes(id)) actions+=`<button class="btn small" data-use="${id}"${dis}>使用</button>`;
+    if(id==="gold") actions+=`<button class="btn small gold" data-gold="1"${dis}>用於本房</button>`;
+    if(id==="rocket") actions+=`<button class="btn small warn" data-rocket="1"${dis}>瞄準</button>`;
+    if(id==="recycledevice") actions+=`<button class="btn small" data-recycle="1"${dis}>回收抽取</button>`;
+    if(id==="rope") actions+=`<button class="btn small" data-rope="1">直接上下樓</button>`;
     div.innerHTML=`<span>${ITEMS[id].name} x${n}</span><span class="actions">${actions}</span>`;
     invEl.appendChild(div);
   });
@@ -1382,6 +1465,12 @@ function renderAll(){
   invEl.querySelectorAll("[data-gold]").forEach(b=>b.onclick=()=>useGoldAtRoom(p));
   invEl.querySelectorAll("[data-rocket]").forEach(b=>b.onclick=()=>useRocket(p));
   invEl.querySelectorAll("[data-recycle]").forEach(b=>b.onclick=()=>useRecycleDevice(p));
+  invEl.querySelectorAll("[data-rope]").forEach(b=>b.onclick=()=>openRopeModal(p));
+  if(needsCommit){
+    const hint=document.createElement("div"); hint.className="muted"; hint.style.fontSize="11px"; hint.style.marginTop="6px";
+    hint.textContent="（繩索、防毒面具除外，其餘道具須先移動並確定停留在房間後才能使用）";
+    invEl.appendChild(hint);
+  }
   if(p.flags.pendingItemUses && p.flags.pendingItemUses.length){
     const pend=document.createElement("div"); pend.className="muted mono"; pend.style.fontSize="11px"; pend.style.marginTop="6px";
     pend.textContent="本輪已宣告使用（結算階段生效）: "+p.flags.pendingItemUses.map(i=>ITEMS[i].name).join("、");
@@ -1410,7 +1499,9 @@ function renderAll(){
 
   // map
   const mapEl=document.getElementById("mapArea"); mapEl.innerHTML="";
-  const reach = p.flags.roomCommitted ? {} : reachableRooms(p.room,p.stepsLeft);
+  const reach = p.flags.roomCommitted ? {} :
+    p.ghost ? Object.fromEntries(Object.keys(ROOMS).map(id=>[id,0])) : // 暗影能穿牆，任何房間皆可到達
+    reachableRooms(p.room,p.stepsLeft);
   const floors={};
   Object.values(ROOMS).forEach(r=>{ (floors[r.floor]=floors[r.floor]||[]).push(r); });
   Object.keys(floors).sort((a,b)=>a-b).forEach(fl=>{
