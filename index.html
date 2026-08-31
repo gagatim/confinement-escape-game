@@ -65,6 +65,9 @@
   .room-chip.here{border-color:var(--amber-bright);background:#2a2410;box-shadow:0 0 10px rgba(255,206,107,.4)}
   .room-chip.poison{border-color:var(--toxic);background:#122313;color:var(--toxic-bright)}
   .room-chip.dead{opacity:.35;cursor:default}
+  .room-chip.spawn{border-color:var(--ember);background:#2a1113;color:var(--ember-bright)}
+  .static-map .room-chip{cursor:default}
+  .static-map .bridge-note{font-size:11px;color:var(--muted);margin-top:8px}
   .room-chip .occ{position:absolute;top:-7px;right:-7px;background:var(--ember);color:#fff;border-radius:999px;
     font-size:9px;padding:1px 5px;font-family:"JetBrains Mono",monospace}
   #log{height:230px;overflow-y:auto;font-size:12px;line-height:1.6;background:var(--panel-2);border:1px solid var(--line);
@@ -124,6 +127,11 @@
       <p class="muted" style="font-size:12.5px">依照規則，玩家在第一輪開始前秘密選擇一個紅色出生點出發。其他玩家（AI）也各自秘密選擇中，你不會看到他們選了哪裡。</p>
       <div class="prof-grid" id="spawnGrid"></div>
       <div style="margin-top:14px"><button class="btn" id="confirmSpawnBtn" disabled>確認出生點，開始第一輪</button></div>
+      <div style="margin-top:18px;border-top:1px solid var(--line);padding-top:12px">
+        <div class="panel-title" style="margin-bottom:6px">整體地圖（參考用）</div>
+        <div id="spawnMapArea" class="static-map"></div>
+        <div class="bridge-note">紅色為出生點。中央天井僅在 <b>B105↔B106</b> 與 <b>B305↔B306</b> 兩處有天橋可花1步直接通行，其餘樓層天井不可跨越。</div>
+      </div>
     </div>
   </div>
 
@@ -271,9 +279,9 @@ const ROOMS = {
 };
 const FLOOR_LABEL = {0:"2F",1:"1F",2:"B1",3:"B2",4:"B3",5:"B4",6:"B5",7:"B6",8:"B7"};
 // Re-derived room-by-room from img1.jpg using a shared 9-column grid per floor (see commit notes):
-// the atrium/chasm blocks left-cluster <-> right-cluster adjacency on every floor EXCEPT B1, which
-// has a visible footbridge (B105<->B106). Wide rooms (spanning multiple columns, e.g. B206/B501/B503)
-// connect to every room whose column they overlap, above and below.
+// the atrium/chasm blocks left-cluster <-> right-cluster adjacency on every floor EXCEPT the two
+// floors with a visible footbridge: B1 (B105<->B106) and B3 (B305<->B306). Wide rooms (spanning
+// multiple columns, e.g. B206/B501/B503) connect to every room whose column they overlap, above and below.
 const ADJ = {
   "201":["102"], "202":["104","103"],
   "101":["102","B102"], "102":["101","201","B104","B103"], "103":["104","B106","202"], "104":["103","202","B107"],
@@ -283,8 +291,8 @@ const ADJ = {
   "B201":["B101","B202","B301"], "B202":["B201","B203","B102","B302"], "B203":["B202","B204","B103","B303"],
   "B204":["B203","B205","B104","B304"], "B205":["B204","B105","B305"], "B206":["B106","B107","B306","B307","B308"],
   "B301":["B302","B201","B501"], "B302":["B301","B303","B202","B501"], "B303":["B302","B304","B203","B401"],
-  "B304":["B303","B305","B204","B402"], "B305":["B304","B205","B402"],
-  "B306":["B307","B206","B403"], "B307":["B306","B308","B206","B404"], "B308":["B307","B206","B405"],
+  "B304":["B303","B305","B204","B402"], "B305":["B304","B205","B402","B306"],
+  "B306":["B307","B206","B403","B305"], "B307":["B306","B308","B206","B404"], "B308":["B307","B206","B405"],
   "B501":["B301","B302","B401","B502","B601"], "B401":["B501","B402","B303","B502"],
   "B402":["B401","B304","B305","B503"], "B403":["B404","B306","B504"],
   "B404":["B403","B405","B307","B504","B505"], "B405":["B404","B308","B505"],
@@ -602,6 +610,26 @@ function renderSpawnGrid(){
       document.getElementById("confirmSpawnBtn").disabled=false;
     });
     grid.appendChild(div);
+  });
+  renderStaticMap("spawnMapArea", SPAWN_ROOMS);
+}
+// read-only reference map (no click handlers, no live game state) — used on the spawn-select
+// screen so players can see the whole connected building before secretly picking a spawn room.
+function renderStaticMap(containerId, highlightIds){
+  const mapEl=document.getElementById(containerId); mapEl.innerHTML="";
+  const floors={};
+  Object.values(ROOMS).forEach(r=>{ (floors[r.floor]=floors[r.floor]||[]).push(r); });
+  Object.keys(floors).sort((a,b)=>a-b).forEach(fl=>{
+    const row=document.createElement("div"); row.className="floor-row";
+    const lbl=document.createElement("span"); lbl.className="floor-label"; lbl.textContent=FLOOR_LABEL[fl];
+    row.appendChild(lbl);
+    floors[fl].sort((a,b)=>a.order-b.order).forEach(r=>{
+      const chip=document.createElement("div"); chip.className="room-chip";
+      if(highlightIds && highlightIds.includes(r.id)) chip.classList.add("spawn");
+      chip.innerHTML=`${r.id}${r.name?("<small>"+r.name+"</small>"):""}`;
+      row.appendChild(chip);
+    });
+    mapEl.appendChild(row);
   });
 }
 document.getElementById("confirmSpawnBtn").addEventListener("click",()=>{
