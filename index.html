@@ -868,6 +868,7 @@ function openControlModal(p){
 const SETTLEMENT_TIMED_ITEMS=["water","food","pill","adrenaline","wine"];
 function useItem(p,item){
   if(!SETTLEMENT_TIMED_ITEMS.includes(item)) return; // passive-hold items are never "used" via click
+  if(!p.flags.roomCommitted){ flashMsg("請先移動並確定停留在房間後，才能使用道具。"); return; }
   if(!removeItem(p,item)) return;
   p.flags.pendingItemUses.push(item);
   log(p.name+" 宣告使用「"+ITEMS[item].name+"」（結算階段公開生效）。");
@@ -899,6 +900,7 @@ function resolvePendingItemUses(p){
   p.flags.pendingItemUses=[];
 }
 function useGoldAtRoom(p){
+  if(!p.flags.roomCommitted){ flashMsg("請先移動並確定停留在房間後，才能使用道具。"); return; }
   if(p.flags.goldUsedThisRound){ flashMsg("每回合限用1根金條"); return; }
   const room=ROOMS[p.room];
   if(room.noGold){ flashMsg("此房間無法使用金條"); return; }
@@ -917,6 +919,7 @@ function useGoldAtRoom(p){
   });
 }
 function useRocket(p){
+  if(!p.flags.roomCommitted){ flashMsg("請先移動並確定停留在房間後，才能使用道具。"); return; }
   openModal(`<h3>火箭筒：選擇目標房間</h3><select id="rkSel">${Object.keys(ROOMS).map(id=>`<option value="${id}">${id} ${ROOMS[id].name||""}</option>`).join("")}</select>
     <br><br><button class="btn small warn" id="rkOk">發射</button> <button class="btn small ghost" id="rkCancel">取消</button>`);
   document.getElementById("rkOk").onclick=()=>{
@@ -929,6 +932,7 @@ function useRocket(p){
   document.getElementById("rkCancel").onclick=closeModal;
 }
 function useRecycleDevice(p){
+  if(!p.flags.roomCommitted){ flashMsg("請先移動並確定停留在房間後，才能使用道具。"); return; }
   if(STATE.discardPile.length===0){ flashMsg("棄牌堆是空的"); return; }
   if(carryRoom(p)<=0){ flashMsg("負重已滿"); return; }
   const idx=Math.floor(Math.random()*STATE.discardPile.length);
@@ -1406,13 +1410,16 @@ function renderAll(){
   const invEl=document.getElementById("inventory"); invEl.innerHTML="";
   const counts={};
   p.inv.forEach(i=>counts[i]=(counts[i]||0)+1);
+  // 道具卡（繩索、防毒面具除外）須先移動並確定停留在房間後才能使用
+  const needsCommit = !p.flags.roomCommitted;
   Object.entries(counts).forEach(([id,n])=>{
     const div=document.createElement("div"); div.className="inv-item";
     let actions="";
-    if(["water","food","pill","adrenaline","wine"].includes(id)) actions+=`<button class="btn small" data-use="${id}">使用</button>`;
-    if(id==="gold") actions+=`<button class="btn small gold" data-gold="1">用於本房</button>`;
-    if(id==="rocket") actions+=`<button class="btn small warn" data-rocket="1">瞄準</button>`;
-    if(id==="recycledevice") actions+=`<button class="btn small" data-recycle="1">回收抽取</button>`;
+    const dis = id==="rope" ? "" : (needsCommit ? " disabled title=\"請先移動並確定停留在房間後，才能使用道具\"" : "");
+    if(["water","food","pill","adrenaline","wine"].includes(id)) actions+=`<button class="btn small" data-use="${id}"${dis}>使用</button>`;
+    if(id==="gold") actions+=`<button class="btn small gold" data-gold="1"${dis}>用於本房</button>`;
+    if(id==="rocket") actions+=`<button class="btn small warn" data-rocket="1"${dis}>瞄準</button>`;
+    if(id==="recycledevice") actions+=`<button class="btn small" data-recycle="1"${dis}>回收抽取</button>`;
     if(id==="rope") actions+=`<button class="btn small" data-rope="1">直接上下樓</button>`;
     div.innerHTML=`<span>${ITEMS[id].name} x${n}</span><span class="actions">${actions}</span>`;
     invEl.appendChild(div);
@@ -1422,6 +1429,11 @@ function renderAll(){
   invEl.querySelectorAll("[data-rocket]").forEach(b=>b.onclick=()=>useRocket(p));
   invEl.querySelectorAll("[data-recycle]").forEach(b=>b.onclick=()=>useRecycleDevice(p));
   invEl.querySelectorAll("[data-rope]").forEach(b=>b.onclick=()=>openRopeModal(p));
+  if(needsCommit){
+    const hint=document.createElement("div"); hint.className="muted"; hint.style.fontSize="11px"; hint.style.marginTop="6px";
+    hint.textContent="（繩索、防毒面具除外，其餘道具須先移動並確定停留在房間後才能使用）";
+    invEl.appendChild(hint);
+  }
   if(p.flags.pendingItemUses && p.flags.pendingItemUses.length){
     const pend=document.createElement("div"); pend.className="muted mono"; pend.style.fontSize="11px"; pend.style.marginTop="6px";
     pend.textContent="本輪已宣告使用（結算階段生效）: "+p.flags.pendingItemUses.map(i=>ITEMS[i].name).join("、");
