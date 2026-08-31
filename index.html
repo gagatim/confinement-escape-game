@@ -175,7 +175,7 @@
         </div>
       </div>
       <div style="margin-top:10px" class="row">
-        <button class="btn" id="endTurnBtn">結束本回合行動</button>
+        <button class="btn" id="endTurnBtn">結束我的回合</button>
       </div>
     </div>
 
@@ -618,6 +618,11 @@ function alivePlayers(){ return STATE.players.filter(p=>p.alive); }
 function playersInRoom(room,excludeGhosts){
   return STATE.players.filter(p=>p.room===room && p.alive && (!excludeGhosts || !p.ghost));
 }
+function shuffleArr(arr){
+  const a=arr.slice();
+  for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; }
+  return a;
+}
 function beginRound(){
   STATE.players.forEach(p=>{
     // Round 1 starts at the secretly-chosen spawn room; every later round continues from
@@ -628,14 +633,49 @@ function beginRound(){
     p.flags.goldUsedThisRound=false;
     p.flags.dietThisRound=false;
     p.flags.roomCommitted=false; // locks once the player acts in a room or explicitly ends movement
+    p.flags.skillUsedThisRound=false; // once-per-round cap on active profession skills
+    p.flags.wineExcluded=null;
+    p.actedThisRound=false; // turn-order bookkeeping (順序牌) — set true once this player's turn resolves
     p.pendingActions={targetRoom:null, movementDone:false, roomActed:false};
   });
   STATE.voteCounts={};
-  renderAll();
+  // 暗影 wander automatically each round, outside the strict player turn order (they have no real choices)
+  STATE.players.filter(p=>p.ghost).forEach(p=>{
+    const opts=ADJ[p.room]||[]; if(opts.length) p.room=opts[Math.floor(Math.random()*opts.length)];
+  });
+  // 順序牌: a fresh random turn order over all living players each round
+  STATE.turnOrder=shuffleArr(alivePlayers().map(p=>p.id));
+  STATE.turnIndex=0;
+  STATE.phase="positioning";
+  advanceTurn();
+}
+function isMyTurn(){
+  return STATE.phase==="positioning" && !STATE.gameOver && STATE.turnOrder &&
+    STATE.turnIndex<STATE.turnOrder.length && STATE.turnOrder[STATE.turnIndex]===you().id;
+}
+function advanceTurn(){
+  while(STATE.turnIndex < STATE.turnOrder.length){
+    const pid=STATE.turnOrder[STATE.turnIndex];
+    const p=STATE.players.find(x=>x.id===pid);
+    if(!p || !p.alive || p.ghost){ STATE.turnIndex++; continue; }
+    if(p.isAI){
+      resolveAITurn(p);
+      p.actedThisRound=true;
+      STATE.turnIndex++;
+      continue;
+    }
+    // human's turn — stop and wait for interaction via the normal UI
+    renderAll();
+    return;
+  }
+  settleRound();
 }
 document.getElementById("endTurnBtn").addEventListener("click",()=>{
-  runAIRound();
-  settleRound();
+  if(!isMyTurn()){ flashMsg("尚未輪到你的回合。"); return; }
+  const p=you();
+  p.actedThisRound=true;
+  STATE.turnIndex++;
+  advanceTurn();
 });
 
 /* ---------- movement ---------- */
@@ -656,7 +696,7 @@ function playerEffectiveSpeed(p){
 /* ---------- room chip click (human) ---------- */
 function onRoomClick(roomId){
   const p=you();
-  if(STATE.phase!=="positioning" || STATE.gameOver) return;
+  if(!isMyTurn()){ flashMsg("尚未輪到你的回合。"); return; }
   if(p.flags.roomCommitted){ flashMsg("本輪已確定停留於此房間，無法再移動（每輪只能在最終抵達的單一房間行動）。"); return; }
   const dist=bfsDist(p.room,roomId);
   if(dist===Infinity || dist>p.stepsLeft){ flashMsg("步數不足或無法到達"); return; }
@@ -666,6 +706,7 @@ function onRoomClick(roomId){
 }
 function commitToRoom(){
   const p=you();
+  if(!isMyTurn()) return;
   if(p.flags.roomCommitted) return;
   p.flags.roomCommitted=true;
   log(p.name+" 確定停留於「"+p.room+" "+(ROOMS[p.room].name||"")+"」，本輪不再移動。");
@@ -699,6 +740,7 @@ function drawFromRoom(p,roomId,maxDraw){
 }
 function doRoomAction(){
   const p=you();
+  if(!isMyTurn()){ flashMsg("尚未輪到你的回合。"); return; }
   if(p.flags.roomCommitted){ flashMsg("本輪已使用過房間功能。"); return; }
   const room=ROOMS[p.room];
   if(room.draw>0){
@@ -1034,33 +1076,29 @@ function aiChooseTarget(p){
   }
   return best;
 }
-function runAIRound(){
-  // Same single-destination-per-round rule as the human: the AI computes ONE target room,
-  // makes ONE move to it, then may act only in that room — it never moves again afterward.
-  alivePlayers().filter(p=>p.isAI).forEach(p=>{
-    if(p.ghost){ // wander randomly
-      const opts=ADJ[p.room]||[]; if(opts.length) p.room=opts[Math.floor(Math.random()*opts.length)];
-      return;
-    }
-    const target=aiChooseTarget(p);
-    const dist=bfsDist(p.room,target);
-    if(dist!==Infinity && dist<=p.stepsLeft){ p.room=target; p.stepsLeft-=dist; }
-    if(p.room==="102") applyLaser(p);
-    const room=ROOMS[p.room];
-    if(room.draw>0){ drawFromRoom(p,p.room,room.draw); }
-    if(room.special==="gene"){ p.power++; p.speed++; p.carry++; }
-    if(room.special==="respec"){ /* AI keeps stats */ }
-    p.flags.roomCommitted=true; // final destination for this round — no further movement
-    // simple item usage: declare now, effect resolves at settlement (same as the human path)
-    if(p.hp<=4 && countItem(p,"pill")>0){ removeItem(p,"pill"); p.flags.pendingItemUses.push("pill"); }
-    if(STATE.round>=2){
-      if(countItem(p,"water")>0){ removeItem(p,"water"); p.flags.pendingItemUses.push("water"); }
-      if(countItem(p,"food")>0){ removeItem(p,"food"); p.flags.pendingItemUses.push("food"); }
-    }
-    // poison vote: avoid own room, pick a random room not own
-    const voteRoom=Object.keys(ROOMS).filter(r=>r!==p.room)[Math.floor(Math.random()*(Object.keys(ROOMS).length-1))];
-    STATE.voteCounts[voteRoom]=(STATE.voteCounts[voteRoom]||0)+1;
-  });
+// Resolves ONE AI player's turn slot (called from advanceTurn() at that player's position in
+// STATE.turnOrder — 順序牌). Ghosts are handled separately in beginRound() and never reach here.
+// Same single-destination-per-round rule as the human: computes ONE target room, moves ONCE,
+// then may act only in that room — never moves again afterward this round.
+function resolveAITurn(p){
+  const target=aiChooseTarget(p);
+  const dist=bfsDist(p.room,target);
+  if(dist!==Infinity && dist<=p.stepsLeft){ p.room=target; p.stepsLeft-=dist; }
+  if(p.room==="102") applyLaser(p);
+  const room=ROOMS[p.room];
+  if(room.draw>0){ drawFromRoom(p,p.room,room.draw); }
+  if(room.special==="gene"){ p.power++; p.speed++; p.carry++; }
+  if(room.special==="respec"){ /* AI keeps stats */ }
+  p.flags.roomCommitted=true; // final destination for this round — no further movement
+  // simple item usage: declare now, effect resolves at settlement (same as the human path)
+  if(p.hp<=4 && countItem(p,"pill")>0){ removeItem(p,"pill"); p.flags.pendingItemUses.push("pill"); }
+  if(STATE.round>=2){
+    if(countItem(p,"water")>0){ removeItem(p,"water"); p.flags.pendingItemUses.push("water"); }
+    if(countItem(p,"food")>0){ removeItem(p,"food"); p.flags.pendingItemUses.push("food"); }
+  }
+  // poison vote: avoid own room, pick a random room not own
+  const voteRoom=Object.keys(ROOMS).filter(r=>r!==p.room)[Math.floor(Math.random()*(Object.keys(ROOMS).length-1))];
+  STATE.voteCounts[voteRoom]=(STATE.voteCounts[voteRoom]||0)+1;
 }
 
 /* ===================== SETTLEMENT ===================== */
