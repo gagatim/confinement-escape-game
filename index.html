@@ -971,33 +971,44 @@ function resolveHumanDraw(p,roomId,maxDraw){
     openDrawSelectionModal(p,drawnItems,roomId);
   }
 }
+// Lets the player choose freely across BOTH their existing inventory and the newly drawn
+// items — not just "which of the new ones fit in whatever space is left". Dropping an old
+// item you no longer need to make room for something better is a valid choice; old items
+// default to kept (nothing is thrown away unless you uncheck it), new items default to unkept.
 function openDrawSelectionModal(p,drawnItems,roomId){
-  const cap=carryRoom(p);
-  const rows=drawnItems.map((item,i)=>{
-    const free=!itemCostsCarry(p,item);
-    return free
-      ? `<label style="display:block;margin:4px 0"><input type="checkbox" checked disabled> ${ITEMS[item].name}（不佔負重，自動保留）</label>`
-      : `<label style="display:block;margin:4px 0"><input type="checkbox" class="drawChk" data-i="${i}"> ${ITEMS[item].name}</label>`;
+  const cap=effectiveCarryCap(p);
+  const oldItems=p.inv.slice();
+  const rowMeta=[];
+  oldItems.forEach((item,i)=>rowMeta.push({key:"old:"+i, item, free:!itemCostsCarry(p,item), defaultChecked:true, tag:"背包中"}));
+  drawnItems.forEach((item,i)=>rowMeta.push({key:"new:"+i, item, free:!itemCostsCarry(p,item), defaultChecked:false, tag:"新抽到"}));
+  const rows=rowMeta.map(r=>{
+    if(r.free) return `<label style="display:block;margin:4px 0"><input type="checkbox" checked disabled> ${ITEMS[r.item].name}（${r.tag}．不佔負重，自動保留）</label>`;
+    return `<label style="display:block;margin:4px 0"><input type="checkbox" class="drawChk" data-key="${r.key}"${r.defaultChecked?" checked":""}> ${ITEMS[r.item].name}（${r.tag}）</label>`;
   }).join("");
-  openModal(`<h3>搜索結果 — 選擇要保留的道具（最多可帶 ${cap} 件）</h3>
+  openModal(`<h3>整理背包 — 選擇要保留的道具（最多可帶 ${cap===9999?"∞":cap} 件）</h3>
     <div>${rows}</div>
     <div class="mono muted" id="drawCount" style="margin:8px 0"></div>
-    <button class="btn small" id="drawConfirm">確認保留</button>`);
+    <button class="btn small" id="drawConfirm">確認</button>`);
   const boxes=[...document.querySelectorAll(".drawChk")];
-  const updateCount=()=>{ document.getElementById("drawCount").textContent="已選 "+boxes.filter(b=>b.checked).length+" / 可帶 "+cap; };
+  const updateCount=()=>{ document.getElementById("drawCount").textContent="已選 "+boxes.filter(b=>b.checked).length+" / 可帶 "+(cap===9999?"∞":cap); };
   boxes.forEach(cb=>cb.addEventListener("change",()=>{
     if(boxes.filter(b=>b.checked).length>cap){ cb.checked=false; flashMsg("已達可攜帶上限，請先取消勾選其他道具"); }
     updateCount();
   }));
   updateCount();
   document.getElementById("drawConfirm").onclick=()=>{
-    drawnItems.forEach((item,i)=>{
-      const free=!itemCostsCarry(p,item);
-      const cb=document.querySelector('.drawChk[data-i="'+i+'"]');
-      if(free || (cb && cb.checked)){ p.inv.push(item); }
-      else { ROOMS[roomId].stock[item]=(ROOMS[roomId].stock[item]||0)+1; }
+    const newInv=[];
+    rowMeta.forEach(r=>{
+      const [kind,idxStr]=r.key.split(":"); const idx=+idxStr;
+      const keep = r.free || !!document.querySelector('.drawChk[data-key="'+r.key+'"]:checked');
+      if(kind==="old"){
+        if(keep) newInv.push(r.item); else STATE.discardPile.push(r.item);
+      } else {
+        if(keep) newInv.push(r.item); else ROOMS[roomId].stock[r.item]=(ROOMS[roomId].stock[r.item]||0)+1;
+      }
     });
-    log(p.name+" 保留了搜索到的道具。");
+    p.inv=newInv;
+    log(p.name+" 整理背包：保留了選擇的道具。");
     closeModal(); renderAll();
   };
 }
@@ -1050,7 +1061,12 @@ function doSpecialRoom(p,room){
     case "slide": if(carrySpendStep(p)){ p.room="B503"; log(p.name+" 經回收站滑至垃圾場。"); } break;
     case "teleport": openTeleportModal(p); break;
     case "control": openControlModal(p); break;
-    case "helipad": collectAirdrop(p); openHelipadModal(p); break;
+    case "helipad":
+      // 玩家從停機坪出發時，必須已經在此停留過一輪才能搭機——抵達當輪只能領空投、必須停留。
+      collectAirdrop(p);
+      if(p.roundStartRoom==="202") openHelipadModal(p);
+      else log(p.name+" 抵達停機坪：本輪必須停留，下一輪才能搭乘直升機離開。");
+      break;
     case "mortuary": break;
     case "laser": break;
   }
@@ -1204,9 +1220,10 @@ function useGoldAtRoom(p){
   document.querySelectorAll("#modal button[data-k]").forEach(btn=>{
     btn.onclick=()=>{
       const k=btn.dataset.k;
-      room.stock[k]--; p.inv.push(k);
+      room.stock[k]--;
       log(p.name+" 使用金條額外獲得: "+ITEMS[k].name);
-      closeModal(); renderAll();
+      if(itemCostsCarry(p,k) && carryRoom(p)<=0){ openDrawSelectionModal(p,[k],p.room); }
+      else { p.inv.push(k); closeModal(); renderAll(); }
     };
   });
   document.getElementById("goldCancel").onclick=closeModal;
@@ -1374,8 +1391,10 @@ document.getElementById("tradeBtn").addEventListener("click",()=>{
     if(accept){
       removeItem(p,give); target.inv.push(give);
       const back=target.inv[Math.floor(Math.random()*target.inv.length)];
-      removeItem(target,back); p.inv.push(back);
+      removeItem(target,back);
       log(p.name+" 與 "+target.name+" 交易：給出「"+ITEMS[give].name+"」換得「"+ITEMS[back].name+"」。");
+      if(itemCostsCarry(p,back) && carryRoom(p)<=0){ openDrawSelectionModal(p,[back],p.room); return; }
+      p.inv.push(back);
     } else { log(target.name+" 拒絕了交易。"); }
     closeModal(); renderAll();
   };
@@ -1416,8 +1435,9 @@ function resolveAITurn(p){
   if(room.special==="respec"){ /* AI keeps stats */ }
   if(room.special==="helipad"){
     collectAirdrop(p);
+    // same "must stay one round before flying" rule as the human path
     const dests=HELI_TARGETS.filter(id=>id!==p.room);
-    if(dests.length && p.stepsLeft>=1){
+    if(p.roundStartRoom==="202" && dests.length && p.stepsLeft>=1){
       p.room=dests[Math.floor(Math.random()*dests.length)]; p.stepsLeft--;
     }
   }
@@ -1452,7 +1472,10 @@ function killPlayer(p,cause){
   // drop items into mortuary
   const embalmers=STATE.players.filter(x=>x.alive && x.prof==="embalmer");
   p.inv.forEach(it=>{
-    if(embalmers.length){
+    // automatic passive pickup — mid-settlement, so there's no moment to ask what to drop;
+    // just skip it (item goes to the mortuary instead) rather than silently exceeding carry.
+    const canCarry=!(itemCostsCarry(embalmers[0]||{}, it) && embalmers.length && carryRoom(embalmers[0])<=0);
+    if(embalmers.length && canCarry){
       const e=embalmers[0];
       if(e.flags.embalmerChoiceMode){ e.inv.push(it); e.flags.embalmerChoiceMode=false; log(e.name+" 以亡者遺贈自行選擇獲得: "+ITEMS[it].name); return; }
       if(!e.flags.__embalmerGotThisRound){ e.inv.push(it); e.flags.__embalmerGotThisRound=true; log(e.name+" 蠱耗感應獲得: "+ITEMS[it].name); return; }
@@ -1829,7 +1852,8 @@ function renderAll(){
       const btn=document.createElement("button"); btn.className="btn small";
       btn.textContent = room.special==="gene"?"使用基因庫" : room.special==="respec"?"重新分配點數" :
         room.special==="slide"?"滑向垃圾場(1步)" : room.special==="teleport"?"傳送" : room.special==="control"?"控制室功能" :
-        room.special==="helipad"?"領取空投" : room.draw>0?"搜索房間 (最多"+room.draw+"張)" : "使用房間功能";
+        room.special==="helipad"?(p.roundStartRoom==="202"?"領取空投／搭乘直升機":"領取空投（本輪需停留，下輪才能搭機）") :
+        room.draw>0?"搜索房間 (最多"+room.draw+"張)" : "使用房間功能";
       if(p.flags.roomLocked){ btn.disabled=true; btn.title="好賭成性失敗，本輪無法房間操作"; }
       btn.onclick=doRoomAction;
       raEl.appendChild(btn);
