@@ -904,28 +904,97 @@ function commitToRoom(){
 function flashMsg(m){ log(`<i class="muted">${m}</i>`); }
 
 /* ===================== ROOM ACTIONS (human) ===================== */
-function drawFromRoom(p,roomId,maxDraw){
+// Draws up to maxDraw items OUT of the room's stock (removed immediately, since they're
+// revealed) with no regard for carry space — the player gets to see everything drawn and
+// choose what to keep afterward, instead of the old behaviour of quietly drawing fewer items
+// just because the bag happened to already be full.
+function drawItemsFromStock(p,roomId,maxDraw){
   const room=ROOMS[roomId];
-  let drawn=0;
-  maxDraw = maxDraw!==undefined?maxDraw:room.draw;
-  let gained=[];
   const isDump=roomId==="B503";
   let nonTrashGained=0;
+  const drawnItems=[];
   for(let i=0;i<maxDraw;i++){
     const stockKeys=Object.keys(room.stock).filter(k=>room.stock[k]>0 && !(isDump && k==="gold"));
     if(stockKeys.length===0) break;
     if(isDump && nonTrashGained>=room.dumpCap && stockKeys.some(k=>k!=="trash") && stockKeys.length===1 && stockKeys[0]!=="trash") break;
     const pick=stockKeys[Math.floor(Math.random()*stockKeys.length)];
     if(isDump && pick!=="trash" && nonTrashGained>=room.dumpCap) continue;
-    if(carryRoom(p)<=0 && !(pick==="trash"&&p.weightlessTrash) && !(pick==="gold"&&p.weightlessGold) && !(pick==="wine"&&p.weightlessWine) && !(ITEMS[pick].weapon&&p.weaponWeightless)) break;
-    room.stock[pick]--; p.inv.push(pick); gained.push(pick); drawn++;
+    room.stock[pick]--; drawnItems.push(pick);
     if(pick!=="trash") nonTrashGained++;
-    // 拾荒嗅覺: 50% chance extra trash from junkyard stock (deducted from B503), doesn't cost carry
+    // 拾荒嗅覺: 50% chance extra trash from junkyard stock (deducted from B503), doesn't cost
+    // carry — always kept immediately, it's never part of the keep/return choice below.
     if(p.prof==="scavenger" && Math.random()<0.5 && ROOMS["B503"].stock.trash>0){
-      ROOMS["B503"].stock.trash--; p.inv.push("trash"); gained.push("trash(拾荒嗅覺)");
+      ROOMS["B503"].stock.trash--; p.inv.push("trash");
     }
   }
-  return gained;
+  return drawnItems;
+}
+function itemCostsCarry(p,item){
+  if(item==="trash" && p.weightlessTrash) return false;
+  if(item==="gold" && p.weightlessGold) return false;
+  if(item==="wine" && p.weightlessWine) return false;
+  if(ITEMS[item].weapon && p.weaponWeightless) return false;
+  return true;
+}
+// Human draw: reveal everything, auto-keep it all if it fits, otherwise let the player choose
+// which to keep up to remaining carry space (weightless items are always kept for free).
+function resolveHumanDraw(p,roomId,maxDraw){
+  const room=ROOMS[roomId];
+  const drawnItems=drawItemsFromStock(p,roomId,maxDraw);
+  if(!drawnItems.length){ log("在「"+(room.name||roomId)+"」搜索到: （無收穫）"); return; }
+  const names=drawnItems.map(g=>ITEMS[g].name).join("、");
+  const costingCount=drawnItems.filter(it=>itemCostsCarry(p,it)).length;
+  const cap=carryRoom(p);
+  if(costingCount<=cap){
+    drawnItems.forEach(it=>p.inv.push(it));
+    log("在「"+(room.name||roomId)+"」搜索到: "+names);
+  } else {
+    log("在「"+(room.name||roomId)+"」搜索到: "+names+"（背包空間不足，請選擇要保留的道具）");
+    openDrawSelectionModal(p,drawnItems,roomId);
+  }
+}
+function openDrawSelectionModal(p,drawnItems,roomId){
+  const cap=carryRoom(p);
+  const rows=drawnItems.map((item,i)=>{
+    const free=!itemCostsCarry(p,item);
+    return free
+      ? `<label style="display:block;margin:4px 0"><input type="checkbox" checked disabled> ${ITEMS[item].name}（不佔負重，自動保留）</label>`
+      : `<label style="display:block;margin:4px 0"><input type="checkbox" class="drawChk" data-i="${i}"> ${ITEMS[item].name}</label>`;
+  }).join("");
+  openModal(`<h3>搜索結果 — 選擇要保留的道具（最多可帶 ${cap} 件）</h3>
+    <div>${rows}</div>
+    <div class="mono muted" id="drawCount" style="margin:8px 0"></div>
+    <button class="btn small" id="drawConfirm">確認保留</button>`);
+  const boxes=[...document.querySelectorAll(".drawChk")];
+  const updateCount=()=>{ document.getElementById("drawCount").textContent="已選 "+boxes.filter(b=>b.checked).length+" / 可帶 "+cap; };
+  boxes.forEach(cb=>cb.addEventListener("change",()=>{
+    if(boxes.filter(b=>b.checked).length>cap){ cb.checked=false; flashMsg("已達可攜帶上限，請先取消勾選其他道具"); }
+    updateCount();
+  }));
+  updateCount();
+  document.getElementById("drawConfirm").onclick=()=>{
+    drawnItems.forEach((item,i)=>{
+      const free=!itemCostsCarry(p,item);
+      const cb=document.querySelector('.drawChk[data-i="'+i+'"]');
+      if(free || (cb && cb.checked)){ p.inv.push(item); }
+      else { ROOMS[roomId].stock[item]=(ROOMS[roomId].stock[item]||0)+1; }
+    });
+    log(p.name+" 保留了搜索到的道具。");
+    closeModal(); renderAll();
+  };
+}
+// AI draw: reveal everything, then greedily keep the most useful items up to carry space
+// (weapons and meds first), returning whatever doesn't fit to the room's stock.
+function resolveAIDraw(p,roomId,maxDraw){
+  const drawnItems=drawItemsFromStock(p,roomId,maxDraw);
+  const priority=(it)=>(ITEMS[it].weapon?0:(it==="pill"||it==="adrenaline")?1:(it==="water"||it==="food")?2:3);
+  const order=drawnItems.map((it,i)=>({it,i})).sort((a,b)=>priority(a.it)-priority(b.it));
+  let remaining=carryRoom(p);
+  order.forEach(({it})=>{
+    const free=!itemCostsCarry(p,it);
+    if(free || remaining>0){ p.inv.push(it); if(!free) remaining--; }
+    else { ROOMS[roomId].stock[it]=(ROOMS[roomId].stock[it]||0)+1; }
+  });
 }
 function doRoomAction(){
   const p=you();
@@ -935,8 +1004,7 @@ function doRoomAction(){
   if(room.draw>0){
     let maxDraw=room.draw;
     if(p.flags.gamblerBonusOps>0){ maxDraw*=2; p.flags.gamblerBonusOps--; }
-    const gained=drawFromRoom(p,p.room,maxDraw);
-    log("在「"+(room.name||p.room)+"」搜索到: "+(gained.length? gained.map(g=>ITEMS[g]?ITEMS[g].name:g).join("、"):"（無收穫）"));
+    resolveHumanDraw(p,p.room,maxDraw);
   }
   if(room.special) doSpecialRoom(p,room);
   // using the room's function is itself committing to this room as your single destination this round
@@ -1170,10 +1238,11 @@ function useProfSkill(p,idx){
   } else if(p.prof==="scavenger" && idx===1){
     if(p.flags.scavengerUses>=2){ flashMsg("已用完2次"); return; }
     if(countItem(p,"trash")<1){ flashMsg("背包內沒有垃圾"); return; }
+    if(carryRoom(p)<=0){ flashMsg("背包空間不足，無法容納轉換後的道具"); return; }
     p.flags.scavengerUses++; removeItem(p,"trash");
     const gain=Math.random()<0.5?"water":"food";
-    log(p.name+" 使用變廢為寶：垃圾轉為「"+ITEMS[gain].name+"」指示物1個（結算後即消失）。");
-    p.flags["consumed_"+gain]=true;
+    addItem(p,gain);
+    log(p.name+" 使用變廢為寶：垃圾轉為「"+ITEMS[gain].name+"」。");
   } else if(p.prof==="trucker" && idx===0){
     if(p.flags.truckerUses>=3){ flashMsg("已用完3次"); return; }
     const nonTrash=p.inv.find(x=>x!=="trash");
@@ -1324,7 +1393,7 @@ function resolveAITurn(p){
   if(dist!==Infinity && dist<=p.stepsLeft){ p.room=target; p.stepsLeft-=dist; }
   if(p.room==="102") applyLaser(p);
   const room=ROOMS[p.room];
-  if(room.draw>0){ drawFromRoom(p,p.room,room.draw); }
+  if(room.draw>0){ resolveAIDraw(p,p.room,room.draw); }
   if(room.special==="gene"){ p.power++; p.speed++; p.carry++; }
   if(room.special==="respec"){ /* AI keeps stats */ }
   if(room.special==="helipad"){
@@ -1504,10 +1573,11 @@ function settleRound(){
       if(v.prof==="shade"){
         log(v.name+"（暗影使者）免疫暗影吸血。"); return;
       }
+      const drainRoom=g.room; // capture before damagePlayer can move a killed victim to the mortuary
       damagePlayer(v,1,"暗影吸血");
       g.ghostDrainTotal++;
       log(g.name+"（暗影）吸取了 "+v.name+" 1點生命。","dmg");
-      STATE.__report.drain.push(g.name+" → "+v.name);
+      STATE.__report.drain.push(g.name+"（暗影）@"+drainRoom+"：吸取 "+v.name+" 1點生命（"+v.name+" HP→"+v.hp+(v.alive?"":" 💀")+"）");
       STATE.players.forEach(sh=>{ if(sh.prof==="shade" && sh.alive && !sh.ghost){ sh.hp=Math.min(sh.maxhp,sh.hp+1); log(sh.name+"（暗影共鳴）恢復1點生命。","heal"); } });
     });
     if(g.ghostDrainTotal>=2){
