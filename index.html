@@ -513,6 +513,10 @@ function restoreGame(){
     st.players.forEach(p=>{
       p.flags=p.flags||{};
       p.flags.__onceKeys=new Set(p.flags.__onceKeys||[]);
+      // saves made before 回手 existed won't have these — default to "already here", so undo
+      // is simply unavailable rather than resetting p.room to undefined on first use.
+      if(p.roundStartRoom===undefined) p.roundStartRoom=p.room;
+      if(p.roundStartSteps===undefined) p.roundStartSteps=p.stepsLeft;
     });
     STATE=st;
     Object.keys(data.rooms||{}).forEach(id=>{
