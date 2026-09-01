@@ -70,10 +70,23 @@
   .static-map .bridge-note{font-size:11px;color:var(--muted);margin-top:8px}
   .room-chip .occ{position:absolute;top:-7px;right:-7px;background:var(--ember);color:#fff;border-radius:999px;
     font-size:9px;padding:1px 5px;font-family:"JetBrains Mono",monospace}
+  /* ---- floor-plan: a real staggered grid laid out per the printed 禁閉逃殺 map, so each
+     room sits in its true column and empty columns render as real gaps (e.g. the atrium
+     chasm cutting through B4/B5), instead of a flat packed list. ---- */
+  .floor-plan{display:grid;grid-template-columns:30px repeat(34,minmax(17px,1fr));gap:3px;
+    min-width:680px;width:100%;box-sizing:border-box;overflow-x:auto;margin-top:8px}
+  .floor-plan .floor-label{width:auto;display:flex;align-items:center;justify-content:center;
+    background:var(--panel-2);border:1px solid var(--line);border-radius:6px}
+  .floor-plan .room-chip{min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+  .room-chip.vlink{border-style:dashed}
+  .room-chip .vmark{position:absolute;bottom:-6px;left:50%;transform:translateX(-50%);font-size:8px;
+    color:var(--muted);background:var(--bg);padding:0 3px}
   #log{height:230px;overflow-y:auto;font-size:12px;line-height:1.6;background:var(--panel-2);border:1px solid var(--line);
     border-radius:8px;padding:8px}
   #log div{border-bottom:1px dashed #1f2942;padding:3px 0}
   #log .r{color:var(--violet);font-weight:700}
+  #log ul.loglist{margin:4px 0 0;padding-left:18px}
+  #log ul.loglist li{margin:2px 0}
   #log .dmg{color:var(--ember-bright)}
   #log .heal{color:var(--toxic-bright)}
   .skillbtn{width:100%;text-align:left;margin:4px 0;padding:8px 10px;border-radius:8px;border:1px solid var(--line);
@@ -197,6 +210,11 @@
         <div id="allPlayers" class="mono" style="font-size:12px"></div>
       </div>
     </div>
+
+    <div class="card" style="grid-column:1/-1">
+      <div class="panel-title">每輪血量變化</div>
+      <div id="hpHistoryTable" style="overflow-x:auto"></div>
+    </div>
   </div>
 
   <!-- ============ END ============ -->
@@ -231,70 +249,76 @@ const ITEMS = {
 };
 
 /* ===================== DATA: ROOMS ===================== */
-// floor: display row (0=top/201·202 ... 8=B701). order: left-right position within that row for rendering.
-function R(id,name,floor,order,opts){ return Object.assign({id,name,floor,order,neighbors:[],draw:0,stock:{}},opts||{}); }
+// floor: display row (0=top/201·202 ... 8=B701). order/span: left-right column position and
+// width within that row, measured directly off 禁閉逃殺地圖1 (a 730px-wide reference photo,
+// sampled every 20px) so the rendered floor plan reproduces the real staggered building outline
+// (gaps where there's no room, wide rooms actually wider) instead of an evenly-packed grid.
+function R(id,name,floor,order,opts){ return Object.assign({id,name,floor,order,neighbors:[],draw:0,stock:{},span:1},opts||{}); }
 const ROOMS = {
-  "201":R("201","基因庫",0,0,{special:"gene"}),
-  "202":R("202","停機坪",0,1,{special:"helipad"}),
-  "101":R("101","水塔",1,0,{draw:4,stock:{water:10}}),
-  "102":R("102","激光室",1,1,{special:"laser"}),
-  "103":R("103","",1,2,{}),
-  "104":R("104","",1,3,{}),
-  "B101":R("B101","控制室",2,0,{special:"control"}),
-  "B102":R("B102","",2,1,{}),
-  "B103":R("B103","",2,2,{}),
-  "B104":R("B104","",2,3,{}),
-  "B105":R("B105","回收站",2,4,{special:"slide"}),
-  "B106":R("B106","",2,5,{}),
-  "B107":R("B107","武器庫",2,6,{draw:2,stock:{knife:5,pistol:2,shotgun:1}}),
-  "B201":R("B201","",3,0,{}),
-  "B202":R("B202","手術室",3,1,{special:"surgery"}),
-  "B203":R("B203","",3,2,{}),
-  "B204":R("B204","餐廳",3,3,{special:"canteen"}),
-  "B205":R("B205","",3,4,{}),
-  "B206":R("B206","金庫",3,5,{draw:2,stock:{gold:4}}),
-  "B301":R("B301","藥房",4,0,{draw:2,stock:{pill:3,adrenaline:3}}),
-  "B302":R("B302","",4,1,{}),
-  "B303":R("B303","",4,2,{}),
-  "B304":R("B304","操作室",4,3,{special:"respec"}),
-  "B305":R("B305","",4,4,{}),
-  "B306":R("B306","",4,5,{}),
-  "B307":R("B307","",4,6,{}),
-  "B308":R("B308","",4,7,{}),
-  "B501":R("B501","大倉庫",5,0,{draw:3,stock:{water:5,food:5,knife:3,wine:2,pill:2,adrenaline:2,pistol:1,gold:1,shotgun:1},poisonRequires:["B401","B502"]}),
-  "B401":R("B401","",5,1,{}),
-  "B402":R("B402","",5,2,{}),
-  "B403":R("B403","傳送室",5,3,{special:"teleport"}),
-  "B404":R("B404","",5,4,{}),
-  "B405":R("B405","",5,5,{}),
-  "B502":R("B502","",6,1,{}),
-  "B503":R("B503","垃圾場",6,2,{draw:5,stock:{trash:20,rope:1,gasmask:1,rocket:1,dimpocket:1,recycledevice:1},noGold:true,dumpCap:2}),
-  "B504":R("B504","",6,4,{}),
-  "B505":R("B505","糧倉",6,5,{draw:4,stock:{food:10}}),
-  "B601":R("B601","酒窖",7,0,{draw:2,stock:{wine:6}}),
-  "B602":R("B602","",7,1,{}),
-  "B603":R("B603","",7,2,{}),
-  "B604":R("B604","",7,3,{}),
-  "B701":R("B701","停屍間",8,0,{special:"mortuary",draw:3,stock:{}})
+  "201":R("201","基因庫",0,10,{special:"gene",span:7}),
+  "202":R("202","停機坪",0,24,{special:"helipad",span:7}),
+  "101":R("101","水塔",1,5,{draw:4,stock:{water:10},span:5}),
+  "102":R("102","激光室",1,10,{special:"laser",span:6}),
+  "103":R("103","",1,24,{span:3}),
+  "104":R("104","",1,27,{span:6}),
+  "B101":R("B101","控制室",2,3,{special:"control",span:2}),
+  "B102":R("B102","",2,5,{span:2}),
+  "B103":R("B103","",2,7,{span:2}),
+  "B104":R("B104","",2,9,{span:7}),
+  "B105":R("B105","回收站",2,17,{special:"slide",span:3}),
+  "B106":R("B106","",2,27,{span:2}),
+  "B107":R("B107","武器庫",2,29,{draw:2,stock:{knife:5,pistol:2,shotgun:1},span:4}),
+  "B201":R("B201","",3,3,{span:3}),
+  "B202":R("B202","手術室",3,6,{special:"surgery",span:3}),
+  "B203":R("B203","",3,9,{span:5}),
+  "B204":R("B204","餐廳",3,14,{special:"canteen",span:3}),
+  "B205":R("B205","",3,17,{span:3}),
+  "B206":R("B206","金庫",3,25,{draw:2,stock:{gold:4},span:8}),
+  "B301":R("B301","藥房",4,3,{draw:2,stock:{pill:3,adrenaline:3},span:4}),
+  "B302":R("B302","",4,7,{span:1}),
+  "B303":R("B303","",4,8,{span:3}),
+  "B304":R("B304","操作室",4,11,{special:"respec",span:8}),
+  "B305":R("B305","",4,20,{span:5}),
+  "B306":R("B306","",4,25,{span:2}),
+  "B307":R("B307","",4,27,{span:2}),
+  "B308":R("B308","",4,31,{span:2}),
+  "B501":R("B501","大倉庫",5,3,{draw:3,stock:{water:5,food:5,knife:3,wine:2,pill:2,adrenaline:2,pistol:1,gold:1,shotgun:1},poisonRequires:[5,6],span:9}),
+  "B401":R("B401","",5,12,{span:5}),
+  "B402":R("B402","",5,17,{span:3}),
+  "B403":R("B403","傳送室",5,25,{special:"teleport",span:4}),
+  "B404":R("B404","",5,29,{span:1}),
+  "B405":R("B405","",5,31,{span:2}),
+  "B502":R("B502","",6,12,{span:4}),
+  "B503":R("B503","垃圾場",6,16,{draw:5,stock:{trash:20,rope:1,gasmask:1,rocket:1,dimpocket:1,recycledevice:1},noGold:true,dumpCap:2,span:9}),
+  "B504":R("B504","",6,25,{span:4}),
+  "B505":R("B505","糧倉",6,30,{draw:4,stock:{food:10},span:3}),
+  "B601":R("B601","酒窖",7,10,{draw:2,stock:{wine:6},span:6}),
+  "B602":R("B602","",7,16,{span:4}),
+  "B603":R("B603","",7,20,{span:5}),
+  "B604":R("B604","",7,25,{span:3}),
+  "B701":R("B701","停屍間",8,16,{special:"mortuary",draw:3,stock:{},span:4})
 };
 const FLOOR_LABEL = {0:"2F",1:"1F",2:"B1",3:"B2",4:"B3",5:"B4",6:"B5",7:"B6",8:"B7"};
-// Re-derived room-by-room from img1.jpg using a shared 9-column grid per floor (see commit notes):
-// the atrium/chasm blocks left-cluster <-> right-cluster adjacency on every floor EXCEPT the two
-// floors with a visible footbridge: B1 (B105<->B106) and B3 (B305<->B306). Wide rooms (spanning
-// multiple columns, e.g. B206/B501/B503) connect to every room whose column they overlap, above and below.
+// Re-derived room-by-room directly off the 禁閉逃殺地圖 reference photos (not assumed from a
+// uniform column grid — every vertical edge below corresponds to an actual ladder drawn in the
+// photo, e.g. B304<->B401 and B402<->B305 are two separate ladders one column apart, not the
+// single B304<->B402 link earlier versions of this file guessed). The atrium/chasm blocks
+// left-cluster <-> right-cluster adjacency on every floor EXCEPT the two floors with a visible
+// footbridge: B1 (B105<->B106) and B3 (B305<->B306). Wide rooms (spanning multiple columns, e.g.
+// B206/B501/B503) connect to every room whose column they overlap, above and below.
 const ADJ = {
   "201":["102"], "202":["104","103"],
-  "101":["102","B102"], "102":["101","201","B104","B103"], "103":["104","B106","202"], "104":["103","202","B107"],
-  "B101":["B102","B201"], "B102":["B101","B103","101","B202"], "B103":["B102","B104","B203","102"],
+  "101":["102","B102"], "102":["101","201","B104"], "103":["104","B106","202"], "104":["103","202","B107"],
+  "B101":["B102","B201"], "B102":["B101","B103","101","B202"], "B103":["B102","B104","B203"],
   "B104":["B103","B105","102","B204"], "B105":["B104","B106","B205"], "B106":["B105","B107","103","B206"],
   "B107":["B106","104","B206"],
   "B201":["B101","B202","B301"], "B202":["B201","B203","B102","B302"], "B203":["B202","B204","B103","B303"],
   "B204":["B203","B205","B104","B304"], "B205":["B204","B105","B305"], "B206":["B106","B107","B306","B307","B308"],
-  "B301":["B302","B201","B501"], "B302":["B301","B303","B202","B501"], "B303":["B302","B304","B203","B401"],
-  "B304":["B303","B305","B204","B402"], "B305":["B304","B205","B402","B306"],
+  "B301":["B302","B201","B501"], "B302":["B301","B303","B202","B501"], "B303":["B302","B304","B203","B501"],
+  "B304":["B303","B305","B204","B401"], "B305":["B304","B205","B402","B306"],
   "B306":["B307","B206","B403","B305"], "B307":["B306","B308","B206","B404"], "B308":["B307","B206","B405"],
-  "B501":["B301","B302","B401","B502","B601"], "B401":["B501","B402","B303","B502"],
-  "B402":["B401","B304","B305","B503"], "B403":["B404","B306","B504"],
+  "B501":["B301","B302","B303","B401","B502","B601"], "B401":["B501","B402","B304","B502"],
+  "B402":["B401","B305","B503"], "B403":["B404","B306","B504"],
   "B404":["B403","B405","B307","B504","B505"], "B405":["B404","B308","B505"],
   "B502":["B501","B503","B401","B601"], "B503":["B502","B402","B602"],
   "B504":["B505","B403","B404","B604"], "B505":["B504","B405","B604","B404"],
@@ -376,7 +400,7 @@ const PROFESSIONS = {
     {name:"舉杯共飲", desc:"道具使用階段，你的果汁可對其他存活玩家使用。", passive:true}
   ]},
   chemist:{name:"化學家", skills:[
-    {name:"毒性調和", desc:"移動階段可使用：指定1個已充滿毒氣房間本輪毒氣傷害-2(最低0)；或本輪毒氣樓層傷害+2。整局限用2次。", uses:2},
+    {name:"毒性調和", desc:"移動階段可使用：指定1個已中毒樓層本輪毒氣傷害-2(最低0)；或本輪毒氣樓層傷害+2。整局限用2次。", uses:2},
     {name:"抗毒", desc:"（永久被動）進入毒氣房間受到的毒氣傷害永久-1。", passive:true}
   ]},
   embalmer:{name:"入殮師", skills:[
@@ -415,6 +439,80 @@ const PROFESSIONS = {
 
 /* ===================== GAME STATE ===================== */
 let STATE=null;
+const SAVE_KEY="confinement_escape_save_v1";
+
+/* ---------- persistence: survive a page refresh mid-game ---------- */
+function getCurrentScreen(){
+  if(!document.getElementById("endScreen").classList.contains("hidden")) return "end";
+  if(!document.getElementById("game").classList.contains("hidden")) return "game";
+  if(!document.getElementById("spawnSelect").classList.contains("hidden")) return "spawnSelect";
+  return "setup";
+}
+function saveGame(){
+  if(!STATE) return;
+  try{
+    const playersData=STATE.players.map(p=>{
+      const flags={...p.flags};
+      flags.__onceKeys = p.flags.__onceKeys ? [...p.flags.__onceKeys] : undefined;
+      return {...p, flags};
+    });
+    const stateCopy={...STATE, players:playersData, poisoned:[...STATE.poisoned], detoxedRooms:[...(STATE.detoxedRooms||[])]};
+    delete stateCopy.__report;
+    const roomsData={};
+    Object.keys(ROOMS).forEach(id=>{
+      roomsData[id]={stock:{...ROOMS[id].stock}, airdropBag: ROOMS[id].airdropBag ? [...ROOMS[id].airdropBag] : undefined};
+    });
+    localStorage.setItem(SAVE_KEY, JSON.stringify({v:1, screen:getCurrentScreen(), state:stateCopy, rooms:roomsData}));
+  }catch(e){ /* storage unavailable/full — game still playable, just unsaved */ }
+}
+function clearSavedGame(){ try{ localStorage.removeItem(SAVE_KEY); }catch(e){} }
+function showScreen(screen){
+  ["setup","spawnSelect","game","endScreen"].forEach(id=>document.getElementById(id).classList.add("hidden"));
+  if(screen==="spawnSelect"){
+    renderSpawnGrid();
+    document.getElementById("spawnSelect").classList.remove("hidden");
+    const mine=you();
+    if(mine && mine.spawnRoom){
+      document.getElementById("confirmSpawnBtn").disabled=false;
+      const card=document.querySelector('#spawnGrid .prof-card[data-room="'+mine.spawnRoom+'"]');
+      if(card) card.classList.add("selected");
+    }
+  } else if(screen==="game"){
+    document.getElementById("game").classList.remove("hidden");
+    renderAll();
+  } else if(screen==="end"){
+    renderEndScreen();
+  } else {
+    document.getElementById("setup").classList.remove("hidden");
+  }
+}
+function restoreGame(){
+  let raw;
+  try{ raw=localStorage.getItem(SAVE_KEY); }catch(e){ return false; }
+  if(!raw) return false;
+  let data;
+  try{ data=JSON.parse(raw); }catch(e){ return false; }
+  if(!data || !data.state || !data.state.players) return false;
+  try{
+    const st=data.state;
+    st.poisoned=new Set(st.poisoned||[]);
+    st.detoxedRooms=new Set(st.detoxedRooms||[]);
+    st.players.forEach(p=>{
+      p.flags=p.flags||{};
+      p.flags.__onceKeys=new Set(p.flags.__onceKeys||[]);
+    });
+    STATE=st;
+    Object.keys(data.rooms||{}).forEach(id=>{
+      if(!ROOMS[id]) return;
+      const rd=data.rooms[id];
+      if(rd.stock) ROOMS[id].stock=rd.stock;
+      if(rd.airdropBag!==undefined) ROOMS[id].airdropBag=rd.airdropBag;
+    });
+    showScreen(data.screen);
+    log("<i class='muted'>（已還原先前的進度）</i>");
+    return true;
+  }catch(e){ console.error("restore failed",e); return false; }
+}
 
 function log(msg,cls){
   const el=document.getElementById("log");
@@ -472,7 +570,7 @@ function validateStart(){
   document.getElementById("startHint").textContent = !selectedProf ? "請先選擇職業" : (p+s+c!==max ? "請把點數剛好分配完" : "");
 }
 document.getElementById("startBtn").addEventListener("click",startGame);
-document.getElementById("replayBtn").addEventListener("click",()=>location.reload());
+document.getElementById("replayBtn").addEventListener("click",()=>{ clearSavedGame(); location.reload(); });
 
 /* ---------- player factory ---------- */
 const AI_NAMES=["阿凱","小美","老周","阿德","阿珍","小胖","阿宏","阿玲"];
@@ -483,6 +581,7 @@ function makePlayer(id,isAI,profId,stats,name){
     isAI, prof:profId,
     power:stats.power, speed:stats.speed, carry:stats.carry,
     hp:10, maxhp:10, alive:true, ghost:false, ghostDrainTotal:0,
+    hpLog:[], // per-round {round,hp,delta} snapshots, filled in at settlement — drives the 每輪血量變化 table
     room: MEETING_ROOM, spawnRoom:null, stepsLeft:0,
     inv:[], // array of item ids
     flags:{gamblerUses:0, gamblerWinUses:0, gamblerForceWin:false, gamblerBonusOps:0,
@@ -557,7 +656,7 @@ function startGame(){
     if(power+speed+carry>cap){ carry=Math.max(1,cap-power-speed); }
     players.push(makePlayer(i,true,pid,{power,speed,carry}));
   }
-  STATE={round:1, phase:"positioning", players, poisoned:new Set(), voteCounts:{}, discardPile:[], gameOver:false};
+  STATE={round:1, phase:"positioning", players, poisoned:new Set(), detoxedRooms:new Set(), voteCounts:{}, discardPile:[], gameOver:false};
   // profession init effects
   players.forEach(p=>{
     if(p.prof==="tamer"){ p.power+=1; p.carry+=1; }
@@ -577,6 +676,7 @@ function startGame(){
   document.getElementById("setup").classList.add("hidden");
   renderSpawnGrid();
   document.getElementById("spawnSelect").classList.remove("hidden");
+  saveGame();
 }
 
 /* ---------- spawn point selection (紅色出生點) ---------- */
@@ -608,28 +708,51 @@ function renderSpawnGrid(){
       div.classList.add("selected");
       you().spawnRoom=r;
       document.getElementById("confirmSpawnBtn").disabled=false;
+      saveGame();
     });
     grid.appendChild(div);
   });
   renderStaticMap("spawnMapArea", SPAWN_ROOMS);
 }
+// A room has a "vertical" connection when one of its ADJ neighbors sits on a different floor
+// and their column ranges (order..order+span) actually overlap — that's a real ladder/slide
+// link in the reference photo, derived purely from the already-verified ADJ table plus the
+// measured column spans (never guessed here).
+function hasVerticalLink(r){
+  const rEnd=r.order+(r.span||1);
+  return (ADJ[r.id]||[]).some(nid=>{
+    const n=ROOMS[nid];
+    if(!n || n.floor===r.floor) return false;
+    const nEnd=n.order+(n.span||1);
+    return r.order<nEnd && n.order<rEnd;
+  });
+}
+// Places a room/label element on the shared 35-column floor-plan grid (col 1 = floor label,
+// cols 2-35 = measured column 0-33) so gaps render as real empty cells and wide rooms actually
+// render wider — reproducing the staggered shape and atrium gap from the reference photo,
+// instead of a flat evenly-packed list.
+function gridPlace(el, floor, col, span){
+  el.style.gridRow = (Number(floor)+1);
+  el.style.gridColumn = (col+2)+" / span "+(span||1);
+}
 // read-only reference map (no click handlers, no live game state) — used on the spawn-select
 // screen so players can see the whole connected building before secretly picking a spawn room.
 function renderStaticMap(containerId, highlightIds){
-  const mapEl=document.getElementById(containerId); mapEl.innerHTML="";
+  const mapEl=document.getElementById(containerId); mapEl.innerHTML=""; mapEl.className="floor-plan";
   const floors={};
   Object.values(ROOMS).forEach(r=>{ (floors[r.floor]=floors[r.floor]||[]).push(r); });
   Object.keys(floors).sort((a,b)=>a-b).forEach(fl=>{
-    const row=document.createElement("div"); row.className="floor-row";
     const lbl=document.createElement("span"); lbl.className="floor-label"; lbl.textContent=FLOOR_LABEL[fl];
-    row.appendChild(lbl);
-    floors[fl].sort((a,b)=>a.order-b.order).forEach(r=>{
+    gridPlace(lbl, fl, -1);
+    mapEl.appendChild(lbl);
+    floors[fl].forEach(r=>{
       const chip=document.createElement("div"); chip.className="room-chip";
       if(highlightIds && highlightIds.includes(r.id)) chip.classList.add("spawn");
+      if(hasVerticalLink(r)) chip.classList.add("vlink");
       chip.innerHTML=`${r.id}${r.name?("<small>"+r.name+"</small>"):""}`;
-      row.appendChild(chip);
+      gridPlace(chip, r.floor, r.order, r.span);
+      mapEl.appendChild(chip);
     });
-    mapEl.appendChild(row);
   });
 }
 document.getElementById("confirmSpawnBtn").addEventListener("click",()=>{
@@ -662,17 +785,15 @@ function beginRound(){
     p.flags.dietThisRound=false;
     p.flags.roomCommitted=false; // locks once the player acts in a room or explicitly ends movement
     p.flags.skillUsedThisRound=false; // once-per-round cap on active profession skills
+    p.flags.votedThisRound=false; // one poison-floor vote per player per round (控制室 boosts its weight instead of granting extra votes)
     p.flags.wineExcluded=null;
     p.actedThisRound=false; // turn-order bookkeeping (順序牌) — set true once this player's turn resolves
     p.pendingActions={targetRoom:null, movementDone:false, roomActed:false};
   });
   STATE.voteCounts={};
-  // 暗影 wander automatically each round, outside the strict player turn order (they have no real choices)
-  STATE.players.filter(p=>p.ghost).forEach(p=>{
-    const opts=ADJ[p.room]||[]; if(opts.length) p.room=opts[Math.floor(Math.random()*opts.length)];
-  });
-  // 順序牌: a fresh random turn order over all living players each round
-  STATE.turnOrder=shuffleArr(alivePlayers().map(p=>p.id));
+  // 順序牌: a fresh random turn order each round, over everyone still taking turns — alive
+  // players AND 暗影 (ghosts get a real turn to move and hunt for blood, not an auto-skip).
+  STATE.turnOrder=shuffleArr(STATE.players.filter(p=>p.alive||p.ghost).map(p=>p.id));
   STATE.turnIndex=0;
   STATE.phase="positioning";
   advanceTurn();
@@ -685,18 +806,35 @@ function advanceTurn(){
   while(STATE.turnIndex < STATE.turnOrder.length){
     const pid=STATE.turnOrder[STATE.turnIndex];
     const p=STATE.players.find(x=>x.id===pid);
-    if(!p || !p.alive || p.ghost){ STATE.turnIndex++; continue; }
+    if(!p || (!p.alive && !p.ghost)){ STATE.turnIndex++; continue; }
     if(p.isAI){
-      resolveAITurn(p);
+      if(p.ghost) resolveGhostAITurn(p); else resolveAITurn(p);
       p.actedThisRound=true;
       STATE.turnIndex++;
       continue;
     }
-    // human's turn — stop and wait for interaction via the normal UI
+    // human's turn (alive or ghost) — stop and wait for interaction via the normal UI
     renderAll();
     return;
   }
   settleRound();
+}
+// A ghost's turn: move freely (wall-passing, any room, no step cost) toward whichever room
+// currently holds the most living targets, to maximize the blood it drains at settlement.
+// With no living players left anywhere it just drifts to a random room.
+function resolveGhostAITurn(p){
+  const counts={};
+  STATE.players.forEach(x=>{ if(x.alive && !x.ghost) counts[x.room]=(counts[x.room]||0)+1; });
+  const rooms=Object.keys(counts);
+  if(rooms.length){
+    let best=rooms[0], bestN=-1;
+    rooms.forEach(r=>{ if(counts[r]>bestN){ bestN=counts[r]; best=r; } });
+    p.room=best;
+  } else {
+    const opts=Object.keys(ROOMS);
+    p.room=opts[Math.floor(Math.random()*opts.length)];
+  }
+  p.flags.roomCommitted=true;
 }
 document.getElementById("endTurnBtn").addEventListener("click",()=>{
   if(!isMyTurn()){ flashMsg("尚未輪到你的回合。"); return; }
@@ -887,17 +1025,19 @@ function openRopeModal(p){
   document.getElementById("ropeCancel").onclick=closeModal;
 }
 function openControlModal(p){
-  const poisonedList=[...STATE.poisoned];
+  // 解毒 targets a single ROOM permanently (a surgical exception), separate from the
+  // floor-wide poison vote — a poisoned floor stays poisoned, only this one room is spared.
+  const poisonedRooms=Object.values(ROOMS).filter(r=>roomIsPoisoned(r));
   openModal(`<h3>控制室</h3>
     <button class="btn small" id="ctrlVote10">本輪毒氣投票 1票 視為 10票</button><br><br>
     <div>選一個已中毒房間永久解毒：</div>
-    <select id="ctrlRoom">${poisonedList.length? poisonedList.map(r=>`<option value="${r}">${r}</option>`).join("") : "<option>目前無中毒房間</option>"}</select>
-    <button class="btn small" id="ctrlDetox">解毒</button><br><br>
+    <select id="ctrlRoom">${poisonedRooms.length? poisonedRooms.map(r=>`<option value="${r.id}">${r.id} ${r.name||""}</option>`).join("") : "<option>目前無中毒房間</option>"}</select>
+    <button class="btn small" id="ctrlDetox"${poisonedRooms.length?"":" disabled"}>解毒</button><br><br>
     <button class="btn small ghost" id="ctrlCancel">關閉</button>`);
   document.getElementById("ctrlVote10").onclick=()=>{ p.flags.voteWeight=10; closeModal(); log(p.name+" 於控制室：本輪投票視為10票。"); };
   document.getElementById("ctrlDetox").onclick=()=>{
-    const r=document.getElementById("ctrlRoom").value;
-    if(r && STATE.poisoned.has(r)){ STATE.poisoned.delete(r); log(p.name+" 於控制室：秘密解毒了 "+r+"。"); }
+    const rid=document.getElementById("ctrlRoom").value;
+    if(rid){ STATE.detoxedRooms.add(rid); log(p.name+" 於控制室：秘密解毒了「"+rid+" "+(ROOMS[rid].name||"")+"」。"); }
     closeModal(); renderAll();
   };
   document.getElementById("ctrlCancel").onclick=closeModal;
@@ -1019,12 +1159,14 @@ function useProfSkill(p,idx){
     p.stepsLeft=Math.min(10,p.stepsLeft*2);
   } else if(p.prof==="chemist" && idx===0){
     if(p.flags.chemistUses>=2){ flashMsg("已用完2次"); return; }
+    const poisonedFloors=[...STATE.poisoned];
+    const floorOpts=poisonedFloors.map(f=>`<option value="${f}">${FLOOR_LABEL[f]}</option>`).join("");
     openModal(`<h3>毒性調和</h3>
-      <button class="btn small" id="chA">指定已中毒房間，本輪毒氣傷害-2</button><br><br>
+      <div>${poisonedFloors.length? `指定已中毒樓層：<select id="chFloor">${floorOpts}</select> ` : "（目前無已中毒樓層）"}<button class="btn small" id="chA"${poisonedFloors.length?"":" disabled"}>本輪毒氣傷害-2</button></div><br>
       <button class="btn small warn" id="chB">本輪毒氣樓層傷害+2</button>`);
     document.getElementById("chA").onclick=()=>{
-      const r=[...STATE.poisoned][0];
-      if(r){ STATE.poisonReduceRoom=r; log(p.name+" 指定 "+r+" 本輪毒氣傷害-2。"); }
+      const f=+document.getElementById("chFloor").value;
+      STATE.poisonReduceFloor=f; log(p.name+" 指定「"+FLOOR_LABEL[f]+"」本輪毒氣傷害-2。");
       p.flags.chemistUses++; closeModal();
     };
     document.getElementById("chB").onclick=()=>{
@@ -1082,15 +1224,18 @@ function useProfSkill(p,idx){
 /* ===================== VOTE / TRADE ===================== */
 document.getElementById("voteBtn").addEventListener("click",()=>{
   const p=you();
-  const opts=Object.keys(ROOMS).map(id=>`<option value="${id}">${id} ${ROOMS[id].name||""}</option>`).join("");
-  openModal(`<h3>投票毒氣區</h3><select id="voteSel">${opts}</select><br><br>
+  if(!isMyTurn()){ flashMsg("尚未輪到你的回合。"); return; }
+  if(p.flags.votedThisRound){ flashMsg("本輪已投過票。"); return; }
+  const opts=Object.keys(FLOOR_LABEL).map(f=>`<option value="${f}">${FLOOR_LABEL[f]}</option>`).join("");
+  openModal(`<h3>投票毒氣樓層</h3><select id="voteSel">${opts}</select><br><br>
     <button class="btn small warn" id="voteOk">投票</button> <button class="btn small ghost" id="voteCancel">取消</button>`);
   document.getElementById("voteOk").onclick=()=>{
-    const r=document.getElementById("voteSel").value;
+    const f=+document.getElementById("voteSel").value;
     const weight=p.flags.voteWeight||1;
-    STATE.voteCounts[r]=(STATE.voteCounts[r]||0)+weight;
+    STATE.voteCounts[f]=(STATE.voteCounts[f]||0)+weight;
     p.flags.voteWeight=1;
-    log(p.name+" 投票毒氣區: "+r+"（權重"+weight+"）");
+    p.flags.votedThisRound=true;
+    log(p.name+" 投票毒氣樓層: "+FLOOR_LABEL[f]+"（權重"+weight+"）");
     closeModal();
   };
   document.getElementById("voteCancel").onclick=closeModal;
@@ -1133,7 +1278,7 @@ function aiChooseTarget(p){
     if(!hasGun(p) && (room.stock.pistol||room.stock.shotgun||room.stock.knife)) score+=3;
     if(STATE.round>=2 && (room.stock.water||room.stock.food)) score+=2;
     if(room.draw>0) score+=1.5;
-    if(STATE.poisoned.has(r)) score-=6;
+    if(roomIsPoisoned(room)) score-=6;
     if(r==="102") score-=4;
     if(r===p.room) score-=0.5;
     if(score>bestScore){ bestScore=score; best=r; }
@@ -1167,9 +1312,12 @@ function resolveAITurn(p){
     if(countItem(p,"water")>0){ removeItem(p,"water"); p.flags.pendingItemUses.push("water"); }
     if(countItem(p,"food")>0){ removeItem(p,"food"); p.flags.pendingItemUses.push("food"); }
   }
-  // poison vote: avoid own room, pick a random room not own
-  const voteRoom=Object.keys(ROOMS).filter(r=>r!==p.room)[Math.floor(Math.random()*(Object.keys(ROOMS).length-1))];
-  STATE.voteCounts[voteRoom]=(STATE.voteCounts[voteRoom]||0)+1;
+  // poison vote (one per player per round, after acting): avoid own floor, pick a random other floor
+  const myFloor=ROOMS[p.room].floor;
+  const floorOpts=Object.keys(FLOOR_LABEL).map(Number).filter(f=>f!==myFloor);
+  const voteFloor=floorOpts[Math.floor(Math.random()*floorOpts.length)];
+  STATE.voteCounts[voteFloor]=(STATE.voteCounts[voteFloor]||0)+1;
+  p.flags.votedThisRound=true;
 }
 
 /* ===================== SETTLEMENT ===================== */
@@ -1204,19 +1352,21 @@ function killPlayer(p,cause){
   if(p.prof==="shade"){ p.speed+=2; }
 }
 
+// A room is poisoned when its floor is a voted-poison floor, EXCEPT: B501 (the tall B4/B5
+// warehouse) which per the rulebook only turns toxic once BOTH the floors it spans are poisoned,
+// and any single room the 控制室 ability has permanently detoxed (a surgical exception that
+// spares just that room while the rest of its floor stays toxic).
+function roomIsPoisoned(room){
+  if(STATE.detoxedRooms && STATE.detoxedRooms.has(room.id)) return false;
+  if(room.poisonRequires) return room.poisonRequires.every(f=>STATE.poisoned.has(f));
+  return STATE.poisoned.has(room.floor);
+}
 function resolvePoisonVote(){
   let winner=null, best=-1;
-  for(const [r,c] of Object.entries(STATE.voteCounts)){ if(c>best){ best=c; winner=r; } }
-  if(!winner) return "本輪毒氣投票: 無人投票，本輪無新增毒氣房間。";
-  const room=ROOMS[winner];
-  let added;
-  if(room.poisonRequires){
-    added = room.poisonRequires.every(r=>STATE.poisoned.has(r));
-    if(added) STATE.poisoned.add(winner);
-  } else {
-    added=true; STATE.poisoned.add(winner);
-  }
-  return "本輪毒氣投票結果：「"+winner+" "+(room.name||"")+"」"+(added?"淪為毒氣區域！":"（尚未滿足毒氣條件，未淪陷）");
+  for(const [f,c] of Object.entries(STATE.voteCounts)){ if(c>best){ best=c; winner=+f; } }
+  if(winner===null) return "本輪毒氣投票: 無人投票，本輪無新增毒氣樓層。";
+  STATE.poisoned.add(winner);
+  return "本輪毒氣投票結果：「"+FLOOR_LABEL[winner]+"」樓層淪為毒氣區域！";
 }
 function poisonDamageForRound(){
   const r=STATE.round;
@@ -1288,9 +1438,9 @@ function settleRound(){
   const baseDmg=poisonDamageForRound() + (STATE.poisonBoost?2:0);
   STATE.players.forEach(p=>{
     if(!p.alive || p.ghost) return;
-    if(STATE.poisoned.has(p.room)){
+    if(roomIsPoisoned(ROOMS[p.room])){
       let dmg=baseDmg;
-      if(p.room===STATE.poisonReduceRoom) dmg=Math.max(0,dmg-2);
+      if(ROOMS[p.room].floor===STATE.poisonReduceFloor) dmg=Math.max(0,dmg-2);
       if(p.inv.includes("gasmask")) dmg=0;
       if(p.room==="202") dmg=0;
       if(p.prof==="chemist") dmg=Math.max(0,dmg-1);
@@ -1298,7 +1448,7 @@ function settleRound(){
       if(dmg>0) log(p.name+" 在毒氣區受到 "+dmg+" 點傷害。","dmg");
     }
   });
-  STATE.poisonReduceRoom=null; STATE.poisonBoost=false;
+  STATE.poisonReduceFloor=null; STATE.poisonBoost=false;
 
   // 4) hunger (round>=2)
   if(STATE.round>=2){
@@ -1351,15 +1501,25 @@ function settleRound(){
     p.flags.climberVertical=false;
   });
 
-  // Public settlement broadcast: always print the full fixed set of category lines,
-  // every round, whether or not anything happened in that category.
+  // Public settlement broadcast: always print the full fixed set of category lines, every
+  // round, whether or not anything happened — each category's entries as its own bullet list
+  // instead of one semicolon-crammed line, so a busy round (multiple fights, multiple drains) stays readable.
   const rep=STATE.__report;
+  const logList=(label,items,emptyText)=>{
+    log(label+": "+(items.length? "" : emptyText)+(items.length? "<ul class='loglist'>"+items.map(x=>"<li>"+x+"</li>").join("")+"</ul>" : ""));
+  };
   log("<b>── 第 "+STATE.round+" 輪結算公告 ──</b>");
   log("毒氣: "+(rep.poison||"無投票結果"));
-  log("火箭筒: "+(rep.rocket.length? rep.rocket.join("；") : "無人使用"));
-  log("戰鬥: "+(rep.combat.length? rep.combat.join("；") : "無"));
-  log("飢餓扣血: "+(rep.hunger.length? rep.hunger.join("、") : "無"));
-  log("暗影吸血: "+(rep.drain.length? rep.drain.join("、") : "無"));
+  logList("火箭筒", rep.rocket, "無人使用");
+  logList("戰鬥", rep.combat, "無");
+  logList("飢餓扣血", rep.hunger, "無");
+  logList("暗影吸血", rep.drain, "無");
+
+  // snapshot each player's HP change this round, for the 每輪血量變化 table
+  STATE.players.forEach(p=>{
+    const prev=p.hpLog.length? p.hpLog[p.hpLog.length-1].hp : p.maxhp;
+    p.hpLog.push({round:STATE.round, hp:p.hp, delta:p.hp-prev});
+  });
 
   renderAll();
   showRoundSummary();
@@ -1414,6 +1574,10 @@ function endGame(){
     if(healed>0){ p.hp+=healed; log(p.name+" 最終結算：以 "+goldCount+" 根金條換取 +"+healed+" 點血。","heal"); }
   });
   document.getElementById("game").classList.add("hidden");
+  renderEndScreen();
+  saveGame();
+}
+function renderEndScreen(){
   const ranked=[...STATE.players].sort((a,b)=>b.hp-a.hp);
   const list=document.getElementById("rankList");
   list.innerHTML="";
@@ -1439,12 +1603,15 @@ function renderAll(){
   document.getElementById("stSpeed").textContent=p.speed;
   document.getElementById("stCarry").textContent=p.carry;
   document.getElementById("curRoom").textContent=p.room+" "+(ROOMS[p.room].name||"");
-  document.getElementById("stepsLeft").textContent=p.stepsLeft;
+  document.getElementById("stepsLeft").textContent=p.ghost?"∞（穿牆）":p.stepsLeft;
   document.getElementById("carryUsed").textContent=usedCarry(p);
   document.getElementById("carryCap").textContent=effectiveCarryCap(p)>9000?"∞":effectiveCarryCap(p);
 
-  // inventory
+  // inventory — 暗影 has no items and can't use any (everything was dropped into the mortuary on death)
   const invEl=document.getElementById("inventory"); invEl.innerHTML="";
+  if(p.ghost){
+    invEl.innerHTML="<div class='muted' style='font-size:12px'>你是暗影，沒有背包。</div>";
+  } else {
   const counts={};
   p.inv.forEach(i=>counts[i]=(counts[i]||0)+1);
   // 道具卡（繩索、防毒面具除外）須先移動並確定停留在房間後才能使用
@@ -1476,9 +1643,13 @@ function renderAll(){
     pend.textContent="本輪已宣告使用（結算階段生效）: "+p.flags.pendingItemUses.map(i=>ITEMS[i].name).join("、");
     invEl.appendChild(pend);
   }
+  }
 
-  // skills
+  // skills — 暗影 no longer plays as its old profession; it just wanders and drains blood
   const skEl=document.getElementById("skillList"); skEl.innerHTML="";
+  if(p.ghost){
+    skEl.innerHTML="<div class='muted' style='font-size:12px'>你是暗影：可自由穿牆移動到任意房間，回合結束時若與存活玩家同房，將於結算階段吸取1點生命；吸滿2點即可復活。</div>";
+  } else {
   PROFESSIONS[p.prof].skills.forEach((s,idx)=>{
     const btn=document.createElement("button"); btn.className="skillbtn";
     let usesLeft="";
@@ -1496,23 +1667,25 @@ function renderAll(){
     else { btn.onclick=()=>useProfSkill(p,idx); }
     skEl.appendChild(btn);
   });
+  }
 
   // map
-  const mapEl=document.getElementById("mapArea"); mapEl.innerHTML="";
+  const mapEl=document.getElementById("mapArea"); mapEl.innerHTML=""; mapEl.className="floor-plan";
   const reach = p.flags.roomCommitted ? {} :
     p.ghost ? Object.fromEntries(Object.keys(ROOMS).map(id=>[id,0])) : // 暗影能穿牆，任何房間皆可到達
     reachableRooms(p.room,p.stepsLeft);
   const floors={};
   Object.values(ROOMS).forEach(r=>{ (floors[r.floor]=floors[r.floor]||[]).push(r); });
   Object.keys(floors).sort((a,b)=>a-b).forEach(fl=>{
-    const row=document.createElement("div"); row.className="floor-row";
     const lbl=document.createElement("span"); lbl.className="floor-label"; lbl.textContent=FLOOR_LABEL[fl];
-    row.appendChild(lbl);
-    floors[fl].sort((a,b)=>a.order-b.order).forEach(r=>{
+    gridPlace(lbl, fl, -1);
+    mapEl.appendChild(lbl);
+    floors[fl].forEach(r=>{
       const chip=document.createElement("div"); chip.className="room-chip";
+      if(hasVerticalLink(r)) chip.classList.add("vlink");
       if(r.id===p.room) chip.classList.add("here");
       else if(reach[r.id]!==undefined) chip.classList.add("reachable");
-      if(STATE.poisoned.has(r.id)) chip.classList.add("poison");
+      if(roomIsPoisoned(r)) chip.classList.add("poison");
       const occAlive=STATE.players.filter(x=>x.room===r.id && x.alive && !x.ghost);
       const fattyHere=STATE.players.find(x=>x.prof==="fatty" && x.alive && x.room===r.id);
       let occTxt="";
@@ -1520,16 +1693,18 @@ function renderAll(){
       else if(fattyHere) occTxt="肥";
       chip.innerHTML=`${r.id}${r.name?("<small>"+r.name+"</small>"):""}`+(occTxt?`<span class="occ">${occTxt}</span>`:"");
       chip.onclick=()=>onRoomClick(r.id);
-      row.appendChild(chip);
+      gridPlace(chip, r.floor, r.order, r.span);
+      mapEl.appendChild(chip);
     });
-    mapEl.appendChild(row);
   });
 
   // room actions — a player may only act in the ONE room they finally stop in this round;
   // using the room's function, or explicitly ending movement, both lock further movement.
   const raEl=document.getElementById("roomActions"); raEl.innerHTML="";
   const room=ROOMS[p.room];
-  if(p.flags.roomCommitted){
+  if(p.ghost){
+    raEl.innerHTML="<span class='muted'>暗影無法使用房間功能，點選地圖上任意房間即可穿牆移動過去，移動完畢後按「結束我的回合」。</span>";
+  } else if(p.flags.roomCommitted){
     raEl.innerHTML="<span class='pill' style='color:var(--amber-bright);border-color:var(--amber-bright)'>已確定停留於「"+p.room+" "+(room.name||"")+"」－本輪不可再移動</span>";
   } else {
     if(room.draw>0 || room.special){
@@ -1549,7 +1724,7 @@ function renderAll(){
     stopBtn.onclick=commitToRoom;
     raEl.appendChild(stopBtn);
   }
-  if(room.special==="laser") log_once(p,"laser-"+STATE.round,()=>{ applyLaser(p); log(p.name+" 經過激光室，結算時將扣1點生命。","dmg"); });
+  if(!p.ghost && room.special==="laser") log_once(p,"laser-"+STATE.round,()=>{ applyLaser(p); log(p.name+" 經過激光室，結算時將扣1點生命。","dmg"); });
 
   // here list
   const hereEl=document.getElementById("hereList");
@@ -1565,10 +1740,41 @@ function renderAll(){
   });
 
   document.getElementById("topStatus").innerHTML=`<span class="badge">回合 ${STATE.round}/6</span>`;
+  renderHpHistory();
+  saveGame();
+}
+// Table of every player's HP change, one column per settled round — delta shown with the
+// resulting HP alongside it, e.g. "-2 (6)", so a busy game stays readable at a glance.
+function renderHpHistory(){
+  const el=document.getElementById("hpHistoryTable");
+  if(!el) return;
+  const settledRounds=STATE.players.length? STATE.players[0].hpLog.length : 0;
+  if(settledRounds===0){
+    el.innerHTML="<div class='muted' style='font-size:12px'>第1輪結算後開始顯示每輪血量變化。</div>";
+    return;
+  }
+  let html="<table class='mono' style='width:100%;border-collapse:collapse;font-size:11.5px;min-width:420px'><thead><tr>"+
+    "<th style='text-align:left;padding:4px 8px'>玩家</th>";
+  for(let r=1;r<=settledRounds;r++) html+="<th style='padding:4px 8px'>第"+r+"輪</th>";
+  html+="</tr></thead><tbody>";
+  STATE.players.forEach(p=>{
+    html+="<tr style='border-top:1px solid var(--line)'><td style='padding:4px 8px;white-space:nowrap'>"+p.name+(p.ghost?" [暗影]":p.alive?"":" 💀")+"</td>";
+    for(let r=1;r<=settledRounds;r++){
+      const entry=p.hpLog[r-1];
+      const sign=entry.delta>0?"+":"";
+      const color=entry.delta<0?"var(--ember-bright)":entry.delta>0?"var(--toxic-bright)":"var(--muted)";
+      html+="<td style='padding:4px 8px;text-align:center;color:"+color+"'>"+sign+entry.delta+" ("+entry.hp+")</td>";
+    }
+    html+="</tr>";
+  });
+  html+="</tbody></table>";
+  el.innerHTML=html;
 }
 function log_once(p,key,fn){
   p.flags.__onceKeys=p.flags.__onceKeys||new Set();
   if(p.flags.__onceKeys.has(key)) return;
   p.flags.__onceKeys.add(key); fn();
 }
+
+restoreGame();
 </script>
