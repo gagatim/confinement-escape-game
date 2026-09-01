@@ -111,7 +111,7 @@
       <h1 style="font-size:22px">禁閉逃殺</h1>
     </div>
     <div id="topStatus" class="row"></div>
-    <button class="btn small warn hidden" id="abandonBtn">放棄遊戲，重新開始</button>
+    <button class="btn small warn hidden" id="abandonBtn">放棄測試，重新開始</button>
   </div>
 
   <!-- ============ SETUP ============ -->
@@ -414,7 +414,7 @@ const PROFESSIONS = {
     {name:"遠端操控", desc:"移動階段可使用，放棄本回合房間功能，改為在任意位置使用基因室/總控室/操作室其一。整局限用2次，不可重複房間。", uses:2}
   ]},
   tycoon:{name:"富豪", skills:[
-    {name:"腰纏萬貫", desc:"你的金條不佔負重。金庫2根+大倉庫1根金條，遊戲開始即歸你所有。每回合限用1根金條。", passive:true}
+    {name:"腰纏萬貫", desc:"你的金條不佔負重。金庫2根+大倉庫1根金條，測試開始即歸你所有。每回合限用1根金條。", passive:true}
   ]},
   shade:{name:"暗影使者", skills:[
     {name:"暗影共鳴", desc:"免疫暗影吸血。存活時，每當其他暗影吸血，你恢復1點生命。", passive:true},
@@ -589,8 +589,8 @@ function validateStart(){
 document.getElementById("startBtn").addEventListener("click",startGame);
 document.getElementById("replayBtn").addEventListener("click",()=>{ clearSavedGame(); location.reload(); });
 document.getElementById("abandonBtn").addEventListener("click",()=>{
-  openModal(`<h3>放棄本局遊戲？</h3>
-    <p class="muted" style="font-size:13px">目前進度將會遺失，回到選擇職業畫面重新開始一局新遊戲。</p>
+  openModal(`<h3>放棄本局測試？</h3>
+    <p class="muted" style="font-size:13px">目前進度將會遺失，回到選擇職業畫面重新開始一局新測試。</p>
     <button class="btn small warn" id="abandonYes">放棄並重新開始</button> <button class="btn small ghost" id="abandonNo">取消</button>`);
   document.getElementById("abandonYes").onclick=()=>{ clearSavedGame(); location.reload(); };
   document.getElementById("abandonNo").onclick=closeModal;
@@ -784,7 +784,7 @@ document.getElementById("confirmSpawnBtn").addEventListener("click",()=>{
   document.getElementById("spawnSelect").classList.add("hidden");
   document.getElementById("game").classList.remove("hidden");
   logRound(1);
-  log("遊戲開始！你的職業：<b>"+PROFESSIONS[you().prof].name+"</b>。你秘密選擇了出生點「"+you().spawnRoom+" "+(ROOMS[you().spawnRoom].name||"")+"」。");
+  log("測試開始！你的職業：<b>"+PROFESSIONS[you().prof].name+"</b>。你秘密選擇了出生點「"+you().spawnRoom+" "+(ROOMS[you().spawnRoom].name||"")+"」。");
   beginRound();
 });
 
