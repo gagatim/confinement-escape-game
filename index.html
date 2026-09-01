@@ -811,6 +811,8 @@ function beginRound(){
     p.flags.goldUsedThisRound=false;
     p.flags.dietThisRound=false;
     p.flags.roomCommitted=false; // locks once the player acts in a room or explicitly ends movement
+    p.flags.roomActsUsedThisRound=0; // how many times the room's function has been used this round
+    p.flags.gamblerBonusOps=0; // 好賭成性's extra room-use, if any — a fresh roll each round, never carries over
     p.flags.skillUsedThisRound=false; // once-per-round cap on active profession skills
     p.flags.votedThisRound=false; // one poison-floor vote per player per round (控制室 boosts its weight instead of granting extra votes)
     p.flags.wineExcluded=null;
@@ -1032,14 +1034,25 @@ function resolveAIDraw(p,roomId,maxDraw){
 function doRoomAction(){
   const p=you();
   if(!isMyTurn()){ flashMsg("尚未輪到你的回合。"); return; }
-  if(p.flags.roomCommitted){ flashMsg("本輪已使用過房間功能。"); return; }
   const room=ROOMS[p.room];
-  if(room.draw>0){
-    let maxDraw=room.draw;
-    if(p.flags.gamblerBonusOps>0){ maxDraw*=2; p.flags.gamblerBonusOps--; }
-    resolveHumanDraw(p,p.room,maxDraw);
+  // 回收站 is a one-way slide down to 垃圾場 — it's a free bonus move, not "using the room's
+  // function", so it does NOT commit you: you can keep moving afterward, or separately choose
+  // to stop and use 垃圾場's own function once you're there.
+  if(room.special==="slide"){
+    if(!carrySpendStep(p)) return;
+    p.room="B503";
+    log(p.name+" 經回收站滑至垃圾場，可繼續移動或停留操作垃圾場。");
+    renderAll();
+    return;
   }
+  // 好賭成性's "本輪房間可操作兩次" means a genuine second use of the room's function, not a
+  // one-shot doubled draw — track uses-vs-allowance so the button stays live for a real 2nd call.
+  const totalOps=1+(p.flags.gamblerBonusOps||0);
+  const used=p.flags.roomActsUsedThisRound||0;
+  if(used>=totalOps){ flashMsg("本輪已使用過房間功能。"); return; }
+  if(room.draw>0) resolveHumanDraw(p,p.room,room.draw);
   if(room.special) doSpecialRoom(p,room);
+  p.flags.roomActsUsedThisRound=used+1;
   // using the room's function is itself committing to this room as your single destination this round
   p.flags.roomCommitted=true;
   renderAll();
@@ -1062,7 +1075,8 @@ function doSpecialRoom(p,room){
       openRespecModal(p,cap);
       break;
     }
-    case "slide": if(carrySpendStep(p)){ p.room="B503"; log(p.name+" 經回收站滑至垃圾場。"); } break;
+    // "slide" (回收站) is handled earlier in doRoomAction, before this switch is ever reached —
+    // it's a free one-way move, not a room-function use, so it never lands here.
     case "teleport": openTeleportModal(p); break;
     case "control": openControlModal(p); break;
     case "helipad":
@@ -1182,13 +1196,17 @@ function useItem(p,item){
   log(p.name+" 宣告使用「"+ITEMS[item].name+"」（結算階段公開生效）。");
   renderAll();
 }
+// 藥片 heals LAST (see resolvePillHealing below) — everything else queued this round (水/糧/
+// 腎上腺素/酒) resolves here, early, since water/food's hunger-flags and adrenaline's death-floor
+// must already be in effect before combat/poison/hunger damage are calculated.
 function resolvePendingItemUses(p){
   const uses=p.flags.pendingItemUses||[];
+  const pillsPending=[];
   uses.forEach(item=>{
+    if(item==="pill"){ pillsPending.push(item); return; }
     STATE.discardPile.push(item);
     switch(item){
       case "water": case "food": p.flags["consumed_"+item]=true; log(p.name+" 結算：使用了"+ITEMS[item].name+"。"); break;
-      case "pill": p.hp=Math.min(p.maxhp,p.hp+2); log(p.name+" 結算：服用藥片，恢復2點生命。","heal"); break;
       case "adrenaline":
         p.flags.adrenalineActive=true; log(p.name+" 結算：注射腎上腺素，下輪速度變10，本輪不會致死。","heal"); break;
       case "wine": {
@@ -1205,7 +1223,22 @@ function resolvePendingItemUses(p){
       }
     }
   });
-  p.flags.pendingItemUses=[];
+  p.flags.pendingItemUses=pillsPending; // pill(s) stay queued for resolvePillHealing
+}
+// Resolves queued 藥片 use AFTER this round's combat/poison/hunger/laser/暗影吸血 damage, so the
+// heal isn't silently wiped out by damage that lands later in the same settlement — and a player
+// killed by that damage before the pill resolves simply doesn't get healed (matches dying same-round).
+function resolvePillHealing(p){
+  const uses=p.flags.pendingItemUses||[];
+  if(p.alive && !p.ghost){
+    uses.forEach(item=>{
+      if(item!=="pill") return;
+      STATE.discardPile.push(item);
+      p.hp=Math.min(p.maxhp,p.hp+2);
+      log(p.name+" 結算：服用藥片，恢復2點生命。","heal");
+    });
+  }
+  p.flags.pendingItemUses=[]; // clear regardless — a pill queued by a player who died first is simply wasted
 }
 function useGoldAtRoom(p){
   if(!p.flags.roomCommitted){ flashMsg("請先移動並確定停留在房間後，才能使用道具。"); return; }
@@ -1523,7 +1556,7 @@ function settleRound(){
   log("<b>── 進入結算階段 ──</b>");
   STATE.__report={combat:[], rocket:[], hunger:[], drain:[], poison:""};
 
-  // 1) queued item-card effects (水/糧/藥片/腎上腺素/酒 — all "結算階段公開使用")
+  // 1) queued item-card effects (水/糧/腎上腺素/酒 — all "結算階段公開使用"；藥片 heals later, see below)
   STATE.players.forEach(p=>{ if(p.alive) resolvePendingItemUses(p); });
 
   // surgery healing (triggered earlier when the room was visited; resolves alongside items)
@@ -1630,6 +1663,10 @@ function settleRound(){
       log(g.name+" 吸滿2點生命，於「"+g.room+"」復活！(HP "+g.hp+")","heal");
     }
   });
+
+  // 7) 藥片 healing resolves LAST — after combat/poison/hunger/laser/暗影吸血 — so it reflects
+  // this round's final HP instead of being overwritten by damage that comes later in settlement.
+  STATE.players.forEach(p=>resolvePillHealing(p));
 
   // adrenaline: apply next-round speed, then clear
   STATE.players.forEach(p=>{
@@ -1847,10 +1884,22 @@ function renderAll(){
   // using the room's function, or explicitly ending movement, both lock further movement.
   const raEl=document.getElementById("roomActions"); raEl.innerHTML="";
   const room=ROOMS[p.room];
+  const roomOpsLeft=(1+(p.flags.gamblerBonusOps||0))-(p.flags.roomActsUsedThisRound||0);
   if(p.ghost){
     raEl.innerHTML="<span class='muted'>暗影無法使用房間功能，點選地圖上任意房間即可穿牆移動過去，移動完畢後按「結束我的回合」。</span>";
-  } else if(p.flags.roomCommitted){
+  } else if(p.flags.roomCommitted && roomOpsLeft<=0){
     raEl.innerHTML="<span class='pill' style='color:var(--amber-bright);border-color:var(--amber-bright)'>已確定停留於「"+p.room+" "+(room.name||"")+"」－本輪不可再移動</span>";
+  } else if(p.flags.roomCommitted){
+    // 好賭成性 granted a genuine second use of this room's function — movement stays locked,
+    // but the action button reappears for the extra operation instead of vanishing after one use.
+    raEl.innerHTML="<span class='pill' style='color:var(--amber-bright);border-color:var(--amber-bright)'>已確定停留於「"+p.room+" "+(room.name||"")+"」－本輪不可再移動，但還可再操作 "+roomOpsLeft+" 次</span><br><br>";
+    const btn=document.createElement("button"); btn.className="btn small";
+    btn.textContent = room.special==="gene"?"使用基因庫" : room.special==="respec"?"重新分配點數" :
+      room.special==="slide"?"滑向垃圾場(1步)" : room.special==="teleport"?"傳送" : room.special==="control"?"控制室功能" :
+      room.special==="helipad"?(p.roundStartRoom==="202"?"領取空投／搭乘直升機":"領取空投（本輪需停留，下輪才能搭機）") :
+      room.draw>0?"搜索房間 (最多"+room.draw+"張)" : "使用房間功能";
+    btn.onclick=doRoomAction;
+    raEl.appendChild(btn);
   } else {
     if(room.draw>0 || room.special){
       const btn=document.createElement("button"); btn.className="btn small";
