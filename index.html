@@ -110,6 +110,7 @@
       <h1 style="font-size:22px">禁閉逃殺</h1>
     </div>
     <div id="topStatus" class="row"></div>
+    <button class="btn small warn hidden" id="abandonBtn">放棄遊戲，重新開始</button>
   </div>
 
   <!-- ============ SETUP ============ -->
@@ -466,8 +467,15 @@ function saveGame(){
   }catch(e){ /* storage unavailable/full — game still playable, just unsaved */ }
 }
 function clearSavedGame(){ try{ localStorage.removeItem(SAVE_KEY); }catch(e){} }
+// Abandon button is only meaningful once a game exists to abandon (spawn-select or in-progress
+// game) — hidden on the setup screen (nothing started yet) and the end screen (already has its
+// own 重新開始 button).
+function setAbandonBtnVisible(v){
+  document.getElementById("abandonBtn").classList.toggle("hidden", !v);
+}
 function showScreen(screen){
   ["setup","spawnSelect","game","endScreen"].forEach(id=>document.getElementById(id).classList.add("hidden"));
+  setAbandonBtnVisible(screen==="spawnSelect" || screen==="game");
   if(screen==="spawnSelect"){
     renderSpawnGrid();
     document.getElementById("spawnSelect").classList.remove("hidden");
@@ -575,6 +583,13 @@ function validateStart(){
 }
 document.getElementById("startBtn").addEventListener("click",startGame);
 document.getElementById("replayBtn").addEventListener("click",()=>{ clearSavedGame(); location.reload(); });
+document.getElementById("abandonBtn").addEventListener("click",()=>{
+  openModal(`<h3>放棄本局遊戲？</h3>
+    <p class="muted" style="font-size:13px">目前進度將會遺失，回到選擇職業畫面重新開始一局新遊戲。</p>
+    <button class="btn small warn" id="abandonYes">放棄並重新開始</button> <button class="btn small ghost" id="abandonNo">取消</button>`);
+  document.getElementById("abandonYes").onclick=()=>{ clearSavedGame(); location.reload(); };
+  document.getElementById("abandonNo").onclick=closeModal;
+});
 
 /* ---------- player factory ---------- */
 const AI_NAMES=["阿凱","小美","老周","阿德","阿珍","小胖","阿宏","阿玲"];
@@ -680,6 +695,7 @@ function startGame(){
   document.getElementById("setup").classList.add("hidden");
   renderSpawnGrid();
   document.getElementById("spawnSelect").classList.remove("hidden");
+  setAbandonBtnVisible(true);
   saveGame();
 }
 
@@ -1090,11 +1106,15 @@ function useGoldAtRoom(p){
   if(p.flags.goldUsedThisRound){ flashMsg("每回合限用1根金條"); return; }
   const room=ROOMS[p.room];
   if(room.noGold){ flashMsg("此房間無法使用金條"); return; }
+  const stockKeys=Object.keys(room.stock).filter(k=>room.stock[k]>0 && k!=="gold");
+  // Bail out BEFORE spending the gold if there's nothing to pick — the old code always spent it
+  // and opened a modal that, with no stock, rendered no buttons at all: an uncloseable modal
+  // (modal-bg blocks every click behind it) that froze the game and wasted the gold for nothing.
+  if(!stockKeys.length){ flashMsg("此房間目前沒有其他庫存可換取，金條未消耗。"); return; }
   if(!removeItem(p,"gold")) return;
   p.flags.goldUsedThisRound=true;
   STATE.discardPile.push("gold");
-  const stockKeys=Object.keys(room.stock).filter(k=>room.stock[k]>0 && k!=="gold");
-  openModal(`<h3>金條：額外選擇一張</h3>${stockKeys.length? stockKeys.map(k=>`<button class="btn small" data-k="${k}">${ITEMS[k].name}(${room.stock[k]})</button>`).join(" ") : "此房間無其他庫存"}`);
+  openModal(`<h3>金條：額外選擇一張</h3>${stockKeys.map(k=>`<button class="btn small" data-k="${k}">${ITEMS[k].name}(${room.stock[k]})</button>`).join(" ")}<br><br><button class="btn small ghost" id="goldCancel">關閉</button>`);
   document.querySelectorAll("#modal button[data-k]").forEach(btn=>{
     btn.onclick=()=>{
       const k=btn.dataset.k;
@@ -1103,6 +1123,7 @@ function useGoldAtRoom(p){
       closeModal(); renderAll();
     };
   });
+  document.getElementById("goldCancel").onclick=closeModal;
 }
 function useRocket(p){
   if(!p.flags.roomCommitted){ flashMsg("請先移動並確定停留在房間後，才能使用道具。"); return; }
@@ -1167,7 +1188,8 @@ function useProfSkill(p,idx){
     const floorOpts=poisonedFloors.map(f=>`<option value="${f}">${FLOOR_LABEL[f]}</option>`).join("");
     openModal(`<h3>毒性調和</h3>
       <div>${poisonedFloors.length? `指定已中毒樓層：<select id="chFloor">${floorOpts}</select> ` : "（目前無已中毒樓層）"}<button class="btn small" id="chA"${poisonedFloors.length?"":" disabled"}>本輪毒氣傷害-2</button></div><br>
-      <button class="btn small warn" id="chB">本輪毒氣樓層傷害+2</button>`);
+      <button class="btn small warn" id="chB">本輪毒氣樓層傷害+2</button><br><br>
+      <button class="btn small ghost" id="chCancel">取消</button>`);
     document.getElementById("chA").onclick=()=>{
       const f=+document.getElementById("chFloor").value;
       STATE.poisonReduceFloor=f; log(p.name+" 指定「"+FLOOR_LABEL[f]+"」本輪毒氣傷害-2。");
@@ -1177,12 +1199,14 @@ function useProfSkill(p,idx){
       STATE.poisonBoost=true; log(p.name+" 令本輪毒氣樓層傷害+2。");
       p.flags.chemistUses++; closeModal();
     };
+    document.getElementById("chCancel").onclick=closeModal;
   } else if(p.prof==="hacker" && idx===1){
     if(p.flags.hackerUses>=2){ flashMsg("已用完2次"); return; }
     openModal(`<h3>遠端操控：選擇要使用的房間功能</h3>
       <button class="btn small" data-r="201">基因庫</button>
       <button class="btn small" data-r="B101">控制室</button>
-      <button class="btn small" data-r="B304">操作室</button>`);
+      <button class="btn small" data-r="B304">操作室</button><br><br>
+      <button class="btn small ghost" id="hackCancel">取消</button>`);
     document.querySelectorAll("#modal button[data-r]").forEach(btn=>{
       btn.onclick=()=>{
         const r=btn.dataset.r;
@@ -1193,6 +1217,7 @@ function useProfSkill(p,idx){
         closeModal(); renderAll();
       };
     });
+    document.getElementById("hackCancel").onclick=closeModal;
   } else if(p.prof==="tamer" && idx===0){
     if(p.flags.tamerUses>=4){ flashMsg("已用完4次"); return; }
     const cands=Object.keys(ROOMS).filter(r=> bfsDist(p.room,r)<=5 && bfsDist(p.room,r)>0 && (Object.values(ROOMS[r].stock).some(v=>v>0)||r==="202"));
@@ -1578,6 +1603,7 @@ function endGame(){
     if(healed>0){ p.hp+=healed; log(p.name+" 最終結算：以 "+goldCount+" 根金條換取 +"+healed+" 點血。","heal"); }
   });
   document.getElementById("game").classList.add("hidden");
+  setAbandonBtnVisible(false);
   renderEndScreen();
   saveGame();
 }
