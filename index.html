@@ -82,6 +82,10 @@
   .room-chip.vlink{border-style:dashed}
   .room-chip .vmark{position:absolute;bottom:-6px;left:50%;transform:translateX(-50%);font-size:8px;
     color:var(--muted);background:var(--bg);padding:0 3px}
+  .room-chip .hbridge{position:absolute;top:50%;transform:translateY(-50%);font-size:9px;
+    color:var(--cyan-bright);background:var(--bg);padding:0 2px;line-height:1}
+  .room-chip .hbridge.right{right:-9px}
+  .room-chip .hbridge.left{left:-9px}
   #log{height:230px;overflow-y:auto;font-size:12px;line-height:1.6;background:var(--panel-2);border:1px solid var(--line);
     border-radius:8px;padding:8px}
   #log div{border-bottom:1px dashed #1f2942;padding:3px 0}
@@ -316,10 +320,10 @@ const ADJ = {
   "B107":["B106","104","B206"],
   "B201":["B101","B202","B301"], "B202":["B201","B203","B102","B302"], "B203":["B202","B204","B103","B303"],
   "B204":["B203","B205","B104","B304"], "B205":["B204","B105","B305"], "B206":["B106","B107","B306","B307","B308"],
-  "B301":["B302","B201","B501"], "B302":["B301","B303","B202","B501"], "B303":["B302","B304","B203","B501"],
+  "B301":["B302","B201"], "B302":["B301","B303","B202"], "B303":["B302","B304","B203"],
   "B304":["B303","B305","B204","B401"], "B305":["B304","B205","B402","B306"],
   "B306":["B307","B206","B403","B305"], "B307":["B306","B308","B206","B404"], "B308":["B307","B206","B405"],
-  "B501":["B301","B302","B303","B401","B502","B601"], "B401":["B501","B402","B304","B502"],
+  "B501":["B401","B502","B601"], "B401":["B501","B402","B304","B502"],
   "B402":["B401","B305","B503"], "B403":["B404","B306","B504"],
   "B404":["B403","B405","B307","B504","B505"], "B405":["B404","B308","B505"],
   "B502":["B501","B503","B401","B601"], "B503":["B502","B402","B602"],
@@ -752,6 +756,15 @@ function hasVerticalLink(r){
     return r.order<nEnd && n.order<rEnd;
   });
 }
+// The only two footbridges across the central atrium — everywhere else the atrium blocks
+// horizontal movement outright, so these get their own distinct marker from ordinary ladders.
+const BRIDGE_SIDE={"B105":"right","B106":"left","B305":"right","B306":"left"};
+function roomMarkersHtml(r){
+  let html="";
+  if(hasVerticalLink(r)) html+=`<span class="vmark" title="有樓梯／梯子可上下樓">🪜</span>`;
+  if(BRIDGE_SIDE[r.id]) html+=`<span class="hbridge ${BRIDGE_SIDE[r.id]}" title="天橋，花1步可跨越天井">🌉</span>`;
+  return html;
+}
 // Places a room/label element on the shared 35-column floor-plan grid (col 1 = floor label,
 // cols 2-35 = measured column 0-33) so gaps render as real empty cells and wide rooms actually
 // render wider — reproducing the staggered shape and atrium gap from the reference photo,
@@ -774,7 +787,7 @@ function renderStaticMap(containerId, highlightIds){
       const chip=document.createElement("div"); chip.className="room-chip";
       if(highlightIds && highlightIds.includes(r.id)) chip.classList.add("spawn");
       if(hasVerticalLink(r)) chip.classList.add("vlink");
-      chip.innerHTML=`${r.id}${r.name?("<small>"+r.name+"</small>"):""}`;
+      chip.innerHTML=`${r.id}${r.name?("<small>"+r.name+"</small>"):""}`+roomMarkersHtml(r);
       gridPlace(chip, r.floor, r.order, r.span);
       mapEl.appendChild(chip);
     });
@@ -809,6 +822,7 @@ function beginRound(){
     p.roundStartSteps = p.stepsLeft;
     if(p.flags.adrenalineRound===STATE.round-1+1){} // no-op placeholder
     p.flags.goldUsedThisRound=false;
+    p.flags.rocketUsedThisRound=false; // 火箭筒 is reusable now — limited to once per round instead of one-shot
     p.flags.dietThisRound=false;
     p.flags.roomCommitted=false; // locks once the player acts in a room or explicitly ends movement
     p.flags.roomActsUsedThisRound=0; // how many times the room's function has been used this round
@@ -1267,10 +1281,12 @@ function useGoldAtRoom(p){
 }
 function useRocket(p){
   if(!p.flags.roomCommitted){ flashMsg("請先移動並確定停留在房間後，才能使用道具。"); return; }
+  if(p.flags.rocketUsedThisRound){ flashMsg("火箭筒每回合限用1次"); return; }
   openModal(`<h3>火箭筒：選擇目標房間</h3><select id="rkSel">${Object.keys(ROOMS).map(id=>`<option value="${id}">${id} ${ROOMS[id].name||""}</option>`).join("")}</select>
     <br><br><button class="btn small warn" id="rkOk">發射</button> <button class="btn small ghost" id="rkCancel">取消</button>`);
   document.getElementById("rkOk").onclick=()=>{
-    removeItem(p,"rocket"); STATE.discardPile.push("rocket");
+    // 一回合限用一次，但發射後不會消耗掉這張道具卡——留在背包裡，下輪還能再用
+    p.flags.rocketUsedThisRound=true;
     STATE.rocketTargets=STATE.rocketTargets||[];
     STATE.rocketTargets.push(document.getElementById("rkSel").value);
     log(p.name+" 發射火箭筒瞄準 "+document.getElementById("rkSel").value+"（結算時生效）。");
@@ -1809,7 +1825,11 @@ function renderAll(){
     const dis = id==="rope" ? "" : (needsCommit ? " disabled title=\"請先移動並確定停留在房間後，才能使用道具\"" : "");
     if(["water","food","pill","adrenaline","wine"].includes(id)) actions+=`<button class="btn small" data-use="${id}"${dis}>使用</button>`;
     if(id==="gold") actions+=`<button class="btn small gold" data-gold="1"${dis}>用於本房</button>`;
-    if(id==="rocket") actions+=`<button class="btn small warn" data-rocket="1"${dis}>瞄準</button>`;
+    if(id==="rocket"){
+      const rocketDisabled=needsCommit||p.flags.rocketUsedThisRound;
+      const rocketTitle=needsCommit?"請先移動並確定停留在房間後，才能使用道具":"火箭筒每回合限用1次";
+      actions+=`<button class="btn small warn" data-rocket="1"${rocketDisabled?` disabled title="${rocketTitle}"`:""}>瞄準</button>`;
+    }
     if(id==="recycledevice") actions+=`<button class="btn small" data-recycle="1"${dis}>回收抽取</button>`;
     if(id==="rope") actions+=`<button class="btn small" data-rope="1">直接上下樓</button>`;
     div.innerHTML=`<span>${ITEMS[id].name} x${n}</span><span class="actions">${actions}</span>`;
@@ -1878,7 +1898,7 @@ function renderAll(){
       let occTxt="";
       if(r.id===p.room) occTxt=occAlive.length>1?String(occAlive.length):"";
       else if(fattyHere) occTxt="肥";
-      chip.innerHTML=`${r.id}${r.name?("<small>"+r.name+"</small>"):""}`+(occTxt?`<span class="occ">${occTxt}</span>`:"");
+      chip.innerHTML=`${r.id}${r.name?("<small>"+r.name+"</small>"):""}`+roomMarkersHtml(r)+(occTxt?`<span class="occ">${occTxt}</span>`:"");
       chip.onclick=()=>onRoomClick(r.id);
       gridPlace(chip, r.floor, r.order, r.span);
       mapEl.appendChild(chip);
@@ -1945,7 +1965,9 @@ function renderAll(){
     apEl.appendChild(line);
   });
 
-  document.getElementById("topStatus").innerHTML=`<span class="badge">回合 ${STATE.round}/6</span>`;
+  const turnPos=STATE.turnOrder? STATE.turnOrder.indexOf(p.id)+1 : 0;
+  document.getElementById("topStatus").innerHTML=`<span class="badge">回合 ${STATE.round}/6</span>`+
+    (turnPos>0? `<span class="badge">本輪順序：第 ${turnPos}/${STATE.turnOrder.length} 位行動</span>` : "");
   renderHpHistory();
   saveGame();
 }
