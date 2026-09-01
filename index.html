@@ -480,6 +480,10 @@ function showScreen(screen){
   } else if(screen==="game"){
     document.getElementById("game").classList.remove("hidden");
     renderAll();
+    // A refresh mid-settlement loses the round-summary modal (UI state isn't persisted) but
+    // STATE.phase stays "settlement", which permanently blocks isMyTurn() — reopen it here so
+    // the player isn't stranded on a normal-looking board with every click "尚未輪到你的回合".
+    if(STATE.phase==="settlement" && !STATE.gameOver) showRoundSummary();
   } else if(screen==="end"){
     renderEndScreen();
   } else {
