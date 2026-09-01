@@ -1178,6 +1178,24 @@ function openRopeModal(p){
   };
   document.getElementById("ropeCancel").onclick=closeModal;
 }
+// 攀岩者's 垂直攀爬: once activated (1 HP paid in useProfSkill), the same "jump straight to any
+// room on floor±1" ability as 繩索, but from a paid skill instead of a consumed item — this was
+// previously just a flag (climberVertical) that nothing ever read, so paying the HP did nothing.
+function openClimberVerticalModal(p){
+  const room=ROOMS[p.room];
+  const dests=Object.values(ROOMS).filter(r=>r.floor===room.floor-1||r.floor===room.floor+1);
+  if(!dests.length){ flashMsg("此樓層沒有可直接上下樓的目標。"); return; }
+  const opts=dests.map(r=>`<option value="${r.id}">${FLOOR_LABEL[r.floor]} ${r.id} ${r.name||""}</option>`).join("");
+  openModal(`<h3>垂直攀爬：直接上下樓</h3><select id="climbSel">${opts}</select><br><br>
+    <button class="btn small" id="climbOk">攀爬(消耗1步)</button> <button class="btn small ghost" id="climbCancel">取消</button>`);
+  document.getElementById("climbOk").onclick=()=>{
+    if(p.flags.roomCommitted){ flashMsg("本輪已確定停留於此房間，無法再移動。"); closeModal(); return; }
+    if(!carrySpendStep(p)){ closeModal(); return; }
+    p.room=document.getElementById("climbSel").value; closeModal(); renderAll();
+    log(p.name+" 使用垂直攀爬，直接前往 "+p.room+"。");
+  };
+  document.getElementById("climbCancel").onclick=closeModal;
+}
 function openControlModal(p){
   // 解毒 targets a single ROOM permanently (a surgical exception), separate from the
   // floor-wide poison vote — a poisoned floor stays poisoned, only this one room is spared.
@@ -1196,6 +1214,25 @@ function openControlModal(p){
   };
   document.getElementById("ctrlCancel").onclick=closeModal;
 }
+// 系統監控: shows headcount and each occupant's base 武力值 for any room — deliberately uses
+// the raw stat, not combatPower(), since a weapon bonus baked into the number would leak whether
+// they're armed, which the skill explicitly says the hacker can't know.
+function openHackerMonitorModal(p){
+  const opts=Object.keys(ROOMS).map(id=>`<option value="${id}">${id} ${ROOMS[id].name||""}</option>`).join("");
+  openModal(`<h3>系統監控：選擇要查看的房間</h3><select id="hackViewSel">${opts}</select><br><br>
+    <button class="btn small" id="hackViewOk">查看</button> <button class="btn small ghost" id="hackViewCancel">取消</button>`);
+  document.getElementById("hackViewOk").onclick=()=>{
+    const rid=document.getElementById("hackViewSel").value;
+    const occupants=playersInRoom(rid,true);
+    const lines=occupants.length? occupants.map(o=>o.name+"（武力 "+o.power+"）").join("<br>") : "（無人）";
+    openModal(`<h3>系統監控：「${rid} ${ROOMS[rid].name||""}」</h3>
+      <div>目前人數：${occupants.length}</div>
+      <div style="margin-top:6px">${lines}</div><br>
+      <button class="btn small ghost" id="hackViewClose">關閉</button>`);
+    document.getElementById("hackViewClose").onclick=closeModal;
+  };
+  document.getElementById("hackViewCancel").onclick=closeModal;
+}
 
 /* ===================== ITEM USE ===================== */
 // 附錄二: 水/糧/藥片/腎上腺素/酒 are all "結算階段公開使用" — clicking them during the action
@@ -1205,10 +1242,48 @@ const SETTLEMENT_TIMED_ITEMS=["water","food","pill","adrenaline","wine"];
 function useItem(p,item){
   if(!SETTLEMENT_TIMED_ITEMS.includes(item)) return; // passive-hold items are never "used" via click
   if(!p.flags.roomCommitted){ flashMsg("請先移動並確定停留在房間後，才能使用道具。"); return; }
+  // 飲品師's 舉杯共飲 (share with another player) and 特調精釀's pre-roll exclusion both only
+  // apply to 酒 — everything else keeps the plain self-only declare-now-resolve-later flow.
+  if(item==="wine" && p.prof==="bartender"){ openBartenderWineModal(p); return; }
   if(!removeItem(p,item)) return;
   p.flags.pendingItemUses.push(item);
   log(p.name+" 宣告使用「"+ITEMS[item].name+"」（結算階段公開生效）。");
   renderAll();
+}
+function openBartenderWineModal(p){
+  const others=playersInRoom(p.room,true).filter(x=>x.id!==p.id);
+  const targetOpts=[`<option value="${p.id}">自己</option>`]
+    .concat(others.map(o=>`<option value="${o.id}">${o.name}</option>`)).join("");
+  const OUTCOME_LABELS={1:"1 - 丟棄所有道具卡",2:"2 - 無事發生",3:"3 - 武力永久+1",4:"4 - 速度永久+1",5:"5 - 負重永久+1",6:"6 - 生命+2"};
+  openModal(`<h3>特調精釀：舉杯共飲</h3>
+    <div>對象：<select id="wineTargetSel">${targetOpts}</select></div><br>
+    <div id="wineExcludeWrap"></div>
+    <button class="btn small" id="wineTargetOk">倒酒</button> <button class="btn small ghost" id="wineTargetCancel">取消</button>`);
+  const updateExcludeUI=()=>{
+    const isSelf=+document.getElementById("wineTargetSel").value===p.id;
+    document.getElementById("wineExcludeWrap").innerHTML = isSelf
+      ? "<div class='muted' style='font-size:12px;margin-bottom:4px'>你自己的酒：勾選剛好3種要排除的結果，剩下3種隨機抽取</div>"+
+        Object.entries(OUTCOME_LABELS).map(([k,label])=>`<label style="display:block;margin:2px 0"><input type="checkbox" class="wineExcl" value="${k}"> ${label}</label>`).join("")
+      : "<div class='muted' style='font-size:12px'>對方喝到的是普通的酒，6種結果均等隨機。</div>";
+  };
+  document.getElementById("wineTargetSel").addEventListener("change",updateExcludeUI);
+  updateExcludeUI();
+  document.getElementById("wineTargetOk").onclick=()=>{
+    const targetId=+document.getElementById("wineTargetSel").value;
+    const isSelf=targetId===p.id;
+    let excluded=[];
+    if(isSelf){
+      excluded=[...document.querySelectorAll(".wineExcl:checked")].map(cb=>+cb.value);
+      if(excluded.length!==3){ flashMsg("請剛好排除3種結果"); return; }
+    }
+    if(!removeItem(p,"wine")) return;
+    const target=STATE.players.find(x=>x.id===targetId);
+    if(isSelf) target.flags.wineExcluded=excluded;
+    target.flags.pendingItemUses.push("wine");
+    log(p.name+(isSelf?" 為自己調製了特調果汁":" 舉杯共飲，請 "+target.name+" 喝了一杯果汁")+"（結算階段公開生效）。");
+    closeModal(); renderAll();
+  };
+  document.getElementById("wineTargetCancel").onclick=closeModal;
 }
 // 藥片 heals LAST (see resolvePillHealing below) — everything else queued this round (水/糧/
 // 腎上腺素/酒) resolves here, early, since water/food's hunger-flags and adrenaline's death-floor
@@ -1224,7 +1299,14 @@ function resolvePendingItemUses(p){
       case "adrenaline":
         p.flags.adrenalineActive=true; log(p.name+" 結算：注射腎上腺素，下輪速度變10，本輪不會致死。","heal"); break;
       case "wine": {
-        const roll=Math.floor(Math.random()*6)+1;
+        // 特調精釀: a bartender's own glass may have 3 outcomes pre-excluded, rolled among
+        // whichever 3 remain — one-time per declared use, then cleared.
+        let pool=[1,2,3,4,5,6];
+        if(p.flags.wineExcluded && p.flags.wineExcluded.length===3){
+          pool=pool.filter(n=>!p.flags.wineExcluded.includes(n));
+          p.flags.wineExcluded=null;
+        }
+        const roll=pool[Math.floor(Math.random()*pool.length)];
         let msg="結算：酒(擲骰"+roll+"): ";
         if(roll===1){ p.inv=[]; msg+="丟棄所有道具卡！"; }
         else if(roll===2){ msg+="無事發生。"; }
@@ -1870,7 +1952,11 @@ function renderAll(){
     if(p.prof==="geneFreak"&&idx===1) usesLeft=" ("+(2-p.flags.geneUses)+"/2)";
     if(p.prof==="climber"&&idx===1) usesLeft=" ("+(p.flags.climberDietUsed?0:1)+"/1)";
     btn.innerHTML=`<b>${s.name}${usesLeft}</b>${s.desc}`;
-    if(s.passive){ btn.disabled=true; btn.title="被動技能，自動生效"; }
+    if(p.prof==="hacker" && idx===0){
+      // 系統監控 is a "permanent passive" in name, but it's an on-demand lookup, not something
+      // that resolves itself — give it a real query button instead of disabling it like other passives.
+      btn.onclick=()=>openHackerMonitorModal(p);
+    } else if(s.passive){ btn.disabled=true; btn.title="被動技能，自動生效"; }
     else { btn.onclick=()=>useProfSkill(p,idx); }
     skEl.appendChild(btn);
   });
@@ -1948,6 +2034,12 @@ function renderAll(){
       undoBtn.textContent="↩ 回手（取消本輪移動）";
       undoBtn.onclick=undoMovement;
       raEl.appendChild(undoBtn);
+    }
+    if(p.prof==="climber" && p.flags.climberVertical){
+      const climbBtn=document.createElement("button"); climbBtn.className="btn small";
+      climbBtn.textContent="🧗 垂直攀爬（直接上下樓，消耗1步）";
+      climbBtn.onclick=()=>openClimberVerticalModal(p);
+      raEl.appendChild(climbBtn);
     }
   }
   if(!p.ghost && room.special==="laser") log_once(p,"laser-"+STATE.round,()=>{ applyLaser(p); log(p.name+" 經過激光室，結算時將扣1點生命。","dmg"); });
