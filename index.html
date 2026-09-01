@@ -1779,8 +1779,13 @@ function renderAll(){
   document.getElementById("phaseName").textContent="行動階段";
   document.getElementById("youName").textContent=p.name;
   document.getElementById("youProf").textContent=PROFESSIONS[p.prof].name;
-  document.getElementById("hpBar").style.width=Math.max(0,(p.hp/p.maxhp*100))+"%";
-  document.getElementById("hpText").textContent="HP "+p.hp+"/"+p.maxhp;
+  if(p.ghost){
+    document.getElementById("hpBar").style.width=Math.min(100,(p.ghostDrainTotal/2*100))+"%";
+    document.getElementById("hpText").textContent="暗影吸血進度 "+p.ghostDrainTotal+"/2（吸滿2點復活）";
+  } else {
+    document.getElementById("hpBar").style.width=Math.max(0,(p.hp/p.maxhp*100))+"%";
+    document.getElementById("hpText").textContent="HP "+p.hp+"/"+p.maxhp;
+  }
   document.getElementById("stPower").textContent=combatPower(p);
   document.getElementById("stSpeed").textContent=p.speed;
   document.getElementById("stCarry").textContent=p.carry;
@@ -1830,7 +1835,7 @@ function renderAll(){
   // skills — 暗影 no longer plays as its old profession; it just wanders and drains blood
   const skEl=document.getElementById("skillList"); skEl.innerHTML="";
   if(p.ghost){
-    skEl.innerHTML="<div class='muted' style='font-size:12px'>你是暗影：可自由穿牆移動到任意房間，回合結束時若與存活玩家同房，將於結算階段吸取1點生命；吸滿2點即可復活。</div>";
+    skEl.innerHTML="<div class='muted' style='font-size:12px'>你是暗影：可自由穿牆移動到任意房間，回合結束時若與存活玩家同房，將於結算階段吸取1點生命；目前已吸 "+p.ghostDrainTotal+"/2 點，吸滿即可原地復活。</div>";
   } else {
   PROFESSIONS[p.prof].skills.forEach((s,idx)=>{
     const btn=document.createElement("button"); btn.className="skillbtn";
