@@ -30,6 +30,7 @@
   .btn.ghost{background:transparent;border:1px solid var(--line);color:var(--ink);box-shadow:none}
   .btn.warn{background:linear-gradient(180deg,var(--ember-bright),var(--ember));box-shadow:0 4px 0 #7a201c;color:#280807}
   .btn.gold{background:linear-gradient(180deg,#ffe8a0,var(--gold));box-shadow:0 4px 0 #8a6b1c;color:#2a1e02}
+  .btn.toxic{background:linear-gradient(180deg,var(--toxic-bright),var(--toxic));box-shadow:0 4px 0 #2a6b28;color:#0a2008}
   .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px}
   .muted{color:var(--muted)}
   .mono{font-family:"JetBrains Mono",monospace}
@@ -178,7 +179,7 @@
         <div class="row" style="justify-content:space-between">
           <div class="panel-title" style="margin-bottom:0">地圖 － 第 <span id="roundNo">1</span>/6 輪 ｜ <span id="phaseName">佈局階段</span></div>
           <div class="row">
-            <button class="btn small ghost" id="voteBtn">投票毒區</button>
+            <button class="btn small toxic" id="voteBtn">☠ 投票毒區</button>
           </div>
         </div>
         <div id="mapArea" style="margin-top:8px"></div>
