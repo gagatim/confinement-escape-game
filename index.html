@@ -801,6 +801,8 @@ function beginRound(){
     // wherever the player physically ended up last round — position is NOT reset to a hub.
     if(STATE.round===1 && p.spawnRoom) p.room=p.spawnRoom;
     p.stepsLeft = p.speed;
+    p.roundStartRoom = p.room; // lets 回手 undo all movement made so far this round, for free
+    p.roundStartSteps = p.stepsLeft;
     if(p.flags.adrenalineRound===STATE.round-1+1){} // no-op placeholder
     p.flags.goldUsedThisRound=false;
     p.flags.dietThisRound=false;
@@ -900,6 +902,21 @@ function commitToRoom(){
   if(p.flags.roomCommitted) return;
   p.flags.roomCommitted=true;
   log(p.name+" 確定停留於「"+p.room+" "+(ROOMS[p.room].name||"")+"」，本輪不再移動。");
+  renderAll();
+}
+// 回手: free undo of every move made so far this round — only available before committing to a
+// room or using its function (matches "執行房間功能之前可以回手"), so a misclick never costs steps.
+function undoMovement(){
+  const p=you();
+  if(!isMyTurn()) return;
+  if(p.flags.roomCommitted) return;
+  p.room=p.roundStartRoom;
+  p.stepsLeft=p.roundStartSteps;
+  // 102 applies its laser effect just by walking through it (before any commit) — undo that too,
+  // and clear its once-per-round trigger so walking through it again later this round still counts.
+  p.pendingLaser=false;
+  if(p.flags.__onceKeys) p.flags.__onceKeys.delete("laser-"+STATE.round);
+  log(p.name+" 回手：取消本輪移動，回到「"+p.room+" "+(ROOMS[p.room].name||"")+"」。");
   renderAll();
 }
 function flashMsg(m){ log(`<i class="muted">${m}</i>`); }
@@ -1824,6 +1841,12 @@ function renderAll(){
     stopBtn.textContent="確定停留於此房間（結束移動）";
     stopBtn.onclick=commitToRoom;
     raEl.appendChild(stopBtn);
+    if(p.room!==p.roundStartRoom || p.stepsLeft!==p.roundStartSteps){
+      const undoBtn=document.createElement("button"); undoBtn.className="btn small ghost";
+      undoBtn.textContent="↩ 回手（取消本輪移動）";
+      undoBtn.onclick=undoMovement;
+      raEl.appendChild(undoBtn);
+    }
   }
   if(!p.ghost && room.special==="laser") log_once(p,"laser-"+STATE.round,()=>{ applyLaser(p); log(p.name+" 經過激光室，結算時將扣1點生命。","dmg"); });
 
