@@ -218,7 +218,7 @@
     </div>
 
     <div class="card" style="grid-column:1/-1">
-      <div class="panel-title">每輪血量變化</div>
+      <div class="panel-title">每輪血量</div>
       <div id="hpHistoryTable" style="overflow-x:auto"></div>
     </div>
   </div>
@@ -1978,7 +1978,7 @@ function renderHpHistory(){
   if(!el) return;
   const settledRounds=STATE.players.length? STATE.players[0].hpLog.length : 0;
   if(settledRounds===0){
-    el.innerHTML="<div class='muted' style='font-size:12px'>第1輪結算後開始顯示每輪血量變化。</div>";
+    el.innerHTML="<div class='muted' style='font-size:12px'>第1輪結算後開始顯示每輪血量。</div>";
     return;
   }
   let html="<table class='mono' style='width:100%;border-collapse:collapse;font-size:11.5px;min-width:420px'><thead><tr>"+
@@ -1989,9 +1989,8 @@ function renderHpHistory(){
     html+="<tr style='border-top:1px solid var(--line)'><td style='padding:4px 8px;white-space:nowrap'>"+p.name+(p.ghost?" [暗影]":p.alive?"":" 💀")+"</td>";
     for(let r=1;r<=settledRounds;r++){
       const entry=p.hpLog[r-1];
-      const sign=entry.delta>0?"+":"";
       const color=entry.delta<0?"var(--ember-bright)":entry.delta>0?"var(--toxic-bright)":"var(--muted)";
-      html+="<td style='padding:4px 8px;text-align:center;color:"+color+"'>"+sign+entry.delta+" ("+entry.hp+")</td>";
+      html+="<td style='padding:4px 8px;text-align:center;color:"+color+"'>"+entry.hp+"</td>";
     }
     html+="</tr>";
   });
