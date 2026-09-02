@@ -930,6 +930,14 @@ function playerEffectiveSpeed(p){
   if(p.flags.truckerDoubled) s=Math.min(10,s*2);
   return s;
 }
+// 每輪強制移動: a player may not end their turn back in the room they started the round in —
+// unless they physically can't move at all this round (e.g. 0 speed), in which case forcing it
+// would just soft-lock them.
+function mustMoveThisRound(p){
+  if(p.ghost) return false;
+  const reach=reachableRooms(p.roundStartRoom, p.roundStartSteps);
+  return Object.keys(reach).some(r=>r!==p.roundStartRoom);
+}
 
 /* ---------- room chip click (human) ---------- */
 function onRoomClick(roomId){
@@ -949,6 +957,10 @@ function commitToRoom(){
   const p=you();
   if(!isMyTurn()) return;
   if(p.flags.roomCommitted) return;
+  if(p.room===p.roundStartRoom && mustMoveThisRound(p)){
+    flashMsg("每輪必須移動到不同的房間，不能原地停留。");
+    return;
+  }
   p.flags.roomCommitted=true;
   log(p.name+" 確定停留於「"+p.room+" "+(ROOMS[p.room].name||"")+"」，本輪不再移動。");
   renderAll();
@@ -1078,6 +1090,13 @@ function doRoomAction(){
   const p=you();
   if(!isMyTurn()){ flashMsg("尚未輪到你的回合。"); return; }
   const room=ROOMS[p.room];
+  // 每輪強制移動 exception: boarding the helicopter at 202 explicitly requires having stayed
+  // there since last round (roundStartRoom==="202") — that's the one legitimate "didn't move" case.
+  const isHelipadBoarding = room.special==="helipad" && p.roundStartRoom==="202";
+  if(p.room===p.roundStartRoom && !isHelipadBoarding && mustMoveThisRound(p)){
+    flashMsg("每輪必須先移動到不同的房間，才能停留操作（不能原地不動）。");
+    return;
+  }
   // 回收站 is a one-way slide down to 垃圾場 — it's a free bonus move, not "using the room's
   // function", so it does NOT commit you: you can keep moving afterward, or separately choose
   // to stop and use 垃圾場's own function once you're there.
@@ -1086,6 +1105,17 @@ function doRoomAction(){
     p.room="B503";
     log(p.name+" 經回收站滑至垃圾場，可繼續移動或停留操作垃圾場。");
     renderAll();
+    return;
+  }
+  // 停機坪搭機 is the same shape as 回收站's slide — spending 1 step to relocate, not "using the
+  // room's function" — so boarding does NOT commit you either: you land with your remaining steps
+  // still free to keep moving, and can still stop and use whatever room you finally land in.
+  // (Collecting the airdrop on your arrival round is unaffected — that path still falls through
+  // to doSpecialRoom below, which commits you exactly as before, since staying put is required
+  // before you're even eligible to board.)
+  if(isHelipadBoarding){
+    collectAirdrop(p);
+    openHelipadModal(p);
     return;
   }
   // 好賭成性's "本輪房間可操作兩次" means a genuine second use of the room's function, not a
@@ -1123,10 +1153,11 @@ function doSpecialRoom(p,room){
     case "teleport": openTeleportModal(p); break;
     case "control": openControlModal(p); break;
     case "helipad":
-      // 玩家從停機坪出發時，必須已經在此停留過一輪才能搭機——抵達當輪只能領空投、必須停留。
+      // Boarding (roundStartRoom==="202") is intercepted earlier in doRoomAction as a non-
+      // committing move, so this only ever runs on the arrival round: land, collect the airdrop,
+      // and — per the rulebook — must stay put; you can't board until you've spent a full round here.
       collectAirdrop(p);
-      if(p.roundStartRoom==="202") openHelipadModal(p);
-      else log(p.name+" 抵達停機坪：本輪必須停留，下一輪才能搭乘直升機離開。");
+      log(p.name+" 抵達停機坪：本輪必須停留，下一輪才能搭乘直升機離開。");
       break;
     case "mortuary": break;
     case "laser": break;
@@ -1576,8 +1607,15 @@ document.getElementById("tradeBtn").addEventListener("click",()=>{
 /* ===================== AI ===================== */
 function aiChooseTarget(p){
   const reach=reachableRooms(p.room, playerEffectiveSpeed(p) + p.stepsLeft-p.speed>=0?p.stepsLeft:p.speed);
-  const cands=Object.keys(reach);
-  let best=p.room, bestScore=-Infinity;
+  let cands=Object.keys(reach);
+  // 每輪強制移動: AI can't just camp in its current room either — except staying at 202 when
+  // that's the boarding round (roundStartRoom already "202"), the same exception as the human path.
+  const canBoardHeli = p.room==="202" && p.roundStartRoom==="202";
+  if(!canBoardHeli){
+    const movable=cands.filter(r=>r!==p.room);
+    if(movable.length) cands=movable; // only forced to move if it's actually possible this round
+  }
+  let best=cands[0], bestScore=-Infinity;
   for(const r of cands){
     let score=Math.random()*2;
     const room=ROOMS[r];
@@ -1587,7 +1625,6 @@ function aiChooseTarget(p){
     if(room.draw>0) score+=1.5;
     if(roomIsPoisoned(room)) score-=6;
     if(r==="102") score-=4;
-    if(r===p.room) score-=0.5;
     if(score>bestScore){ bestScore=score; best=r; }
   }
   return best;
@@ -2091,6 +2128,10 @@ function renderAll(){
     btn.onclick=doRoomAction;
     raEl.appendChild(btn);
   } else {
+    // 每輪強制移動: neither "use this room's function" nor "stay here" is allowed while still
+    // parked in the room the round started in — except boarding the helicopter at 202.
+    const isHelipadBoarding = room.special==="helipad" && p.roundStartRoom==="202";
+    const mustMoveFirst = p.room===p.roundStartRoom && !isHelipadBoarding && mustMoveThisRound(p);
     if(room.draw>0 || room.special){
       const btn=document.createElement("button"); btn.className="btn small";
       btn.textContent = room.special==="gene"?"使用基因庫" : room.special==="respec"?"重新分配點數" :
@@ -2098,6 +2139,7 @@ function renderAll(){
         room.special==="helipad"?(p.roundStartRoom==="202"?"領取空投／搭乘直升機":"領取空投（本輪需停留，下輪才能搭機）") :
         room.draw>0?"搜索房間 (最多"+room.draw+"張)" : "使用房間功能";
       if(p.flags.roomLocked){ btn.disabled=true; btn.title="好賭成性失敗，本輪無法房間操作"; }
+      else if(mustMoveFirst){ btn.disabled=true; btn.title="每輪必須先移動到不同的房間，才能停留操作"; }
       btn.onclick=doRoomAction;
       raEl.appendChild(btn);
     } else {
@@ -2106,6 +2148,7 @@ function renderAll(){
     }
     const stopBtn=document.createElement("button"); stopBtn.className="btn small ghost";
     stopBtn.textContent="確定停留於此房間（結束移動）";
+    if(mustMoveFirst){ stopBtn.disabled=true; stopBtn.title="每輪必須移動到不同的房間，不能原地停留"; }
     stopBtn.onclick=commitToRoom;
     raEl.appendChild(stopBtn);
     if(p.room!==p.roundStartRoom || p.stepsLeft!==p.roundStartSteps){
