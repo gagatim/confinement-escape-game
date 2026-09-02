@@ -1211,8 +1211,9 @@ function doSpecialRoom(p,room){
     }
     case "canteen": p.flags.dietThisRound=true; log(p.name+" 於餐廳：本輪免上交水/糧。"); break;
     case "respec": {
-      const cap = p.prof==="geneFreak"?12:10;
-      openRespecModal(p,cap);
+      // 重新分配的總點數 = 玩家目前實際擁有的三項屬性總和，而不是固定的初始點數 — 否則像
+      // 基因庫（每次三項各永久+1）這種永久加點會在重新分配時被悄悄吃掉。
+      openRespecModal(p,p.power+p.speed+p.carry);
       break;
     }
     // "slide" (回收站) is handled earlier in doRoomAction, before this switch is ever reached —
@@ -1608,7 +1609,7 @@ function useProfSkill(p,idx){
   } else if(p.prof==="geneFreak" && idx===1){
     if(p.flags.geneUses>=2){ flashMsg("已用完2次"); return; }
     p.flags.geneUses++;
-    openRespecModal(p,12);
+    openRespecModal(p,p.power+p.speed+p.carry);
   } else if(p.prof==="climber" && idx===0){
     if(p.hp<=1){ flashMsg("生命值不足"); return; }
     p.hp--; p.flags.climberVertical=true;
