@@ -12,62 +12,83 @@
     --ink:#e7edf7; --muted:#7c8bab; --gold:#e8c15a;
   }
   *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
   html,body{margin:0;min-height:100%;background:var(--bg-deep);color:var(--ink)}
   body{font-family:"Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif;
     background:radial-gradient(ellipse 900px 500px at 50% -8%,#1a2542 0%,transparent 60%),
       radial-gradient(ellipse 700px 420px at 90% 100%,#1c1230 0%,transparent 55%), var(--bg-deep);
-    padding:16px; padding-bottom:60px;}
+    padding:16px; padding-bottom:60px; line-height:1.5; -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;}
   h1,h2,h3{font-family:"Orbitron","Noto Sans TC",sans-serif; margin:0}
   .wrap{max-width:1180px;margin:0 auto}
   .eyebrow{font-family:"JetBrains Mono",monospace;font-size:11px;letter-spacing:.22em;color:var(--violet)}
   .hidden{display:none !important}
   button{font-family:inherit;cursor:pointer}
+  input[type=range]{accent-color:var(--cyan)}
+  input[type=number],input[type=text],select{font-family:inherit;background:var(--panel-2);color:var(--ink);
+    border:1px solid var(--line);border-radius:6px;padding:5px 8px;transition:border-color .15s ease}
+  input[type=number]:focus,input[type=text]:focus,select:focus{outline:none;border-color:var(--cyan-bright)}
+  /* dark, theme-matched scrollbars instead of the jarring default OS ones */
+  *{scrollbar-width:thin;scrollbar-color:var(--line) transparent}
+  ::-webkit-scrollbar{width:9px;height:9px}
+  ::-webkit-scrollbar-track{background:transparent}
+  ::-webkit-scrollbar-thumb{background:var(--line);border-radius:5px}
+  ::-webkit-scrollbar-thumb:hover{background:var(--cyan)}
   .btn{background:linear-gradient(180deg,var(--cyan-bright),var(--cyan));border:none;border-radius:8px;
-    color:#04141a;font-weight:700;padding:10px 18px;font-size:14px;box-shadow:0 4px 0 #1f7b82;}
-  .btn:active{transform:translateY(3px);box-shadow:0 1px 0 #1f7b82}
+    color:#04141a;font-weight:700;padding:10px 18px;font-size:14px;box-shadow:0 4px 0 #1f7b82;
+    transition:transform .12s ease,box-shadow .12s ease,filter .12s ease;}
+  .btn:hover:not(:disabled){filter:brightness(1.08);transform:translateY(-1px)}
+  .btn:active:not(:disabled){transform:translateY(3px);box-shadow:0 1px 0 #1f7b82}
   .btn:disabled{background:linear-gradient(180deg,#445064,#313c4e);color:#8998b3;box-shadow:0 4px 0 #232b39;cursor:not-allowed}
   .btn.small{padding:6px 12px;font-size:12px;border-radius:6px}
   .btn.ghost{background:transparent;border:1px solid var(--line);color:var(--ink);box-shadow:none}
+  .btn.ghost:hover:not(:disabled){background:var(--panel-2);border-color:var(--cyan)}
   .btn.warn{background:linear-gradient(180deg,var(--ember-bright),var(--ember));box-shadow:0 4px 0 #7a201c;color:#280807}
   .btn.gold{background:linear-gradient(180deg,#ffe8a0,var(--gold));box-shadow:0 4px 0 #8a6b1c;color:#2a1e02}
   .btn.toxic{background:linear-gradient(180deg,var(--toxic-bright),var(--toxic));box-shadow:0 4px 0 #2a6b28;color:#0a2008}
-  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px}
   .muted{color:var(--muted)}
   .mono{font-family:"JetBrains Mono",monospace}
 
   /* ---- setup ---- */
   #setup .prof-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px;margin:14px 0}
-  .prof-card{border:2px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--panel-2);transition:.15s}
+  .prof-card{border:2px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--panel-2);
+    transition:border-color .15s ease,box-shadow .15s ease,transform .15s ease;cursor:pointer}
+  .prof-card:hover{border-color:var(--cyan);transform:translateY(-2px)}
   .prof-card.selected{border-color:var(--cyan-bright);box-shadow:0 0 0 1px var(--cyan-bright),0 0 18px rgba(76,214,224,.35)}
   .prof-card h3{font-size:15px;color:var(--cyan-bright)}
-  .prof-card .sk{font-size:11.5px;color:var(--muted);margin-top:6px;line-height:1.5}
+  .prof-card .sk{font-size:11.5px;color:var(--muted);margin-top:6px;line-height:1.55}
   .prof-card .sk b{color:var(--amber-bright)}
   .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
   .statbar{display:flex;align-items:center;gap:8px;margin:6px 0}
   .statbar label{width:90px;font-size:13px}
-  .statbar input[type=range]{flex:1}
+  .statbar input[type=range]{flex:1;accent-color:var(--cyan)}
   .pill{background:var(--panel-2);border:1px solid var(--line);border-radius:999px;padding:3px 10px;font-size:12px}
 
   /* ---- game layout ---- */
-  #game{display:grid;grid-template-columns:300px 1fr 300px;gap:12px}
+  #game{display:grid;grid-template-columns:300px 1fr 300px;gap:14px}
   @media (max-width:1000px){#game{grid-template-columns:1fr}}
   .panel-title{font-size:13px;letter-spacing:.08em;color:var(--violet);margin-bottom:8px;font-family:"Orbitron",sans-serif}
   .hpbar-outer{background:#1a2333;border-radius:6px;height:10px;overflow:hidden;border:1px solid var(--line)}
-  .hpbar-inner{height:100%;background:linear-gradient(90deg,var(--ember),var(--toxic))}
+  .hpbar-inner{height:100%;background:linear-gradient(90deg,var(--ember),var(--toxic));transition:width .4s ease}
   .inv-item{display:flex;justify-content:space-between;align-items:center;background:var(--panel-2);border:1px solid var(--line);
-    border-radius:8px;padding:6px 10px;margin:4px 0;font-size:12.5px}
+    border-radius:8px;padding:6px 10px;margin:4px 0;font-size:12.5px;transition:border-color .15s ease}
+  .inv-item:hover{border-color:var(--cyan)}
   .inv-item .actions{display:flex;gap:4px}
   .floor-row{display:flex;flex-wrap:wrap;gap:5px;margin:4px 0;align-items:center}
   .floor-label{width:32px;font-size:10px;color:var(--muted);font-family:"JetBrains Mono",monospace}
   .room-chip{border:1px solid var(--line);background:var(--panel-2);border-radius:6px;padding:5px 7px;font-size:11px;
-    cursor:pointer;position:relative;min-width:52px;text-align:center;line-height:1.3}
+    cursor:pointer;position:relative;min-width:52px;text-align:center;line-height:1.3;
+    transition:border-color .12s ease,box-shadow .12s ease,transform .12s ease}
+  .room-chip:hover{border-color:var(--cyan-bright);transform:translateY(-1px)}
   .room-chip small{display:block;font-size:9px;color:var(--muted)}
   .room-chip.reachable{border-color:var(--cyan);box-shadow:0 0 8px rgba(76,214,224,.3)}
   .room-chip.here{border-color:var(--amber-bright);background:#2a2410;box-shadow:0 0 10px rgba(255,206,107,.4)}
   .room-chip.poison{border-color:var(--toxic);background:#122313;color:var(--toxic-bright)}
   .room-chip.dead{opacity:.35;cursor:default}
+  .room-chip.dead:hover{transform:none;border-color:var(--line)}
   .room-chip.spawn{border-color:var(--ember);background:#2a1113;color:var(--ember-bright)}
   .static-map .room-chip{cursor:default}
+  .static-map .room-chip:hover{transform:none;border-color:var(--line)}
   .static-map .bridge-note{font-size:11px;color:var(--muted);margin-top:8px}
   .room-chip .occ{position:absolute;top:-7px;right:-7px;background:var(--ember);color:#fff;border-radius:999px;
     font-size:9px;padding:1px 5px;font-family:"JetBrains Mono",monospace}
@@ -86,25 +107,29 @@
     color:var(--cyan-bright);background:var(--bg);padding:0 2px;line-height:1}
   .room-chip .hbridge.right{right:-9px}
   .room-chip .hbridge.left{left:-9px}
-  #log{height:230px;overflow-y:auto;font-size:12px;line-height:1.6;background:var(--panel-2);border:1px solid var(--line);
-    border-radius:8px;padding:8px}
-  #log div{border-bottom:1px dashed #1f2942;padding:3px 0}
+  #log{height:230px;overflow-y:auto;font-size:12.5px;line-height:1.65;background:var(--panel-2);border:1px solid var(--line);
+    border-radius:8px;padding:10px}
+  #log div{border-bottom:1px dashed #1f2942;padding:4px 0}
   #log .r{color:var(--violet);font-weight:700}
   #log ul.loglist{margin:4px 0 0;padding-left:18px}
-  #log ul.loglist li{margin:2px 0}
+  #log ul.loglist li{margin:3px 0}
   #log .dmg{color:var(--ember-bright)}
   #log .heal{color:var(--toxic-bright)}
   .skillbtn{width:100%;text-align:left;margin:4px 0;padding:8px 10px;border-radius:8px;border:1px solid var(--line);
-    background:var(--panel-2);color:var(--ink);font-size:12px}
+    background:var(--panel-2);color:var(--ink);font-size:12px;transition:border-color .15s ease,background .15s ease}
   .skillbtn:disabled{opacity:.4;cursor:not-allowed}
+  .skillbtn:not(:disabled):hover{border-color:var(--cyan);background:#152036}
   .skillbtn b{color:var(--amber-bright);display:block;font-size:12.5px}
   .topbar{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px}
   .badge{font-family:"JetBrains Mono",monospace;font-size:12px;background:var(--panel-2);border:1px solid var(--line);
     border-radius:6px;padding:4px 10px}
   .rank-row{display:flex;justify-content:space-between;padding:8px 10px;border-bottom:1px solid var(--line);font-size:14px}
   .rank-row:first-child{color:var(--gold);font-weight:900}
-  #modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px}
-  #modal{max-width:520px;width:100%;max-height:80vh;overflow-y:auto}
+  #modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px;
+    animation:modalFade .15s ease}
+  #modal{max-width:520px;width:100%;max-height:80vh;overflow-y:auto;animation:modalPop .18s cubic-bezier(.2,.9,.3,1.2)}
+  @keyframes modalFade{from{opacity:0}to{opacity:1}}
+  @keyframes modalPop{from{opacity:0;transform:scale(.96) translateY(6px)}to{opacity:1;transform:scale(1) translateY(0)}}
   .tag{display:inline-block;font-size:10px;padding:1px 6px;border-radius:4px;background:var(--panel-2);border:1px solid var(--line);margin-left:4px}
 </style>
 
@@ -113,6 +138,7 @@
     <div>
       <span class="eyebrow">CONFINEMENT ESCAPE · 禁閉逃殺</span>
       <h1 style="font-size:22px">禁閉逃殺</h1>
+      <div class="muted mono" style="font-size:10.5px;margin-top:2px">葉晉廷製作 · 請勿隨意分享</div>
     </div>
     <div id="topStatus" class="row"></div>
     <button class="btn small warn hidden" id="abandonBtn">放棄測試，重新開始</button>
@@ -168,11 +194,11 @@
         </div>
         <div class="muted mono" style="font-size:11px;margin-top:6px">所在: <span id="curRoom"></span> ｜ 剩餘步數 <span id="stepsLeft"></span></div>
       </div>
-      <div class="card" style="margin-top:10px">
+      <div class="card" style="margin-top:12px">
         <div class="panel-title">背包 (<span id="carryUsed">0</span>/<span id="carryCap">0</span>)</div>
         <div id="inventory"></div>
       </div>
-      <div class="card" style="margin-top:10px">
+      <div class="card" style="margin-top:12px">
         <div class="panel-title">職業技能</div>
         <div id="skillList"></div>
       </div>
@@ -188,11 +214,11 @@
         </div>
         <div id="mapArea" style="margin-top:8px"></div>
       </div>
-      <div class="card" style="margin-top:10px">
+      <div class="card" style="margin-top:12px">
         <div class="panel-title">房間動作</div>
         <div id="roomActions" class="row"></div>
       </div>
-      <div class="card" style="margin-top:10px">
+      <div class="card" style="margin-top:12px">
         <div class="row" style="justify-content:space-between">
           <div class="panel-title" style="margin-bottom:0">同房間玩家</div>
         </div>
@@ -201,7 +227,7 @@
           <button class="btn small ghost" id="tradeBtn">交易</button>
         </div>
       </div>
-      <div style="margin-top:10px" class="row">
+      <div style="margin-top:12px" class="row">
         <button class="btn" id="endTurnBtn">結束我的回合</button>
       </div>
     </div>
@@ -211,7 +237,7 @@
         <div class="panel-title">事件紀錄</div>
         <div id="log"></div>
       </div>
-      <div class="card" style="margin-top:10px">
+      <div class="card" style="margin-top:12px">
         <div class="panel-title">全體玩家</div>
         <div id="allPlayers" class="mono" style="font-size:12px"></div>
       </div>
@@ -402,7 +428,7 @@ const PROFESSIONS = {
     {name:"猛烈衝撞", desc:"（被動）使用卸載加速後強制觸發：抵達房間時，房內其他存活玩家各扣1點生命，房間強制公開。整局限用3次。", passive:true}
   ]},
   bartender:{name:"飲品師", skills:[
-    {name:"特調精釀", desc:"你的所有果汁(酒)不佔負重，酒窖的2張果汁為你初始所有。使用前可剔除三種效果後再隨機抽取。", passive:true},
+    {name:"特調精釀", desc:"你的所有果汁(酒)不佔負重，酒窖的2張果汁為你初始所有。使用前可剔除四種效果後再隨機抽取。", passive:true},
     {name:"舉杯共飲", desc:"道具使用階段，你的果汁可對其他存活玩家使用。", passive:true}
   ]},
   chemist:{name:"化學家", skills:[
@@ -605,11 +631,12 @@ const AI_NAMES=["阿凱","小美","老周","阿德","阿珍","小胖","阿宏","
 function makePlayer(id,isAI,profId,stats,name){
   const prof=PROFESSIONS[profId];
   const p={
-    id, name: name || (isAI? AI_NAMES[id%AI_NAMES.length]+"#"+id : "你"),
+    id, name: name || (isAI? AI_NAMES[id%AI_NAMES.length] : "你"),
     isAI, prof:profId,
     power:stats.power, speed:stats.speed, carry:stats.carry,
     hp:10, maxhp:10, alive:true, ghost:false, ghostDrainTotal:0,
     hpLog:[], // per-round {round,hp,delta} snapshots, filled in at settlement — drives the 每輪血量變化 table
+    roundEvents:[], // this round's {cause,amount} damage events — read by showRoundSummary, reset each beginRound
     room: MEETING_ROOM, spawnRoom:null, stepsLeft:0,
     inv:[], // array of item ids
     flags:{gamblerUses:0, gamblerWinUses:0, gamblerForceWin:false, gamblerBonusOps:0,
@@ -820,9 +847,11 @@ function beginRound(){
     p.stepsLeft = p.speed;
     p.roundStartRoom = p.room; // lets 回手 undo all movement made so far this round, for free
     p.roundStartSteps = p.stepsLeft;
+    p.roundEvents=[]; // cleared for the new round — showRoundSummary already read last round's
     if(p.flags.adrenalineRound===STATE.round-1+1){} // no-op placeholder
     p.flags.goldUsedThisRound=false;
     p.flags.rocketUsedThisRound=false; // 火箭筒 is reusable now — limited to once per round instead of one-shot
+    p.flags.recycleUsedThisRound=false; // 循環回收裝置 is a durable item too — limited to once per round
     p.flags.dietThisRound=false;
     p.flags.roomCommitted=false; // locks once the player acts in a room or explicitly ends movement
     p.flags.roomActsUsedThisRound=0; // how many times the room's function has been used this round
@@ -1245,6 +1274,12 @@ function useItem(p,item){
   // 飲品師's 舉杯共飲 (share with another player) and 特調精釀's pre-roll exclusion both only
   // apply to 酒 — everything else keeps the plain self-only declare-now-resolve-later flow.
   if(item==="wine" && p.prof==="bartender"){ openBartenderWineModal(p); return; }
+  // 水/糧/腎上腺素 each just flip a one-time flag at settlement (免飢餓 / 保底1血) — they don't
+  // stack, so declaring a second one this round would just silently discard it for nothing.
+  if((item==="water"||item==="food"||item==="adrenaline") && p.flags.pendingItemUses.includes(item)){
+    flashMsg(ITEMS[item].name+"本輪已宣告使用過，效果不會疊加，不需要（也請不要）重複使用。");
+    return;
+  }
   if(!removeItem(p,item)) return;
   p.flags.pendingItemUses.push(item);
   log(p.name+" 宣告使用「"+ITEMS[item].name+"」（結算階段公開生效）。");
@@ -1262,7 +1297,7 @@ function openBartenderWineModal(p){
   const updateExcludeUI=()=>{
     const isSelf=+document.getElementById("wineTargetSel").value===p.id;
     document.getElementById("wineExcludeWrap").innerHTML = isSelf
-      ? "<div class='muted' style='font-size:12px;margin-bottom:4px'>你自己的酒：勾選剛好3種要排除的結果，剩下3種隨機抽取</div>"+
+      ? "<div class='muted' style='font-size:12px;margin-bottom:4px'>你自己的酒：勾選剛好4種要排除的結果，剩下2種隨機抽取</div>"+
         Object.entries(OUTCOME_LABELS).map(([k,label])=>`<label style="display:block;margin:2px 0"><input type="checkbox" class="wineExcl" value="${k}"> ${label}</label>`).join("")
       : "<div class='muted' style='font-size:12px'>對方喝到的是普通的酒，6種結果均等隨機。</div>";
   };
@@ -1274,7 +1309,7 @@ function openBartenderWineModal(p){
     let excluded=[];
     if(isSelf){
       excluded=[...document.querySelectorAll(".wineExcl:checked")].map(cb=>+cb.value);
-      if(excluded.length!==3){ flashMsg("請剛好排除3種結果"); return; }
+      if(excluded.length!==4){ flashMsg("請剛好排除4種結果"); return; }
     }
     if(!removeItem(p,"wine")) return;
     const target=STATE.players.find(x=>x.id===targetId);
@@ -1299,10 +1334,10 @@ function resolvePendingItemUses(p){
       case "adrenaline":
         p.flags.adrenalineActive=true; log(p.name+" 結算：注射腎上腺素，下輪速度變10，本輪不會致死。","heal"); break;
       case "wine": {
-        // 特調精釀: a bartender's own glass may have 3 outcomes pre-excluded, rolled among
-        // whichever 3 remain — one-time per declared use, then cleared.
+        // 特調精釀: a bartender's own glass may have 4 outcomes pre-excluded, rolled among
+        // whichever 2 remain — one-time per declared use, then cleared.
         let pool=[1,2,3,4,5,6];
-        if(p.flags.wineExcluded && p.flags.wineExcluded.length===3){
+        if(p.flags.wineExcluded && p.flags.wineExcluded.length===4){
           pool=pool.filter(n=>!p.flags.wineExcluded.includes(n));
           p.flags.wineExcluded=null;
         }
@@ -1378,11 +1413,13 @@ function useRocket(p){
 }
 function useRecycleDevice(p){
   if(!p.flags.roomCommitted){ flashMsg("請先移動並確定停留在房間後，才能使用道具。"); return; }
+  if(p.flags.recycleUsedThisRound){ flashMsg("循環回收裝置每回合限用1次"); return; }
   if(STATE.discardPile.length===0){ flashMsg("棄牌堆是空的"); return; }
   if(carryRoom(p)<=0){ flashMsg("負重已滿"); return; }
   const idx=Math.floor(Math.random()*STATE.discardPile.length);
   const item=STATE.discardPile.splice(idx,1)[0];
   p.inv.push(item);
+  p.flags.recycleUsedThisRound=true;
   log(p.name+" 使用循環回收裝置，獲得: "+ITEMS[item].name);
   renderAll();
 }
@@ -1597,8 +1634,10 @@ function applyLaser(p){
 }
 function damagePlayer(p,amount,cause){
   if(amount<=0) return;
-  if(p.flags.adrenalineActive){ p.hp=Math.max(1,p.hp-amount); return; }
+  p.roundEvents=p.roundEvents||[];
+  if(p.flags.adrenalineActive){ p.hp=Math.max(1,p.hp-amount); p.roundEvents.push({cause,amount}); return; }
   p.hp-=amount;
+  p.roundEvents.push({cause,amount});
   if(p.hp<=0){ p.hp=0; killPlayer(p,cause); }
 }
 function killPlayer(p,cause){
@@ -1652,7 +1691,7 @@ function poisonDamageForRound(){
 function settleRound(){
   STATE.phase="settlement";
   log("<b>── 進入結算階段 ──</b>");
-  STATE.__report={combat:[], rocket:[], hunger:[], drain:[], poison:""};
+  STATE.__report={combat:[], rocket:[], hunger:[], drain:[], poison:"", poisonDamage:[]};
 
   // 1) queued item-card effects (水/糧/腎上腺素/酒 — all "結算階段公開使用"；藥片 heals later, see below)
   STATE.players.forEach(p=>{ if(p.alive) resolvePendingItemUses(p); });
@@ -1674,13 +1713,35 @@ function settleRound(){
       group.filter(p=>p.prof==="outsider" && group.length>=3).forEach(p=>{ p.hp=Math.min(p.maxhp,p.hp+1); });
       return;
     }
-    // free-for-all: everyone compares to the strongest present; simplistic pairwise settlement
-    for(let i=0;i<fighters.length;i++){
-      for(let j=i+1;j<fighters.length;j++){
-        const a=fighters[i], b=fighters[j];
-        if(!a.alive||!b.alive) continue;
-        resolveCombat(a,b,r);
+    // free-for-all (3+ fighters): guns take priority — gun-holders fight each other pairwise
+    // (normal diff mechanic). Unarmed fighters don't fight each other while any gun is present;
+    // instead each takes one hit from the single STRONGEST gun-holder only (not summed across
+    // every gunner present) — same "highest vs everyone, no stacking" shape as the all-unarmed
+    // fallback below. Only when NOBODY present has a gun does it fall back to: the single
+    // strongest fighter compares against everyone else, diff-based.
+    const gunners=fighters.filter(f=>hasGun(f));
+    if(gunners.length>0){
+      for(let i=0;i<gunners.length;i++){
+        for(let j=i+1;j<gunners.length;j++){
+          const a=gunners[i], b=gunners[j];
+          if(!a.alive||!b.alive) continue;
+          resolveCombat(a,b,r);
+        }
       }
+      const unarmed=fighters.filter(f=>!hasGun(f));
+      if(unarmed.length>0){
+        const strongestGunner=gunners.reduce((best,f)=>combatPower(f)>combatPower(best)?f:best, gunners[0]);
+        unarmed.forEach(u=>{
+          if(!strongestGunner.alive||!u.alive) return;
+          resolveCombat(strongestGunner,u,r);
+        });
+      }
+    } else {
+      const strongest=fighters.reduce((best,f)=>combatPower(f)>combatPower(best)?f:best, fighters[0]);
+      fighters.forEach(f=>{
+        if(f===strongest || !f.alive || !strongest.alive) return;
+        resolveCombat(strongest,f,r);
+      });
     }
     group.filter(p=>p.prof==="outsider" && group.length>=3).forEach(p=>{ p.hp=Math.min(p.maxhp,p.hp+1); });
   });
@@ -1720,6 +1781,7 @@ function settleRound(){
       if(p.prof==="chemist") dmg=Math.max(0,dmg-1);
       damagePlayer(p,dmg,"毒氣");
       if(dmg>0) log(p.name+" 在毒氣區受到 "+dmg+" 點傷害。","dmg");
+      STATE.__report.poisonDamage.push(p.name+"（"+p.room+" "+(ROOMS[p.room].name||"")+"） -"+dmg);
     }
   });
   STATE.poisonReduceFloor=null; STATE.poisonBoost=false;
@@ -1789,6 +1851,7 @@ function settleRound(){
   };
   log("<b>── 第 "+STATE.round+" 輪結算公告 ──</b>");
   log("毒氣: "+(rep.poison||"無投票結果"));
+  logList("毒氣扣血", rep.poisonDamage, "無人在毒氣區");
   logList("火箭筒", rep.rocket, "無人使用");
   logList("戰鬥", rep.combat, "無");
   logList("飢餓扣血", rep.hunger, "無");
@@ -1829,9 +1892,21 @@ function resolveCombat(a,b,roomId){
 }
 
 function showRoundSummary(){
-  const alive=alivePlayers();
+  // 歷史回顧: for each player, where they ended up, who else was there, and exactly what
+  // damaged them this round — built from the {cause,amount} events damagePlayer recorded.
   let html="<h3>第 "+STATE.round+" 輪結算</h3><div class='mono' style='font-size:12px'>";
-  STATE.players.forEach(p=>{ html+= p.name+"("+PROFESSIONS[p.prof].name+"): HP "+p.hp+(p.ghost?" [暗影]":p.alive?"":" [死亡]")+"<br>"; });
+  STATE.players.forEach(p=>{
+    const companions=playersInRoom(p.room,false).filter(x=>x.id!==p.id).map(x=>x.name+(x.ghost?"[暗影]":"")).join("、")||"（無）";
+    const events=(p.roundEvents||[]).map(e=>e.cause+" -"+e.amount).join("、")||"無扣血";
+    const path = p.roundStartRoom && p.roundStartRoom!==p.room
+      ? "「"+p.roundStartRoom+"」→「"+p.room+" "+(ROOMS[p.room].name||"")+"」"
+      : "「"+p.room+" "+(ROOMS[p.room].name||"")+"」（未移動）";
+    html+="<div style='margin-bottom:6px;padding-bottom:6px;border-bottom:1px dashed var(--line)'>"+
+      "<b>"+p.name+"</b>（"+PROFESSIONS[p.prof].name+"） HP "+p.hp+(p.ghost?" [暗影]":p.alive?"":" 💀")+"<br>"+
+      "路徑："+path+"　同房："+companions+"<br>"+
+      "本輪扣血："+events+
+      "</div>";
+  });
   html+="</div><button class='btn small' id='sumOk'>繼續</button>";
   openModal(html);
   document.getElementById("sumOk").onclick=()=>{
@@ -1912,7 +1987,11 @@ function renderAll(){
       const rocketTitle=needsCommit?"請先移動並確定停留在房間後，才能使用道具":"火箭筒每回合限用1次";
       actions+=`<button class="btn small warn" data-rocket="1"${rocketDisabled?` disabled title="${rocketTitle}"`:""}>瞄準</button>`;
     }
-    if(id==="recycledevice") actions+=`<button class="btn small" data-recycle="1"${dis}>回收抽取</button>`;
+    if(id==="recycledevice"){
+      const recycleDisabled=needsCommit||p.flags.recycleUsedThisRound;
+      const recycleTitle=needsCommit?"請先移動並確定停留在房間後，才能使用道具":"循環回收裝置每回合限用1次";
+      actions+=`<button class="btn small" data-recycle="1"${recycleDisabled?` disabled title="${recycleTitle}"`:""}>回收抽取</button>`;
+    }
     if(id==="rope") actions+=`<button class="btn small" data-rope="1">直接上下樓</button>`;
     div.innerHTML=`<span>${ITEMS[id].name} x${n}</span><span class="actions">${actions}</span>`;
     invEl.appendChild(div);
