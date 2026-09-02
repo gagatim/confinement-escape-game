@@ -141,6 +141,7 @@
       <div class="muted mono" style="font-size:10.5px;margin-top:2px">葉晉廷製作 · 請勿隨意分享</div>
     </div>
     <div id="topStatus" class="row"></div>
+    <button class="btn small ghost" id="muteBtn" title="開關音效">🔊 音效</button>
     <button class="btn small warn hidden" id="abandonBtn">放棄測試，重新開始</button>
   </div>
 
@@ -561,6 +562,69 @@ function restoreGame(){
   }catch(e){ console.error("restore failed",e); return false; }
 }
 
+/* ===================== SOUND EFFECTS ===================== */
+// All synthesized on the fly with the Web Audio API — no audio files, no network, no cost.
+// Browsers block audio before a user gesture, so the AudioContext is created lazily on first use.
+const SFX=(()=>{
+  let ctx=null, muted=localStorage.getItem("sfxMuted")==="1";
+  function ensureCtx(){
+    if(!ctx){ const AC=window.AudioContext||window.webkitAudioContext; if(!AC) return null; ctx=new AC(); }
+    if(ctx.state==="suspended") ctx.resume();
+    return ctx;
+  }
+  function tone(freq,dur,type,peak,delay){
+    if(muted) return;
+    try{
+      const c=ensureCtx(); if(!c) return;
+      const t0=c.currentTime+(delay||0);
+      const osc=c.createOscillator(), gain=c.createGain();
+      osc.type=type||"sine"; osc.frequency.setValueAtTime(freq,t0);
+      gain.gain.setValueAtTime(0,t0);
+      gain.gain.linearRampToValueAtTime(peak||0.15,t0+0.012);
+      gain.gain.exponentialRampToValueAtTime(0.0001,t0+dur);
+      osc.connect(gain); gain.connect(c.destination);
+      osc.start(t0); osc.stop(t0+dur+0.02);
+    }catch(e){}
+  }
+  function sweep(f0,f1,dur,type,peak,delay){
+    if(muted) return;
+    try{
+      const c=ensureCtx(); if(!c) return;
+      const t0=c.currentTime+(delay||0);
+      const osc=c.createOscillator(), gain=c.createGain();
+      osc.type=type||"sine"; osc.frequency.setValueAtTime(f0,t0);
+      osc.frequency.exponentialRampToValueAtTime(Math.max(1,f1),t0+dur);
+      gain.gain.setValueAtTime(0,t0);
+      gain.gain.linearRampToValueAtTime(peak||0.18,t0+0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001,t0+dur);
+      osc.connect(gain); gain.connect(c.destination);
+      osc.start(t0); osc.stop(t0+dur+0.02);
+    }catch(e){}
+  }
+  return {
+    isMuted:()=>muted,
+    setMuted(v){ muted=v; localStorage.setItem("sfxMuted",v?"1":"0"); },
+    click(){ tone(1500,0.045,"square",0.045); },
+    move(){ tone(520,0.06,"triangle",0.08); tone(700,0.07,"triangle",0.07,0.05); },
+    hit(){ sweep(220,80,0.18,"sawtooth",0.2); },
+    heal(){ tone(660,0.09,"sine",0.13); tone(880,0.12,"sine",0.13,0.08); },
+    death(){ sweep(300,55,0.5,"sawtooth",0.18); },
+    roundStart(){ tone(440,0.1,"triangle",0.11); tone(660,0.12,"triangle",0.11,0.1); },
+    victory(){ [523,659,784,1047].forEach((f,i)=>tone(f,0.28,"triangle",0.15,i*0.14)); }
+  };
+})();
+// generic tactile feedback for any button press (capture phase so it always fires)
+document.addEventListener("click",e=>{
+  const btn=e.target.closest(".btn");
+  if(btn && !btn.disabled) SFX.click();
+},true);
+(()=>{
+  const muteBtn=document.getElementById("muteBtn");
+  const syncMuteLabel=()=>{ muteBtn.textContent = SFX.isMuted()? "🔇 音效已關閉" : "🔊 音效"; };
+  syncMuteLabel();
+  muteBtn.addEventListener("click",()=>{ SFX.setMuted(!SFX.isMuted()); syncMuteLabel(); });
+})();
+
 function log(msg,cls){
   const el=document.getElementById("log");
   const d=document.createElement("div");
@@ -568,8 +632,10 @@ function log(msg,cls){
   d.innerHTML=msg;
   el.appendChild(d);
   el.scrollTop=el.scrollHeight;
+  if(cls==="dmg") SFX.hit();
+  else if(cls==="heal") SFX.heal();
 }
-function logRound(n){ log(`<span class="r">── 第 ${n} 輪 ──</span>`); }
+function logRound(n){ log(`<span class="r">── 第 ${n} 輪 ──</span>`); SFX.roundStart(); }
 
 /* ---------- setup screen wiring ---------- */
 const profGrid=document.getElementById("profGrid");
@@ -945,12 +1011,13 @@ function onRoomClick(roomId){
   if(!isMyTurn()){ flashMsg("尚未輪到你的回合。"); return; }
   if(p.flags.roomCommitted){ flashMsg("本輪已確定停留於此房間，無法再移動（每輪只能在最終抵達的單一房間行動）。"); return; }
   if(p.ghost){ // 暗影無視梯子電梯，能穿牆移動，不受相鄰房間/步數限制
-    p.room=roomId; renderAll(); return;
+    p.room=roomId; SFX.move(); renderAll(); return;
   }
   const dist=bfsDist(p.room,roomId);
   if(dist===Infinity || dist>p.stepsLeft){ flashMsg("步數不足或無法到達"); return; }
   p.room=roomId; p.stepsLeft-=dist;
   if(roomId==="102"){ applyLaser(p); }
+  SFX.move();
   renderAll();
 }
 function commitToRoom(){
@@ -1680,6 +1747,7 @@ function damagePlayer(p,amount,cause){
 function killPlayer(p,cause){
   p.alive=false; p.ghost=true; p.ghostDrainTotal=0;
   log(p.name+" 死亡（"+cause+"），於停屍間化為暗影...","dmg");
+  SFX.death();
   // drop items into mortuary
   const embalmers=STATE.players.filter(x=>x.alive && x.prof==="embalmer");
   p.inv.forEach(it=>{
@@ -1956,6 +2024,7 @@ function showRoundSummary(){
 }
 function endGame(){
   STATE.gameOver=true;
+  SFX.victory();
   // 最終結算：手上剩餘的金條每根可換 +1 點血（上限為血量上限）
   STATE.players.forEach(p=>{
     const goldCount=countItem(p,"gold");
