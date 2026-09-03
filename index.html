@@ -847,15 +847,22 @@ function renderSpawnGrid(){
 // and their column ranges (order..order+span) actually overlap — that's a real ladder/slide
 // link in the reference photo, derived purely from the already-verified ADJ table plus the
 // measured column spans (never guessed here).
-function hasVerticalLink(r){
-  const rEnd=r.order+(r.span||1);
-  return (ADJ[r.id]||[]).some(nid=>{
+// Returns the actual room(s) r has a real vertical (different-floor) ADJ connection to — used
+// both to decide whether to show the 🪜 marker at all, and to name the exact destination(s) in
+// its tooltip, so the icon never just claims "a ladder exists here" without saying where it goes.
+// Trusts ADJ directly rather than re-deriving from column position: an earlier version required
+// the two rooms' rendered column ranges to strictly overlap, which silently hid the marker for any
+// pair whose columns only touch at the boundary (e.g. B205<->B305, B402<->B305, B103<->B203) even
+// though ADJ — the actual data bfsDist/movement already trust — connects them. A marker that's
+// wrong about what's reachable is worse than no marker, so this must match ADJ exactly, not a
+// secondary geometric guess that can drift from it.
+function verticalLinkTargets(r){
+  return (ADJ[r.id]||[]).filter(nid=>{
     const n=ROOMS[nid];
-    if(!n || n.floor===r.floor) return false;
-    const nEnd=n.order+(n.span||1);
-    return r.order<nEnd && n.order<rEnd;
+    return n && n.floor!==r.floor;
   });
 }
+function hasVerticalLink(r){ return verticalLinkTargets(r).length>0; }
 // The only two footbridges across the central atrium — everywhere else the atrium blocks
 // horizontal movement outright, so these get their own distinct marker from ordinary ladders.
 const BRIDGE_SIDE={"B105":"right","B106":"left","B305":"right","B306":"left"};
@@ -886,7 +893,8 @@ const FLOOR_CONNECTORS=(()=>{
 })();
 function roomMarkersHtml(r){
   let html="";
-  if(hasVerticalLink(r)) html+=`<span class="vmark" title="有樓梯／梯子可上下樓">🪜</span>`;
+  const vlinks=verticalLinkTargets(r);
+  if(vlinks.length) html+=`<span class="vmark" title="樓梯／梯子可通往：${vlinks.map(id=>id+(ROOMS[id].name?" "+ROOMS[id].name:"")).join("、")}">🪜</span>`;
   if(BRIDGE_SIDE[r.id]) html+=`<span class="hbridge ${BRIDGE_SIDE[r.id]}" title="天橋，花1步可跨越天井">🌉</span>`;
   Object.values(FLOOR_CONNECTORS).forEach(c=>{
     if(c.a===r.id) html+=c.connected?
