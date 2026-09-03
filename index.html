@@ -1943,36 +1943,17 @@ function settleRound(){
       group.filter(p=>p.prof==="outsider" && group.length>=3).forEach(p=>{ p.hp=Math.min(p.maxhp,p.hp+1); });
       return;
     }
-    // free-for-all (3+ fighters): guns take priority — gun-holders fight each other pairwise
-    // (normal diff mechanic). Unarmed fighters don't fight each other while any gun is present;
-    // instead each takes one hit from the single STRONGEST gun-holder only (not summed across
-    // every gunner present) — same "highest vs everyone, no stacking" shape as the all-unarmed
-    // fallback below. Only when NOBODY present has a gun does it fall back to: the single
-    // strongest fighter compares against everyone else, diff-based.
+    // free-for-all (3+ fighters): everyone fights ONE target only, never each other — the
+    // strongest-power gun-holder if anyone in the room has a gun, otherwise the single strongest
+    // fighter overall (diff-based, same as normal 1v1 combat). No pairwise round-robin.
     const gunners=fighters.filter(f=>hasGun(f));
-    if(gunners.length>0){
-      for(let i=0;i<gunners.length;i++){
-        for(let j=i+1;j<gunners.length;j++){
-          const a=gunners[i], b=gunners[j];
-          if(!a.alive||!b.alive) continue;
-          resolveCombat(a,b,r);
-        }
-      }
-      const unarmed=fighters.filter(f=>!hasGun(f));
-      if(unarmed.length>0){
-        const strongestGunner=gunners.reduce((best,f)=>combatPower(f)>combatPower(best)?f:best, gunners[0]);
-        unarmed.forEach(u=>{
-          if(!strongestGunner.alive||!u.alive) return;
-          resolveCombat(strongestGunner,u,r);
-        });
-      }
-    } else {
-      const strongest=fighters.reduce((best,f)=>combatPower(f)>combatPower(best)?f:best, fighters[0]);
-      fighters.forEach(f=>{
-        if(f===strongest || !f.alive || !strongest.alive) return;
-        resolveCombat(strongest,f,r);
-      });
-    }
+    const target=gunners.length>0
+      ? gunners.reduce((best,f)=>combatPower(f)>combatPower(best)?f:best, gunners[0])
+      : fighters.reduce((best,f)=>combatPower(f)>combatPower(best)?f:best, fighters[0]);
+    fighters.forEach(f=>{
+      if(f===target || !f.alive || !target.alive) return;
+      resolveCombat(target,f,r);
+    });
     group.filter(p=>p.prof==="outsider" && group.length>=3).forEach(p=>{ p.hp=Math.min(p.maxhp,p.hp+1); });
   });
 
