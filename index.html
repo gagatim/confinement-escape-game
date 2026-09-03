@@ -1120,6 +1120,7 @@ function drawItemsFromStock(p,roomId,maxDraw){
     // carry — always kept immediately, it's never part of the keep/return choice below.
     if(p.prof==="scavenger" && Math.random()<0.5 && ROOMS["B503"].stock.trash>0){
       ROOMS["B503"].stock.trash--; p.inv.push("trash");
+      log(p.name+"（拾荒嗅覺）額外獲得1個垃圾。");
     }
   }
   return drawnItems;
@@ -1680,6 +1681,20 @@ function useProfSkill(p,idx){
   }
   renderAll();
 }
+// Skills that already open their own selection modal (毒性調和's floor picker, 遠端操控's room
+// picker, 基因重組's respec form) — clicking their button already stops short of doing anything
+// irreversible, so wrapping them in a second confirm dialog would just be an extra click for
+// nothing. Every OTHER active skill executes immediately on click, which is risky for a
+// limited-use skill (a stray click permanently burns one of only 1-4 charges) — those get a
+// confirm prompt naming the skill and its effect before anything happens.
+const SKILL_OPENS_OWN_MODAL=new Set(["chemist:0","hacker:1","geneFreak:1"]);
+function confirmAndUseSkill(p,idx){
+  const s=PROFESSIONS[p.prof].skills[idx];
+  openModal(`<h3>發動技能：${s.name}</h3><div style="margin-bottom:12px;font-size:13px;line-height:1.6">${s.desc}</div>
+    <button class="btn small warn" id="skConfirmOk">確定發動</button> <button class="btn small ghost" id="skConfirmCancel">取消</button>`);
+  document.getElementById("skConfirmOk").onclick=()=>{ closeModal(); useProfSkill(p,idx); };
+  document.getElementById("skConfirmCancel").onclick=closeModal;
+}
 
 /* ===================== VOTE / TRADE ===================== */
 document.getElementById("voteBtn").addEventListener("click",()=>{
@@ -1896,11 +1911,9 @@ function killPlayer(p,cause){
   });
   p.inv=[];
   p.room="B701";
-  embalmers.forEach(e=>{ e.carry++; });
-  // shade immunity/heal handled in ghost-drain resolution; 暗影親和 speed+2
-  if(p.prof==="shade"){ /* becomes ghost itself, unaffected by others' drains as it's now a ghost too */ }
-  STATE.players.forEach(x=>{ if(x.prof==="shade" && x.alive) {/* passive noted */} });
-  if(p.prof==="shade"){ p.speed+=2; }
+  embalmers.forEach(e=>{ e.carry++; log(e.name+"（蠱耗感應）負重永久+1（現為 "+e.carry+"）。"); });
+  // shade immunity/heal handled separately in ghost-drain resolution; 暗影親和 speed+2 below
+  if(p.prof==="shade"){ p.speed+=2; log(p.name+"（暗影親和）成為暗影，移動速度永久+2（現為 "+p.speed+"）。"); }
 }
 
 // A room is poisoned when its floor is a voted-poison floor, EXCEPT: B501 (the tall B4/B5
@@ -1946,9 +1959,11 @@ function settleRound(){
     if(group.length<2) return;
     if(r==="B202"){ if(group.length===2) return; } // healing handled above; 2p no combat
     // outsider: if room has 3+ alive, they sit out
+    const outsiders=group.filter(p=>p.prof==="outsider" && group.length>=3);
+    outsiders.forEach(p=>log(p.name+"（邊緣存在感）房內3人以上，不參與戰鬥結算。"));
     const fighters=group.filter(p=>!(p.prof==="outsider" && group.length>=3));
     if(fighters.length<2){
-      group.filter(p=>p.prof==="outsider" && group.length>=3).forEach(p=>{ p.hp=Math.min(p.maxhp,p.hp+1); });
+      outsiders.forEach(p=>{ p.hp=Math.min(p.maxhp,p.hp+1); log(p.name+"（邊緣存在感）自動恢復1點生命。","heal"); });
       return;
     }
     // free-for-all (3+ fighters): everyone fights ONE target only, never each other — the
@@ -1962,7 +1977,7 @@ function settleRound(){
       if(f===target || !f.alive || !target.alive) return;
       resolveCombat(target,f,r);
     });
-    group.filter(p=>p.prof==="outsider" && group.length>=3).forEach(p=>{ p.hp=Math.min(p.maxhp,p.hp+1); });
+    outsiders.forEach(p=>{ p.hp=Math.min(p.maxhp,p.hp+1); log(p.name+"（邊緣存在感）自動恢復1點生命。","heal"); });
   });
 
   // rocket launcher (declared during action phase, resolves as part of this round's violence)
@@ -1970,10 +1985,10 @@ function settleRound(){
     const hit=playersInRoom(r,true);
     STATE.__report.rocket.push(r+(hit.length?"（命中 "+hit.map(p=>p.name).join("、")+"）":"（房內無人）"));
     hit.forEach(p=>{
-      let dmg=4;
-      if(p.prof==="bomb") dmg=Math.max(0,dmg-1);
+      let dmg=4, note="";
+      if(p.prof==="bomb"){ dmg=Math.max(0,dmg-1); note="〔爆破緩衝 -1〕"; }
       damagePlayer(p,dmg,"火箭筒");
-      log(p.name+" 被火箭筒轟炸於「"+r+"」，受到 "+dmg+" 點傷害。","dmg");
+      log(p.name+" 被火箭筒轟炸於「"+r+"」，受到 "+dmg+" 點傷害"+note+"。","dmg");
     });
   });
   STATE.rocketTargets=[];
@@ -1993,14 +2008,14 @@ function settleRound(){
   STATE.players.forEach(p=>{
     if(!p.alive || p.ghost) return;
     if(roomIsPoisoned(ROOMS[p.room])){
-      let dmg=baseDmg;
-      if(ROOMS[p.room].floor===STATE.poisonReduceFloor) dmg=Math.max(0,dmg-2);
-      if(p.inv.includes("gasmask")) dmg=0;
+      let dmg=baseDmg, note="";
+      if(ROOMS[p.room].floor===STATE.poisonReduceFloor){ dmg=Math.max(0,dmg-2); note+="〔毒性調和 -2〕"; }
+      if(p.prof==="chemist" && dmg>0){ dmg=Math.max(0,dmg-1); note+="〔抗毒 -1〕"; }
+      if(p.inv.includes("gasmask")){ dmg=0; note+="〔防毒面具〕"; }
       if(p.room==="202") dmg=0;
-      if(p.prof==="chemist") dmg=Math.max(0,dmg-1);
       damagePlayer(p,dmg,"毒氣");
-      if(dmg>0) log(p.name+" 在毒氣區受到 "+dmg+" 點傷害。","dmg");
-      STATE.__report.poisonDamage.push(p.name+"（"+p.room+" "+(ROOMS[p.room].name||"")+"） -"+dmg);
+      if(dmg>0) log(p.name+" 在毒氣區受到 "+dmg+" 點傷害"+note+"。","dmg");
+      STATE.__report.poisonDamage.push(p.name+"（"+p.room+" "+(ROOMS[p.room].name||"")+"） -"+dmg+note);
     }
   });
   STATE.poisonReduceFloor=null; STATE.poisonBoost=false;
@@ -2097,17 +2112,18 @@ function resolveCombat(a,b,roomId){
     const diff=combatPower(a)-combatPower(b);
     if(diff>0) dmgToB=diff; else if(diff<0) dmgToA=-diff;
   }
-  // profession damage reduction (肥宅, 防爆小組 vs gun)
+  // profession damage reduction (肥宅, 防爆小組 vs gun) — note WHICH skill reduced it, not just
+  // the already-reduced final number, so the combat log explains itself instead of looking arbitrary.
   const reduce=(p,dmg,attackerHasGun)=>{
-    let d=dmg;
-    if(p.prof==="fatty") d=Math.max(0,d-2);
-    if(p.prof==="bomb" && attackerHasGun) d=Math.max(0,d-3);
-    return d;
+    let d=dmg, note="";
+    if(p.prof==="fatty" && d>0){ const before=d; d=Math.max(0,d-2); note+="〔肥肉坦克 -"+(before-d)+"〕"; }
+    if(p.prof==="bomb" && attackerHasGun && d>0){ const before=d; d=Math.max(0,d-3); note+="〔防爆盾牌 -"+(before-d)+"〕"; }
+    return {d,note};
   };
-  dmgToA=reduce(a,dmgToA,bGun);
-  dmgToB=reduce(b,dmgToB,aGun);
-  if(dmgToA>0){ damagePlayer(a,dmgToA,"與"+b.name+"戰鬥"); log(a.name+" 在「"+roomId+"」戰鬥中受到 "+dmgToA+" 點傷害（對手 "+b.name+"）。","dmg"); }
-  if(dmgToB>0){ damagePlayer(b,dmgToB,"與"+a.name+"戰鬥"); log(b.name+" 在「"+roomId+"」戰鬥中受到 "+dmgToB+" 點傷害（對手 "+a.name+"）。","dmg"); }
+  const ra=reduce(a,dmgToA,bGun), rb=reduce(b,dmgToB,aGun);
+  dmgToA=ra.d; dmgToB=rb.d;
+  if(dmgToA>0){ damagePlayer(a,dmgToA,"與"+b.name+"戰鬥"); log(a.name+" 在「"+roomId+"」戰鬥中受到 "+dmgToA+" 點傷害（對手 "+b.name+"）"+ra.note+"。","dmg"); }
+  if(dmgToB>0){ damagePlayer(b,dmgToB,"與"+a.name+"戰鬥"); log(b.name+" 在「"+roomId+"」戰鬥中受到 "+dmgToB+" 點傷害（對手 "+a.name+"）"+rb.note+"。","dmg"); }
   if(dmgToA===0 && dmgToB===0) log(a.name+" 與 "+b.name+" 在「"+roomId+"」武力相同，未分勝負。");
   STATE.__report.combat.push(a.name+" vs "+b.name+" @"+roomId+"（"+a.name+" -"+dmgToA+" / "+b.name+" -"+dmgToB+"）");
 }
@@ -2267,7 +2283,8 @@ function renderAll(){
       btn.onclick=()=>openHackerMonitorModal(p);
     } else if(s.passive){ btn.disabled=true; btn.title="被動技能，自動生效"; }
     else if(p.flags.skillUsedThisRound){ btn.disabled=true; btn.title="本輪已使用過職業技能，下輪才能再使用"; }
-    else { btn.onclick=()=>useProfSkill(p,idx); }
+    else if(SKILL_OPENS_OWN_MODAL.has(p.prof+":"+idx)){ btn.onclick=()=>useProfSkill(p,idx); }
+    else { btn.onclick=()=>confirmAndUseSkill(p,idx); }
     skEl.appendChild(btn);
   });
   }
