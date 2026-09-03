@@ -216,6 +216,7 @@
             <button class="btn small toxic" id="voteBtn">☠ 投票毒區</button>
           </div>
         </div>
+        <div class="muted" style="font-size:12px;margin-top:4px">目前已中毒樓層: <span id="poisonedFloors" class="mono" style="color:var(--ember-bright)">無</span></div>
         <div id="mapArea" style="margin-top:8px"></div>
         <div class="bridge-note">🪜 樓梯上下樓｜🌉 天橋跨天井(1步)｜<span style="color:var(--cyan-bright)">▸◂</span> 走道可同層橫移｜<span style="color:var(--ember-bright)">⛔</span> 天井阻隔不可橫移。藍框＝可移動抵達，琥珀框＝目前所在。</div>
       </div>
@@ -783,7 +784,7 @@ function startGame(){
     if(power+speed+carry>cap){ carry=Math.max(1,cap-power-speed); }
     players.push(makePlayer(i,true,pid,{power,speed,carry}));
   }
-  STATE={round:1, phase:"positioning", players, poisoned:new Set(), detoxedRooms:new Set(), voteCounts:{}, discardPile:[], gameOver:false};
+  STATE={round:1, phase:"positioning", players, poisoned:new Set(), detoxedRooms:new Set(), voteCounts:{}, voteLog:[], discardPile:[], gameOver:false};
   // profession init effects
   players.forEach(p=>{
     if(p.prof==="tamer"){ p.power+=1; p.carry+=1; }
@@ -968,6 +969,7 @@ function beginRound(){
     p.pendingActions={targetRoom:null, movementDone:false, roomActed:false};
   });
   STATE.voteCounts={};
+  STATE.voteLog=[]; // per-round {name,floor,weight} entries — who voted for what, human and AI alike
   // 順序牌: a fresh random turn order each round, over everyone still taking turns — alive
   // players AND 暗影 (ghosts get a real turn to move and hunt for blood, not an auto-skip).
   STATE.turnOrder=shuffleArr(STATE.players.filter(p=>p.alive||p.ghost).map(p=>p.id));
@@ -1683,6 +1685,7 @@ document.getElementById("voteBtn").addEventListener("click",()=>{
     const f=+document.getElementById("voteSel").value;
     const weight=p.flags.voteWeight||1;
     STATE.voteCounts[f]=(STATE.voteCounts[f]||0)+weight;
+    STATE.voteLog.push({name:p.name, floor:f, weight});
     p.flags.voteWeight=1;
     p.flags.votedThisRound=true;
     log(p.name+" 投票毒氣樓層: "+FLOOR_LABEL[f]+"（權重"+weight+"）");
@@ -1849,6 +1852,7 @@ function resolveAITurn(p){
   const voteFloor=floorOpts[Math.floor(Math.random()*floorOpts.length)];
   const voteWeight=p.flags.voteWeight||1;
   STATE.voteCounts[voteFloor]=(STATE.voteCounts[voteFloor]||0)+voteWeight;
+  STATE.voteLog.push({name:p.name, floor:voteFloor, weight:voteWeight});
   p.flags.voteWeight=1;
   p.flags.votedThisRound=true;
 }
@@ -2076,7 +2080,9 @@ function settleRound(){
     log(label+": "+(items.length? "" : emptyText)+(items.length? "<ul class='loglist'>"+items.map(x=>"<li>"+x+"</li>").join("")+"</ul>" : ""));
   };
   log("<b>── 第 "+STATE.round+" 輪結算公告 ──</b>");
+  logList("本輪投票明細（含玩家與AI）", STATE.voteLog.map(v=>v.name+" → "+FLOOR_LABEL[v.floor]+"（權重"+v.weight+"）"), "無人投票");
   log("毒氣: "+(rep.poison||"無投票結果"));
+  log("目前已中毒樓層: "+([...STATE.poisoned].map(f=>FLOOR_LABEL[f]).join("、")||"無"));
   logList("毒氣扣血", rep.poisonDamage, "無人在毒氣區");
   logList("火箭筒", rep.rocket, "無人使用");
   logList("戰鬥", rep.combat, "無");
@@ -2121,6 +2127,12 @@ function showRoundSummary(){
   // 歷史回顧: for each player, where they ended up, who else was there, and exactly what
   // damaged them this round — built from the {cause,amount} events damagePlayer recorded.
   let html="<h3>第 "+STATE.round+" 輪結算</h3><div class='mono' style='font-size:12px'>";
+  const voteLines=STATE.voteLog.map(v=>v.name+" → "+FLOOR_LABEL[v.floor]+(v.weight>1?"（權重"+v.weight+"）":"")).join("、")||"無人投票";
+  const poisonedList=[...STATE.poisoned].map(f=>FLOOR_LABEL[f]).join("、")||"無";
+  html+="<div style='margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--line)'>"+
+    "☠ 本輪投票明細："+voteLines+"<br>"+
+    "目前已中毒樓層：<span style='color:var(--ember-bright)'>"+poisonedList+"</span>"+
+    "</div>";
   STATE.players.forEach(p=>{
     const companions=playersInRoom(p.room,false).filter(x=>x.id!==p.id).map(x=>x.name+(x.ghost?"[暗影]":"")).join("、")||"（無）";
     const events=(p.roundEvents||[]).map(e=>e.cause+" -"+e.amount).join("、")||"無扣血";
@@ -2177,6 +2189,7 @@ function renderAll(){
   const p=you();
   document.getElementById("roundNo").textContent=STATE.round;
   document.getElementById("phaseName").textContent="行動階段";
+  document.getElementById("poisonedFloors").textContent=[...STATE.poisoned].map(f=>FLOOR_LABEL[f]).join("、")||"無";
   document.getElementById("youName").textContent=p.name;
   document.getElementById("youProf").textContent=PROFESSIONS[p.prof].name;
   if(p.ghost){
