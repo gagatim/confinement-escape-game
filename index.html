@@ -103,10 +103,13 @@
   .room-chip.vlink{border-style:dashed}
   .room-chip .vmark{position:absolute;bottom:-6px;left:50%;transform:translateX(-50%);font-size:8px;
     color:var(--muted);background:var(--bg);padding:0 3px}
-  .room-chip .hbridge{position:absolute;top:50%;transform:translateY(-50%);font-size:9px;
-    color:var(--cyan-bright);background:var(--bg);padding:0 2px;line-height:1}
-  .room-chip .hbridge.right{right:-9px}
-  .room-chip .hbridge.left{left:-9px}
+  .room-chip .hbridge{position:absolute;top:50%;font-size:9px;z-index:1;
+    color:var(--cyan-bright);background:var(--bg);padding:0 2px;line-height:1.4;white-space:nowrap}
+  /* sit fully outside the chip's own border (translate by 100% of the marker's own width,
+     not a fixed px offset) so it never overlaps the room-id text inside narrow chips */
+  .room-chip .hbridge.right{right:0;transform:translate(100%,-50%)}
+  .room-chip .hbridge.left{left:0;transform:translate(-100%,-50%)}
+  .room-chip .hbridge.chasm{color:var(--ember-bright)}
   #log{height:230px;overflow-y:auto;font-size:12.5px;line-height:1.65;background:var(--panel-2);border:1px solid var(--line);
     border-radius:8px;padding:10px}
   #log div{border-bottom:1px dashed #1f2942;padding:4px 0}
@@ -176,7 +179,7 @@
       <div style="margin-top:18px;border-top:1px solid var(--line);padding-top:12px">
         <div class="panel-title" style="margin-bottom:6px">整體地圖（參考用）</div>
         <div id="spawnMapArea" class="static-map"></div>
-        <div class="bridge-note">紅色為出生點。中央天井僅在 <b>B105↔B106</b> 與 <b>B305↔B306</b> 兩處有天橋可花1步直接通行，其餘樓層天井不可跨越。</div>
+        <div class="bridge-note">紅色為出生點。<span style="color:var(--cyan-bright)">▸◂</span> 為走道，同層房間可直接橫移；<span style="color:var(--ember-bright)">⛔</span> 為天井阻隔，同層無法跨越；中央天井僅在 <b>🌉 B105↔B106</b> 與 <b>🌉 B305↔B306</b> 兩處有天橋可花1步直接通行。</div>
       </div>
     </div>
   </div>
@@ -214,6 +217,7 @@
           </div>
         </div>
         <div id="mapArea" style="margin-top:8px"></div>
+        <div class="bridge-note">🪜 樓梯上下樓｜🌉 天橋跨天井(1步)｜<span style="color:var(--cyan-bright)">▸◂</span> 走道可同層橫移｜<span style="color:var(--ember-bright)">⛔</span> 天井阻隔不可橫移。藍框＝可移動抵達，琥珀框＝目前所在。</div>
       </div>
       <div class="card" style="margin-top:12px">
         <div class="panel-title">房間動作</div>
@@ -548,6 +552,8 @@ function restoreGame(){
       // is simply unavailable rather than resetting p.room to undefined on first use.
       if(p.roundStartRoom===undefined) p.roundStartRoom=p.room;
       if(p.roundStartSteps===undefined) p.roundStartSteps=p.stepsLeft;
+      // saves made before the 每輪血量 table existed won't have this — default to no history yet.
+      if(!p.hpLog) p.hpLog=[];
     });
     STATE=st;
     Object.keys(data.rooms||{}).forEach(id=>{
@@ -852,10 +858,43 @@ function hasVerticalLink(r){
 // The only two footbridges across the central atrium — everywhere else the atrium blocks
 // horizontal movement outright, so these get their own distinct marker from ordinary ladders.
 const BRIDGE_SIDE={"B105":"right","B106":"left","B305":"right","B306":"left"};
+// The exact bridge pairs (as opposed to BRIDGE_SIDE, which is keyed by room and would also match
+// B105's OTHER boundary with B104, or B306's OTHER boundary with B307) — used to skip generating a
+// plain walkway/chasm marker only for the one boundary each bridge actually covers.
+const BRIDGE_PAIRS=new Set(["B105>B106","B305>B306"]);
+// Derived (not hardcoded) from ADJ + room order: walks each floor left-to-right and marks every
+// same-floor boundary between neighbouring rooms as either an open walkway (they're connected in
+// ADJ — most boundaries) or an atrium wall blocking direct passage (not connected) — so the whole
+// floor plan shows every legal same-floor lateral move, and every place the atrium cuts it off,
+// instead of leaving players to infer connectivity from ADJ alone. Boundaries already covered by
+// the two footbridges (BRIDGE_SIDE) keep their 🌉 marker instead of a plain walkway/wall icon.
+const FLOOR_CONNECTORS=(()=>{
+  const out={};
+  const floors={};
+  Object.values(ROOMS).forEach(r=>{ (floors[r.floor]=floors[r.floor]||[]).push(r); });
+  Object.values(floors).forEach(list=>{
+    const rs=list.slice().sort((a,b)=>a.order-b.order);
+    for(let i=0;i<rs.length-1;i++){
+      const a=rs[i], b=rs[i+1];
+      if(BRIDGE_PAIRS.has(a.id+">"+b.id)) continue;
+      const connected=(ADJ[a.id]||[]).includes(b.id) || (ADJ[b.id]||[]).includes(a.id);
+      out[a.id+">"+b.id]={a:a.id,b:b.id,connected};
+    }
+  });
+  return out;
+})();
 function roomMarkersHtml(r){
   let html="";
   if(hasVerticalLink(r)) html+=`<span class="vmark" title="有樓梯／梯子可上下樓">🪜</span>`;
   if(BRIDGE_SIDE[r.id]) html+=`<span class="hbridge ${BRIDGE_SIDE[r.id]}" title="天橋，花1步可跨越天井">🌉</span>`;
+  Object.values(FLOOR_CONNECTORS).forEach(c=>{
+    if(c.a===r.id) html+=c.connected?
+      `<span class="hbridge right" title="走道相通，可直接橫移至 ${c.b}">▸</span>` :
+      `<span class="hbridge right chasm" title="天井阻隔，此樓層無法直接橫移過去">⛔</span>`;
+    else if(c.b===r.id) html+=c.connected?
+      `<span class="hbridge left" title="走道相通，可直接橫移至 ${c.a}">◂</span>` :
+      `<span class="hbridge left chasm" title="天井阻隔，此樓層無法直接橫移過去">⛔</span>`;
+  });
   return html;
 }
 // Places a room/label element on the shared 35-column floor-plan grid (col 1 = floor label,
@@ -1527,9 +1566,12 @@ function useRecycleDevice(p){
 function useProfSkill(p,idx){
   const prof=PROFESSIONS[p.prof];
   const sk=prof.skills[idx];
+  // Active profession skills are a once-per-round action (the "技能使用階段" from the rulebook),
+  // shared across a player's own skill slots — using one locks out the other for the rest of the round.
+  if(p.flags.skillUsedThisRound){ flashMsg("本輪已使用過職業技能，請下輪再使用。"); return; }
   if(p.prof==="gambler" && idx===0){
     if(p.flags.gamblerUses>=3){ flashMsg("已用完3次"); return; }
-    p.flags.gamblerUses++;
+    p.flags.gamblerUses++; p.flags.skillUsedThisRound=true;
     let roll = p.flags.gamblerForceWin ? 6 : Math.floor(Math.random()*6)+1;
     p.flags.gamblerForceWin=false;
     let msg="好賭成性(擲骰"+roll+"): ";
@@ -1539,13 +1581,13 @@ function useProfSkill(p,idx){
     log(p.name+" "+msg);
   } else if(p.prof==="gambler" && idx===1){
     if(p.flags.gamblerWinUses>=1){ flashMsg("已用完"); return; }
-    p.flags.gamblerWinUses++; p.flags.gamblerForceWin=true;
+    p.flags.gamblerWinUses++; p.flags.gamblerForceWin=true; p.flags.skillUsedThisRound=true;
     log(p.name+" 使用逢賭必贏：下次好賭成性必定成功。");
   } else if(p.prof==="scavenger" && idx===1){
     if(p.flags.scavengerUses>=2){ flashMsg("已用完2次"); return; }
     if(countItem(p,"trash")<1){ flashMsg("背包內沒有垃圾"); return; }
     if(carryRoom(p)<=0){ flashMsg("背包空間不足，無法容納轉換後的道具"); return; }
-    p.flags.scavengerUses++; removeItem(p,"trash");
+    p.flags.scavengerUses++; p.flags.skillUsedThisRound=true; removeItem(p,"trash");
     const gain=Math.random()<0.5?"water":"food";
     addItem(p,gain);
     log(p.name+" 使用變廢為寶：垃圾轉為「"+ITEMS[gain].name+"」。");
@@ -1554,7 +1596,7 @@ function useProfSkill(p,idx){
     const nonTrash=p.inv.find(x=>x!=="trash");
     if(!nonTrash){ flashMsg("沒有可丟棄的非垃圾道具卡"); return; }
     removeItem(p,nonTrash); STATE.discardPile.push(nonTrash);
-    p.flags.truckerUses++; p.flags.truckerDoubled=true; p.flags.truckerJustUsed=true;
+    p.flags.truckerUses++; p.flags.truckerDoubled=true; p.flags.truckerJustUsed=true; p.flags.skillUsedThisRound=true;
     log(p.name+" 使用卸載加速：丟棄「"+ITEMS[nonTrash].name+"」，本輪速度變兩倍。");
     p.stepsLeft=Math.min(10,p.stepsLeft*2);
   } else if(p.prof==="chemist" && idx===0){
@@ -1568,15 +1610,16 @@ function useProfSkill(p,idx){
     document.getElementById("chA").onclick=()=>{
       const f=+document.getElementById("chFloor").value;
       STATE.poisonReduceFloor=f; log(p.name+" 指定「"+FLOOR_LABEL[f]+"」本輪毒氣傷害-2。");
-      p.flags.chemistUses++; closeModal();
+      p.flags.chemistUses++; p.flags.skillUsedThisRound=true; closeModal(); renderAll();
     };
     document.getElementById("chB").onclick=()=>{
       STATE.poisonBoost=true; log(p.name+" 令本輪毒氣樓層傷害+2。");
-      p.flags.chemistUses++; closeModal();
+      p.flags.chemistUses++; p.flags.skillUsedThisRound=true; closeModal(); renderAll();
     };
     document.getElementById("chCancel").onclick=closeModal;
   } else if(p.prof==="hacker" && idx===1){
     if(p.flags.hackerUses>=2){ flashMsg("已用完2次"); return; }
+    if(p.room==="B202"){ flashMsg("手術室內無法使用遠端操控"); return; }
     openModal(`<h3>遠端操控：選擇要使用的房間功能</h3>
       <button class="btn small" data-r="201">基因庫</button>
       <button class="btn small" data-r="B101">控制室</button>
@@ -1586,7 +1629,7 @@ function useProfSkill(p,idx){
       btn.onclick=()=>{
         const r=btn.dataset.r;
         if(p.flags.hackerUsedRooms.includes(r)){ flashMsg("不可重複選擇同一房間"); return; }
-        p.flags.hackerUsedRooms.push(r); p.flags.hackerUses++;
+        p.flags.hackerUsedRooms.push(r); p.flags.hackerUses++; p.flags.skillUsedThisRound=true;
         doSpecialRoom(p,ROOMS[r]);
         log(p.name+" 使用遠端操控：於本回合遠端使用了「"+r+" "+ROOMS[r].name+"」。");
         closeModal(); renderAll();
@@ -1595,6 +1638,7 @@ function useProfSkill(p,idx){
     document.getElementById("hackCancel").onclick=closeModal;
   } else if(p.prof==="tamer" && idx===0){
     if(p.flags.tamerUses>=4){ flashMsg("已用完4次"); return; }
+    p.flags.skillUsedThisRound=true;
     const cands=Object.keys(ROOMS).filter(r=> bfsDist(p.room,r)<=5 && bfsDist(p.room,r)>0 && (Object.values(ROOMS[r].stock).some(v=>v>0)||r==="202"));
     if(cands.length===0){ log(p.name+" 派遣巡迴獵犬：附近沒有可搜索的庫存房間，無功而返。"); p.flags.tamerUses++; return; }
     const target=cands[Math.floor(Math.random()*cands.length)];
@@ -1608,17 +1652,19 @@ function useProfSkill(p,idx){
     } else { log(p.name+" 派遣巡迴獵犬前往「"+target+"」，但無法獲得道具。"); }
   } else if(p.prof==="geneFreak" && idx===1){
     if(p.flags.geneUses>=2){ flashMsg("已用完2次"); return; }
-    p.flags.geneUses++;
+    p.flags.geneUses++; p.flags.skillUsedThisRound=true;
     openRespecModal(p,p.power+p.speed+p.carry);
   } else if(p.prof==="climber" && idx===0){
     if(p.hp<=1){ flashMsg("生命值不足"); return; }
-    p.hp--; p.flags.climberVertical=true;
+    p.hp--; p.flags.climberVertical=true; p.flags.skillUsedThisRound=true;
     log(p.name+" 支付1點生命，發動垂直攀爬。","dmg");
   } else if(p.prof==="climber" && idx===1){
     if(p.flags.climberDietUsed){ flashMsg("已用完"); return; }
-    p.flags.climberDietUsed=true; p.flags.dietThisRound=true;
+    p.flags.climberDietUsed=true; p.flags.dietThisRound=true; p.flags.skillUsedThisRound=true;
     log(p.name+" 使用節食：本輪不需支付水/糧。");
   } else if(p.prof==="embalmer" && idx===1){
+    if(p.flags.embalmerUses>=1){ flashMsg("已用完"); return; }
+    p.flags.embalmerUses++; p.flags.skillUsedThisRound=true;
     p.flags.embalmerChoiceMode=true;
     log(p.name+" 啟用亡者遺贈：下次道具進入停屍間時可自行選擇。");
   }
@@ -1697,11 +1743,80 @@ function aiChooseTarget(p){
   }
   return best;
 }
+// AI profession-skill usage — same one-skill-per-round budget as the human path
+// (p.flags.skillUsedThisRound), with a simple heuristic per profession instead of a real
+// decision tree. Two skills are deliberately left unused by AI: 賭徒's dice gamble (its payoff
+// is extra room-operations per round, a concept the AI's single draw-per-turn flow below never
+// exploits either way) and 基因怪人's 基因重組 respec (AI already keeps its stats as-is when it
+// lands on the respec room naturally — using the skill version would be the same no-op, just
+// spending one of its 2 limited uses for nothing).
+// 卸載加速 (trucker) only matters if it runs BEFORE this round's movement is chosen, since it's
+// the only skill that changes how FAR the AI can travel this round.
+function aiConsiderTruckerBoost(p){
+  if(p.prof!=="trucker" || p.flags.skillUsedThisRound || p.flags.truckerUses>=3) return;
+  if(p.speed>4) return; // already fast enough to cross most of the floor plan unaided
+  if(!p.inv.find(x=>x!=="trash")) return; // 卸載加速 requires discarding a non-垃圾 item
+  useProfSkill(p,0);
+}
+// Everything else is decided AFTER movement/room-resolution, since it either depends on where
+// the AI ended up (chemist/climber-escape/hacker's B202 lockout) or doesn't care about position
+// at all (tamer/scavenger/embalmer). chemist and hacker bypass useProfSkill for the branches that
+// would otherwise open a human-only modal (毒性調和's floor picker, 遠端操控's room picker) and
+// instead directly apply the same effect those modal buttons perform.
+function aiConsiderSkillAfterMove(p){
+  if(p.flags.skillUsedThisRound) return;
+  const room=ROOMS[p.room];
+  if(p.prof==="climber"){
+    // 垂直攀爬: escape a poisoned floor immediately rather than riding out this round's damage.
+    if(roomIsPoisoned(room) && p.hp>1 && p.stepsLeft>=1){
+      const dests=Object.values(ROOMS).filter(r=>(r.floor===room.floor-1||r.floor===room.floor+1) && !roomIsPoisoned(r));
+      if(dests.length){
+        useProfSkill(p,0); // pays 1 HP, sets climberVertical + skillUsedThisRound
+        p.room=dests[Math.floor(Math.random()*dests.length)].id; p.stepsLeft--;
+        log(p.name+" 使用垂直攀爬逃離毒氣樓層，前往 "+p.room+"。");
+      }
+      return;
+    }
+    // 節食: only worth spending the once-per-game use when it actually replaces a real payment.
+    if(!p.flags.climberDietUsed && countItem(p,"water")===0 && countItem(p,"food")===0) useProfSkill(p,1);
+    return;
+  }
+  if(p.prof==="scavenger"){
+    if(p.flags.scavengerUses<2 && countItem(p,"trash")>=1 && carryRoom(p)>0) useProfSkill(p,1);
+    return;
+  }
+  if(p.prof==="tamer"){ if(p.flags.tamerUses<4) useProfSkill(p,0); return; }
+  if(p.prof==="embalmer"){ if(p.flags.embalmerUses<1) useProfSkill(p,1); return; }
+  if(p.prof==="chemist"){
+    if(p.flags.chemistUses>=2) return;
+    const poisonedFloors=[...STATE.poisoned];
+    if(!poisonedFloors.length) return; // nothing to mitigate — don't burn a limited use for +2 boost
+    const target=poisonedFloors.includes(room.floor)?room.floor:poisonedFloors[0];
+    STATE.poisonReduceFloor=target; p.flags.chemistUses++; p.flags.skillUsedThisRound=true;
+    log(p.name+" 使用毒性調和：指定「"+FLOOR_LABEL[target]+"」本輪毒氣傷害-2。");
+    return;
+  }
+  if(p.prof==="hacker"){
+    if(p.flags.hackerUses>=2 || p.room==="B202") return;
+    if(!p.flags.hackerUsedRooms.includes("201")){
+      p.flags.hackerUsedRooms.push("201"); p.flags.hackerUses++; p.flags.skillUsedThisRound=true;
+      p.power++; p.speed++; p.carry++;
+      log(p.name+" 使用遠端操控：遠端使用了「201 基因庫」。");
+    } else if(!p.flags.hackerUsedRooms.includes("B101")){
+      p.flags.hackerUsedRooms.push("B101"); p.flags.hackerUses++; p.flags.skillUsedThisRound=true;
+      p.flags.voteWeight=10;
+      log(p.name+" 使用遠端操控：遠端使用了「B101 控制室」（本輪投票視為10票）。");
+    }
+    // a third candidate (B304 操作室) exists but is skipped for the same reason as 基因重組 above.
+    return;
+  }
+}
 // Resolves ONE AI player's turn slot (called from advanceTurn() at that player's position in
 // STATE.turnOrder — 順序牌). Ghosts are handled separately in beginRound() and never reach here.
 // Same single-destination-per-round rule as the human: computes ONE target room, moves ONCE,
 // then may act only in that room — never moves again afterward this round.
 function resolveAITurn(p){
+  aiConsiderTruckerBoost(p);
   const target=aiChooseTarget(p);
   const dist=bfsDist(p.room,target);
   if(dist!==Infinity && dist<=p.stepsLeft){ p.room=target; p.stepsLeft-=dist; }
@@ -1719,9 +1834,12 @@ function resolveAITurn(p){
     }
   }
   p.flags.roomCommitted=true; // final destination for this round — no further movement
+  aiConsiderSkillAfterMove(p);
   // simple item usage: declare now, effect resolves at settlement (same as the human path)
   if(p.hp<=4 && countItem(p,"pill")>0){ removeItem(p,"pill"); p.flags.pendingItemUses.push("pill"); }
-  if(STATE.round>=2){
+  // 節食 (either from 餐廳 or 攀岩者's skill) exempts this round's hunger payment entirely — queuing
+  // water/food anyway would just waste the item for no benefit.
+  if(STATE.round>=2 && !p.flags.dietThisRound){
     if(countItem(p,"water")>0){ removeItem(p,"water"); p.flags.pendingItemUses.push("water"); }
     if(countItem(p,"food")>0){ removeItem(p,"food"); p.flags.pendingItemUses.push("food"); }
   }
@@ -1729,7 +1847,9 @@ function resolveAITurn(p){
   const myFloor=ROOMS[p.room].floor;
   const floorOpts=Object.keys(FLOOR_LABEL).map(Number).filter(f=>f!==myFloor);
   const voteFloor=floorOpts[Math.floor(Math.random()*floorOpts.length)];
-  STATE.voteCounts[voteFloor]=(STATE.voteCounts[voteFloor]||0)+1;
+  const voteWeight=p.flags.voteWeight||1;
+  STATE.voteCounts[voteFloor]=(STATE.voteCounts[voteFloor]||0)+voteWeight;
+  p.flags.voteWeight=1;
   p.flags.votedThisRound=true;
 }
 
@@ -2137,12 +2257,14 @@ function renderAll(){
     if(p.prof==="tamer"&&idx===0) usesLeft=" ("+(4-p.flags.tamerUses)+"/4)";
     if(p.prof==="geneFreak"&&idx===1) usesLeft=" ("+(2-p.flags.geneUses)+"/2)";
     if(p.prof==="climber"&&idx===1) usesLeft=" ("+(p.flags.climberDietUsed?0:1)+"/1)";
+    if(p.prof==="embalmer"&&idx===1) usesLeft=" ("+(1-p.flags.embalmerUses)+"/1)";
     btn.innerHTML=`<b>${s.name}${usesLeft}</b>${s.desc}`;
     if(p.prof==="hacker" && idx===0){
       // 系統監控 is a "permanent passive" in name, but it's an on-demand lookup, not something
       // that resolves itself — give it a real query button instead of disabling it like other passives.
       btn.onclick=()=>openHackerMonitorModal(p);
     } else if(s.passive){ btn.disabled=true; btn.title="被動技能，自動生效"; }
+    else if(p.flags.skillUsedThisRound){ btn.disabled=true; btn.title="本輪已使用過職業技能，下輪才能再使用"; }
     else { btn.onclick=()=>useProfSkill(p,idx); }
     skEl.appendChild(btn);
   });
