@@ -1616,7 +1616,11 @@ function useProfSkill(p,idx){
     log(p.name+" "+msg);
   } else if(p.prof==="gambler" && idx===1){
     if(p.flags.gamblerWinUses>=1){ flashMsg("已用完"); return; }
-    p.flags.gamblerWinUses++; p.flags.gamblerForceWin=true; p.flags.skillUsedThisRound=true;
+    // 逢賭必贏 does NOT consume this round's skillUsedThisRound budget — it exists specifically to
+    // set up an immediate 好賭成性 in the SAME round (guaranteed to roll 6), which is 賭徒's only
+    // other skill. Locking the round budget here would make 逢賭必贏 unable to ever do what its own
+    // description says: gambling to guarantee gambling.
+    p.flags.gamblerWinUses++; p.flags.gamblerForceWin=true;
     log(p.name+" 使用逢賭必贏：下次好賭成性必定成功。");
   } else if(p.prof==="scavenger" && idx===1){
     if(p.flags.scavengerUses>=2){ flashMsg("已用完2次"); return; }
