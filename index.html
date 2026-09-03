@@ -1590,6 +1590,9 @@ function useProfSkill(p,idx){
   if(p.flags.skillUsedThisRound){ flashMsg("本輪已使用過職業技能，請下輪再使用。"); return; }
   if(p.prof==="gambler" && idx===0){
     if(p.flags.gamblerUses>=3){ flashMsg("已用完3次"); return; }
+    // 好賭成性 must be gambled BEFORE the room's function is used this round — rolling for "an
+    // extra use" after you've already used it once would be resolving the bet retroactively.
+    if(p.flags.roomActsUsedThisRound>0){ flashMsg("已使用過房間功能，好賭成性必須在使用房間功能前發動。"); return; }
     p.flags.gamblerUses++; p.flags.skillUsedThisRound=true;
     let roll = p.flags.gamblerForceWin ? 6 : Math.floor(Math.random()*6)+1;
     p.flags.gamblerForceWin=false;
@@ -2303,6 +2306,9 @@ function renderAll(){
       btn.onclick=()=>openHackerMonitorModal(p);
     } else if(s.passive){ btn.disabled=true; btn.title="被動技能，自動生效"; }
     else if(p.flags.skillUsedThisRound){ btn.disabled=true; btn.title="本輪已使用過職業技能，下輪才能再使用"; }
+    else if(p.prof==="gambler" && idx===0 && p.flags.roomActsUsedThisRound>0){
+      btn.disabled=true; btn.title="已使用過房間功能，好賭成性必須在使用房間功能前發動";
+    }
     else if(SKILL_OPENS_OWN_MODAL.has(p.prof+":"+idx)){ btn.onclick=()=>useProfSkill(p,idx); }
     else { btn.onclick=()=>confirmAndUseSkill(p,idx); }
     skEl.appendChild(btn);
