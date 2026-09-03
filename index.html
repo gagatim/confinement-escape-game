@@ -280,6 +280,7 @@ const ITEMS = {
   wine:{name:"酒",weapon:false,gun:false},
   gold:{name:"金條",weapon:false,gun:false},
   knife:{name:"刀",weapon:true,gun:false,power:2},
+  knifeX2:{name:"雙刀",weapon:true,gun:false,power:4}, // 第1輪停機坪空投的特殊道具：單張卡、武力+4、僅佔1格負重（不是兩把普通刀）
   pistol:{name:"手槍",weapon:true,gun:true,power:2},
   shotgun:{name:"霰彈槍",weapon:true,gun:true,power:4},
   rope:{name:"繩索",weapon:false,gun:false},
@@ -370,7 +371,7 @@ const ADJ = {
 const MEETING_ROOM = "B204"; // 會議室 hub: treated as the assembly room players return to between rounds
 const HELI_TARGETS = ["B101","101","B103","201","B105"];
 const SPAWN_ROOMS = ["103","B103","B303","B307","B402","B603"]; // 紅色出生點 marked on img1.jpg
-const AIRDROP_SCHEDULE = [null,["knife","knife"],["wine","wine"],["water","food"],["pistol"],["adrenaline"],["pill"]];
+const AIRDROP_SCHEDULE = [null,["knifeX2"],["wine","wine"],["water","food"],["pistol"],["adrenaline"],["pill"]];
 
 function bfsPath(from,to,maxSteps){
   if(from===to) return [from];
