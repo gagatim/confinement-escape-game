@@ -555,6 +555,8 @@ function restoreGame(){
       if(p.roundStartSteps===undefined) p.roundStartSteps=p.stepsLeft;
       // saves made before the 每輪血量 table existed won't have this — default to no history yet.
       if(!p.hpLog) p.hpLog=[];
+      // saves made before per-wine exclusion tracking existed won't have this.
+      if(!p.flags.wineExcludedQueue) p.flags.wineExcludedQueue=[];
     });
     STATE=st;
     Object.keys(data.rooms||{}).forEach(id=>{
@@ -717,7 +719,7 @@ function makePlayer(id,isAI,profId,stats,name){
       chemistUses:0, embalmerUses:0, hackerUses:0, hackerUsedRooms:[],
       tamerUses:0, geneUses:0, climberDietUsed:false, adrenalineRound:0, dietThisRound:false,
       goldUsedThisRound:false, visited102:false, remoteRoomOverride:null,
-      pendingItemUses:[], roomCommitted:false},
+      pendingItemUses:[], wineExcludedQueue:[], roomCommitted:false},
     pendingActions:{targetRoom:null, movementDone:false, roomActed:false},
     weaponWeightless: profId==="merc",
     weightlessGold: profId==="tycoon",
@@ -972,7 +974,7 @@ function beginRound(){
     p.flags.gamblerBonusOps=0; // 好賭成性's extra room-use, if any — a fresh roll each round, never carries over
     p.flags.skillUsedThisRound=false; // once-per-round cap on active profession skills
     p.flags.votedThisRound=false; // one poison-floor vote per player per round (控制室 boosts its weight instead of granting extra votes)
-    p.flags.wineExcluded=null;
+    p.flags.wineExcludedQueue=[]; // should already be empty post-settlement, reset defensively
     p.actedThisRound=false; // turn-order bookkeeping (順序牌) — set true once this player's turn resolves
     p.pendingActions={targetRoom:null, movementDone:false, roomActed:false};
   });
@@ -1462,7 +1464,11 @@ function openBartenderWineModal(p){
     }
     if(!removeItem(p,"wine")) return;
     const target=STATE.players.find(x=>x.id===targetId);
-    if(isSelf) target.flags.wineExcluded=excluded;
+    // one queue entry per queued "wine", in the same order, so multiple wines declared by/for the
+    // same player in one round each keep their OWN exclusion instead of sharing a single flag that
+    // only the first-resolved wine would see (the bug: a second wine would silently roll from the
+    // full 1-6 pool, including the "excluded" results, once the shared flag had already been consumed).
+    target.flags.wineExcludedQueue.push(isSelf?excluded:null);
     target.flags.pendingItemUses.push("wine");
     log(p.name+(isSelf?" 為自己調製了特調果汁":" 舉杯共飲，請 "+target.name+" 喝了一杯果汁")+"（結算階段公開生效）。");
     closeModal(); renderAll();
@@ -1484,11 +1490,13 @@ function resolvePendingItemUses(p){
         p.flags.adrenalineActive=true; log(p.name+" 結算：注射腎上腺素，下輪速度變10，本輪不會致死。","heal"); break;
       case "wine": {
         // 特調精釀: a bartender's own glass may have 4 outcomes pre-excluded, rolled among
-        // whichever 2 remain — one-time per declared use, then cleared.
+        // whichever 2 remain. Each queued "wine" pulls its OWN exclusion (or none) off the front
+        // of wineExcludedQueue, in the same order they were declared — NOT a single shared flag,
+        // which would only ever apply to the first of several wines resolved in one round.
         let pool=[1,2,3,4,5,6];
-        if(p.flags.wineExcluded && p.flags.wineExcluded.length===4){
-          pool=pool.filter(n=>!p.flags.wineExcluded.includes(n));
-          p.flags.wineExcluded=null;
+        const excluded=p.flags.wineExcludedQueue.length?p.flags.wineExcludedQueue.shift():null;
+        if(excluded && excluded.length===4){
+          pool=pool.filter(n=>!excluded.includes(n));
         }
         const roll=pool[Math.floor(Math.random()*pool.length)];
         let msg="結算：酒(擲骰"+roll+"): ";
@@ -1701,7 +1709,10 @@ document.getElementById("voteBtn").addEventListener("click",()=>{
   const p=you();
   if(!isMyTurn()){ flashMsg("尚未輪到你的回合。"); return; }
   if(p.flags.votedThisRound){ flashMsg("本輪已投過票。"); return; }
-  const opts=Object.keys(FLOOR_LABEL).map(f=>`<option value="${f}">${FLOOR_LABEL[f]}</option>`).join("");
+  // already-poisoned floors are permanently off the ballot — no point re-voting a floor that's already toxic.
+  const availFloors=Object.keys(FLOOR_LABEL).map(Number).filter(f=>!STATE.poisoned.has(f));
+  if(!availFloors.length){ flashMsg("所有樓層皆已中毒，無可投票對象。"); return; }
+  const opts=availFloors.map(f=>`<option value="${f}">${FLOOR_LABEL[f]}</option>`).join("");
   openModal(`<h3>投票毒氣樓層</h3><select id="voteSel">${opts}</select><br><br>
     <button class="btn small warn" id="voteOk">投票</button> <button class="btn small ghost" id="voteCancel">取消</button>`);
   document.getElementById("voteOk").onclick=()=>{
@@ -1869,14 +1880,17 @@ function resolveAITurn(p){
     if(countItem(p,"water")>0){ removeItem(p,"water"); p.flags.pendingItemUses.push("water"); }
     if(countItem(p,"food")>0){ removeItem(p,"food"); p.flags.pendingItemUses.push("food"); }
   }
-  // poison vote (one per player per round, after acting): avoid own floor, pick a random other floor
+  // poison vote (one per player per round, after acting): avoid own floor (the room it's going to
+  // this round) and any floor already poisoned — pick a random floor from what's left.
   const myFloor=ROOMS[p.room].floor;
-  const floorOpts=Object.keys(FLOOR_LABEL).map(Number).filter(f=>f!==myFloor);
-  const voteFloor=floorOpts[Math.floor(Math.random()*floorOpts.length)];
-  const voteWeight=p.flags.voteWeight||1;
-  STATE.voteCounts[voteFloor]=(STATE.voteCounts[voteFloor]||0)+voteWeight;
-  STATE.voteLog.push({name:p.name, floor:voteFloor, weight:voteWeight});
-  p.flags.voteWeight=1;
+  const floorOpts=Object.keys(FLOOR_LABEL).map(Number).filter(f=>f!==myFloor && !STATE.poisoned.has(f));
+  if(floorOpts.length){
+    const voteFloor=floorOpts[Math.floor(Math.random()*floorOpts.length)];
+    const voteWeight=p.flags.voteWeight||1;
+    STATE.voteCounts[voteFloor]=(STATE.voteCounts[voteFloor]||0)+voteWeight;
+    STATE.voteLog.push({name:p.name, floor:voteFloor, weight:voteWeight});
+    p.flags.voteWeight=1;
+  }
   p.flags.votedThisRound=true;
 }
 
@@ -1926,11 +1940,17 @@ function roomIsPoisoned(room){
   return STATE.poisoned.has(room.floor);
 }
 function resolvePoisonVote(){
-  let winner=null, best=-1;
-  for(const [f,c] of Object.entries(STATE.voteCounts)){ if(c>best){ best=c; winner=+f; } }
-  if(winner===null) return "本輪毒氣投票: 無人投票，本輪無新增毒氣樓層。";
-  STATE.poisoned.add(winner);
-  return "本輪毒氣投票結果：「"+FLOOR_LABEL[winner]+"」樓層淪為毒氣區域！";
+  const entries=Object.entries(STATE.voteCounts);
+  if(!entries.length) return "本輪毒氣投票: 無人投票，本輪無新增毒氣樓層。";
+  let best=-1;
+  entries.forEach(([f,c])=>{ if(c>best) best=c; });
+  // a tie for the highest vote count poisons ALL tied floors, not just the first one seen.
+  const winners=entries.filter(([f,c])=>c===best).map(([f])=>+f);
+  winners.forEach(f=>STATE.poisoned.add(f));
+  const label=winners.map(f=>FLOOR_LABEL[f]).join("、");
+  return winners.length>1
+    ? "本輪毒氣投票結果：「"+label+"」樓層並列最高票，全數淪為毒氣區域！"
+    : "本輪毒氣投票結果：「"+label+"」樓層淪為毒氣區域！";
 }
 function poisonDamageForRound(){
   const r=STATE.round;
