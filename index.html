@@ -149,6 +149,7 @@
     </div>
     <div id="topStatus" class="row"></div>
     <button class="btn small ghost" id="muteBtn" title="開關音效">🔊 音效</button>
+    <button class="btn small ghost" id="voiceMuteBtn" title="開關角色語音">🗣 語音</button>
     <button class="btn small warn hidden" id="abandonBtn">放棄測試，重新開始</button>
   </div>
 
@@ -646,6 +647,92 @@ document.addEventListener("click",e=>{
   muteBtn.addEventListener("click",()=>{ SFX.setMuted(!SFX.isMuted()); syncMuteLabel(); });
 })();
 
+/* ===================== VOICE LINES ===================== */
+// Web Speech API only — no audio files, no API key, no network cost. Most browsers only ship
+// ONE zh-TW voice, so "different voice per character" is faked with per-profession rate/pitch
+// offsets on that single voice rather than actually picking 16 distinct voices.
+const PROF_VOICE={
+  fatty:{rate:0.85,pitch:0.7}, bomb:{rate:1.0,pitch:0.75}, gambler:{rate:1.15,pitch:1.15},
+  scavenger:{rate:1.05,pitch:0.9}, trucker:{rate:1.1,pitch:0.65}, bartender:{rate:0.95,pitch:1.0},
+  chemist:{rate:1.0,pitch:1.1}, embalmer:{rate:0.8,pitch:0.6}, hacker:{rate:1.2,pitch:1.2},
+  tycoon:{rate:0.9,pitch:0.85}, shade:{rate:0.75,pitch:1.4}, tamer:{rate:1.0,pitch:0.95},
+  merc:{rate:1.05,pitch:0.7}, geneFreak:{rate:1.1,pitch:1.25}, outsider:{rate:0.9,pitch:1.05},
+  climber:{rate:1.15,pitch:1.0}
+};
+// One line per ACTIVE skill activation (passive skills have no discrete "use" moment to speak on).
+const SKILL_QUOTES={
+  "gambler:0":"命就是拿來賭的！",
+  "gambler:1":"這把，穩贏。",
+  "scavenger:1":"垃圾？在我手上都是寶。",
+  "trucker:0":"貨物不重要，油門踩到底！",
+  "chemist:0a":"這個配方，能救命。",
+  "chemist:0b":"加大劑量，誰都別想活著出去。",
+  "hacker:1":"系統，由我接管。",
+  "tamer:0":"去，把獵物叼回來。",
+  "geneFreak:1":"重新編碼，我還能更強。",
+  "climber:0":"撐得住，就往上爬。",
+  "climber:1":"餓一頓，死不了。",
+  "embalmer:1":"死者的東西，由我來挑。"
+};
+const VOICE=(()=>{
+  const supported="speechSynthesis" in window;
+  let muted=localStorage.getItem("voiceMuted")==="1";
+  let voice=null;
+  function pickVoice(){
+    if(!supported) return null;
+    const list=speechSynthesis.getVoices();
+    return list.find(v=>/zh[-_]TW/i.test(v.lang)) || list.find(v=>/zh/i.test(v.lang)) || list[0] || null;
+  }
+  if(supported){
+    voice=pickVoice();
+    speechSynthesis.onvoiceschanged=()=>{ voice=pickVoice(); };
+  }
+  function speak(text,profKey){
+    if(!supported || muted || !text) return;
+    try{
+      const u=new SpeechSynthesisUtterance(text);
+      const cfg=PROF_VOICE[profKey]||{rate:1,pitch:1};
+      u.lang="zh-TW"; u.rate=cfg.rate; u.pitch=cfg.pitch;
+      if(voice) u.voice=voice;
+      speechSynthesis.cancel(); // don't stack overlapping lines when several skills fire back-to-back
+      speechSynthesis.speak(u);
+    }catch(e){}
+  }
+  return {
+    isMuted:()=>muted,
+    setMuted(v){ muted=v; localStorage.setItem("voiceMuted",v?"1":"0"); if(v && supported) speechSynthesis.cancel(); },
+    speak
+  };
+})();
+function speakSkill(p,key){ VOICE.speak(SKILL_QUOTES[key],p.prof); }
+// Self-introduction line spoken when a profession card is clicked on the setup screen —
+// separate from SKILL_QUOTES since there's no player object yet at that point (VOICE.speak
+// is called directly with the profession id instead of going through speakSkill(p,key)).
+const SELECT_QUOTES={
+  fatty:"我不動，但我扛得住。",
+  bomb:"任何爆炸，我來擋。",
+  gambler:"骰子已經在我手上發燙了。",
+  scavenger:"別人的垃圾，是我的活路。",
+  trucker:"讓開，我要衝了。",
+  bartender:"來一杯？保證有效果。",
+  chemist:"配方，我都算好了。",
+  embalmer:"死人的秘密，我最懂。",
+  hacker:"系統的漏洞，我一眼就看到。",
+  tycoon:"錢能解決的事，都不是事。",
+  shade:"死亡對我來說，只是個開始。",
+  tamer:"跟緊我，獵犬會帶路。",
+  merc:"武器在手，誰都別想輕舉妄動。",
+  geneFreak:"我的基因，天生贏在起跑點。",
+  outsider:"沒人會注意到我，這就是我的優勢。",
+  climber:"牆再高，我都爬得上去。"
+};
+(()=>{
+  const voiceBtn=document.getElementById("voiceMuteBtn");
+  const syncVoiceLabel=()=>{ voiceBtn.textContent = VOICE.isMuted()? "🔈 語音已關閉" : "🗣 語音"; };
+  syncVoiceLabel();
+  voiceBtn.addEventListener("click",()=>{ VOICE.setMuted(!VOICE.isMuted()); syncVoiceLabel(); });
+})();
+
 function log(msg,cls){
   const el=document.getElementById("log");
   const d=document.createElement("div");
@@ -672,6 +759,7 @@ Object.entries(PROFESSIONS).forEach(([id,p])=>{
     document.getElementById("startHint").textContent="";
     updateAllocMax();
     validateStart();
+    VOICE.speak(SELECT_QUOTES[id],id);
   });
   profGrid.appendChild(div);
 });
@@ -1613,7 +1701,7 @@ function useProfSkill(p,idx){
     if(roll<=2){ p.flags.roomLocked=true; msg+="失敗，本輪無法房間操作。"; }
     else if(roll<=4){ msg+="無事發生。"; }
     else { p.flags.gamblerBonusOps=1; msg+="成功！本輪房間可操作兩次。"; }
-    log(p.name+" "+msg);
+    log(p.name+" "+msg); speakSkill(p,"gambler:0");
   } else if(p.prof==="gambler" && idx===1){
     if(p.flags.gamblerWinUses>=1){ flashMsg("已用完"); return; }
     // 逢賭必贏 does NOT consume this round's skillUsedThisRound budget — it exists specifically to
@@ -1621,7 +1709,7 @@ function useProfSkill(p,idx){
     // other skill. Locking the round budget here would make 逢賭必贏 unable to ever do what its own
     // description says: gambling to guarantee gambling.
     p.flags.gamblerWinUses++; p.flags.gamblerForceWin=true;
-    log(p.name+" 使用逢賭必贏：下次好賭成性必定成功。");
+    log(p.name+" 使用逢賭必贏：下次好賭成性必定成功。"); speakSkill(p,"gambler:1");
   } else if(p.prof==="scavenger" && idx===1){
     if(p.flags.scavengerUses>=2){ flashMsg("已用完2次"); return; }
     if(countItem(p,"trash")<1){ flashMsg("背包內沒有垃圾"); return; }
@@ -1629,14 +1717,14 @@ function useProfSkill(p,idx){
     p.flags.scavengerUses++; p.flags.skillUsedThisRound=true; removeItem(p,"trash");
     const gain=Math.random()<0.5?"water":"food";
     addItem(p,gain);
-    log(p.name+" 使用變廢為寶：垃圾轉為「"+ITEMS[gain].name+"」。");
+    log(p.name+" 使用變廢為寶：垃圾轉為「"+ITEMS[gain].name+"」。"); speakSkill(p,"scavenger:1");
   } else if(p.prof==="trucker" && idx===0){
     if(p.flags.truckerUses>=3){ flashMsg("已用完3次"); return; }
     const nonTrash=p.inv.find(x=>x!=="trash");
     if(!nonTrash){ flashMsg("沒有可丟棄的非垃圾道具卡"); return; }
     removeItem(p,nonTrash); STATE.discardPile.push(nonTrash);
     p.flags.truckerUses++; p.flags.truckerDoubled=true; p.flags.truckerJustUsed=true; p.flags.skillUsedThisRound=true;
-    log(p.name+" 使用卸載加速：丟棄「"+ITEMS[nonTrash].name+"」，本輪速度變兩倍。");
+    log(p.name+" 使用卸載加速：丟棄「"+ITEMS[nonTrash].name+"」，本輪速度變兩倍。"); speakSkill(p,"trucker:0");
     p.stepsLeft=Math.min(10,p.stepsLeft*2);
   } else if(p.prof==="chemist" && idx===0){
     if(p.flags.chemistUses>=2){ flashMsg("已用完2次"); return; }
@@ -1648,11 +1736,11 @@ function useProfSkill(p,idx){
       <button class="btn small ghost" id="chCancel">取消</button>`);
     document.getElementById("chA").onclick=()=>{
       const f=+document.getElementById("chFloor").value;
-      STATE.poisonReduceFloor=f; log(p.name+" 指定「"+FLOOR_LABEL[f]+"」本輪毒氣傷害-2。");
+      STATE.poisonReduceFloor=f; log(p.name+" 指定「"+FLOOR_LABEL[f]+"」本輪毒氣傷害-2。"); speakSkill(p,"chemist:0a");
       p.flags.chemistUses++; p.flags.skillUsedThisRound=true; closeModal(); renderAll();
     };
     document.getElementById("chB").onclick=()=>{
-      STATE.poisonBoost=true; log(p.name+" 令本輪毒氣樓層傷害+2。");
+      STATE.poisonBoost=true; log(p.name+" 令本輪毒氣樓層傷害+2。"); speakSkill(p,"chemist:0b");
       p.flags.chemistUses++; p.flags.skillUsedThisRound=true; closeModal(); renderAll();
     };
     document.getElementById("chCancel").onclick=closeModal;
@@ -1670,14 +1758,14 @@ function useProfSkill(p,idx){
         if(p.flags.hackerUsedRooms.includes(r)){ flashMsg("不可重複選擇同一房間"); return; }
         p.flags.hackerUsedRooms.push(r); p.flags.hackerUses++; p.flags.skillUsedThisRound=true;
         doSpecialRoom(p,ROOMS[r]);
-        log(p.name+" 使用遠端操控：於本回合遠端使用了「"+r+" "+ROOMS[r].name+"」。");
+        log(p.name+" 使用遠端操控：於本回合遠端使用了「"+r+" "+ROOMS[r].name+"」。"); speakSkill(p,"hacker:1");
         closeModal(); renderAll();
       };
     });
     document.getElementById("hackCancel").onclick=closeModal;
   } else if(p.prof==="tamer" && idx===0){
     if(p.flags.tamerUses>=4){ flashMsg("已用完4次"); return; }
-    p.flags.skillUsedThisRound=true;
+    p.flags.skillUsedThisRound=true; speakSkill(p,"tamer:0");
     const cands=Object.keys(ROOMS).filter(r=> bfsDist(p.room,r)<=5 && bfsDist(p.room,r)>0 && (Object.values(ROOMS[r].stock).some(v=>v>0)||r==="202"));
     if(cands.length===0){ log(p.name+" 派遣巡迴獵犬：附近沒有可搜索的庫存房間，無功而返。"); p.flags.tamerUses++; return; }
     const target=cands[Math.floor(Math.random()*cands.length)];
@@ -1691,21 +1779,21 @@ function useProfSkill(p,idx){
     } else { log(p.name+" 派遣巡迴獵犬前往「"+target+"」，但無法獲得道具。"); }
   } else if(p.prof==="geneFreak" && idx===1){
     if(p.flags.geneUses>=2){ flashMsg("已用完2次"); return; }
-    p.flags.geneUses++; p.flags.skillUsedThisRound=true;
+    p.flags.geneUses++; p.flags.skillUsedThisRound=true; speakSkill(p,"geneFreak:1");
     openRespecModal(p,p.power+p.speed+p.carry);
   } else if(p.prof==="climber" && idx===0){
     if(p.hp<=1){ flashMsg("生命值不足"); return; }
     p.hp--; p.flags.climberVertical=true; p.flags.skillUsedThisRound=true;
-    log(p.name+" 支付1點生命，發動垂直攀爬。","dmg");
+    log(p.name+" 支付1點生命，發動垂直攀爬。","dmg"); speakSkill(p,"climber:0");
   } else if(p.prof==="climber" && idx===1){
     if(p.flags.climberDietUsed){ flashMsg("已用完"); return; }
     p.flags.climberDietUsed=true; p.flags.dietThisRound=true; p.flags.skillUsedThisRound=true;
-    log(p.name+" 使用節食：本輪不需支付水/糧。");
+    log(p.name+" 使用節食：本輪不需支付水/糧。"); speakSkill(p,"climber:1");
   } else if(p.prof==="embalmer" && idx===1){
     if(p.flags.embalmerUses>=1){ flashMsg("已用完"); return; }
     p.flags.embalmerUses++; p.flags.skillUsedThisRound=true;
     p.flags.embalmerChoiceMode=true;
-    log(p.name+" 啟用亡者遺贈：下次道具進入停屍間時可自行選擇。");
+    log(p.name+" 啟用亡者遺贈：下次道具進入停屍間時可自行選擇。"); speakSkill(p,"embalmer:1");
   }
   renderAll();
 }
@@ -1760,12 +1848,14 @@ document.getElementById("tradeBtn").addEventListener("click",()=>{
   document.getElementById("tOk").onclick=()=>{
     const give=document.getElementById("tOffer").value;
     if(target.inv.length===0){ log(target.name+" 沒有道具可交換，拒絕交易。"); closeModal(); return; }
-    // AI accepts if it doesn't give away its only weapon/med while player offers "junk"
+    // AI doesn't evaluate what it gives back — accept odds only depend on whether you're offering junk
     const accept = give==="trash" ? Math.random()<0.3 : Math.random()<0.7;
     if(accept){
-      removeItem(p,give); target.inv.push(give);
+      // pick the AI's reward BEFORE `give` is added to its inventory, so the item you just
+      // handed over can never be picked right back out as the "back" reward
       const back=target.inv[Math.floor(Math.random()*target.inv.length)];
       removeItem(target,back);
+      removeItem(p,give); target.inv.push(give);
       log(p.name+" 與 "+target.name+" 交易：給出「"+ITEMS[give].name+"」換得「"+ITEMS[back].name+"」。");
       if(itemCostsCarry(p,back) && carryRoom(p)<=0){ openDrawSelectionModal(p,[back],p.room); return; }
       p.inv.push(back);
@@ -1850,7 +1940,7 @@ function aiConsiderSkillAfterMove(p){
     if(!poisonedFloors.length) return; // nothing to mitigate — don't burn a limited use for +2 boost
     const target=poisonedFloors.includes(room.floor)?room.floor:poisonedFloors[0];
     STATE.poisonReduceFloor=target; p.flags.chemistUses++; p.flags.skillUsedThisRound=true;
-    log(p.name+" 使用毒性調和：指定「"+FLOOR_LABEL[target]+"」本輪毒氣傷害-2。");
+    log(p.name+" 使用毒性調和：指定「"+FLOOR_LABEL[target]+"」本輪毒氣傷害-2。"); speakSkill(p,"chemist:0a");
     return;
   }
   if(p.prof==="hacker"){
@@ -1858,11 +1948,11 @@ function aiConsiderSkillAfterMove(p){
     if(!p.flags.hackerUsedRooms.includes("201")){
       p.flags.hackerUsedRooms.push("201"); p.flags.hackerUses++; p.flags.skillUsedThisRound=true;
       p.power++; p.speed++; p.carry++;
-      log(p.name+" 使用遠端操控：遠端使用了「201 基因庫」。");
+      log(p.name+" 使用遠端操控：遠端使用了「201 基因庫」。"); speakSkill(p,"hacker:1");
     } else if(!p.flags.hackerUsedRooms.includes("B101")){
       p.flags.hackerUsedRooms.push("B101"); p.flags.hackerUses++; p.flags.skillUsedThisRound=true;
       p.flags.voteWeight=10;
-      log(p.name+" 使用遠端操控：遠端使用了「B101 控制室」（本輪投票視為10票）。");
+      log(p.name+" 使用遠端操控：遠端使用了「B101 控制室」（本輪投票視為10票）。"); speakSkill(p,"hacker:1");
     }
     // a third candidate (B304 操作室) exists but is skipped for the same reason as 基因重組 above.
     return;
