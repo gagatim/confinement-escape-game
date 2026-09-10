@@ -79,6 +79,7 @@
   .prof-card .prof-icon{width:32px;height:32px;flex:0 0 32px;border-radius:8px;background:var(--panel);
     border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:18px;line-height:1}
   .prof-card.selected .prof-icon{border-color:var(--cyan-bright);background:#0e2226}
+  html[data-no-icons] .prof-card .prof-icon{font-size:12px;font-family:"JetBrains Mono",monospace}
   .prof-card h3{font-size:15px;color:var(--cyan-bright);margin:0}
   .prof-card .sk{font-size:11.5px;color:var(--muted);margin-top:6px;line-height:1.55}
   .prof-card .sk b{color:var(--amber-bright)}
@@ -201,6 +202,7 @@
     </div>
     <div id="topStatus" class="row"></div>
     <button class="btn small ghost" id="stealthBtn" title="老闆鍵：一鍵偽裝成報表（快捷鍵：按住 Alt 再按 ` 鍵可隨時觸發，不用把滑鼠移過來）">🥷 低調模式</button>
+    <button class="btn small ghost" id="iconsBtn" title="常駐低調：把介面上的 emoji 圖示換成純文字，平時看起來更像內部系統">🖼 去圖示模式</button>
     <button class="btn small ghost" id="themeBtn" title="切換明亮/暗黑介面">🌙 暗色介面</button>
     <button class="btn small ghost" id="muteBtn" title="開關音效">🔊 音效</button>
     <button class="btn small ghost" id="voiceMuteBtn" title="開關角色語音">🗣 語音</button>
@@ -239,7 +241,7 @@
         <div class="panel-title" style="margin-bottom:6px">整體地圖（參考用）</div>
         <div class="map-scroll"><div id="spawnMapArea" class="static-map"></div></div>
         <div class="map-scroll-hint">↔ 地圖較寬，可左右滑動查看</div>
-        <div class="bridge-note">紅色為出生點。<span style="color:var(--cyan-bright)">▸◂</span> 為走道，同層房間可直接橫移；<span style="color:var(--ember-bright)">⛔</span> 為天井阻隔，同層無法跨越；中央天井僅在 <b>🌉 B105↔B106</b> 與 <b>🌉 B305↔B306</b> 兩處有天橋可花1步直接通行。</div>
+        <div class="bridge-note" id="bridgeNoteSpawn"></div>
       </div>
     </div>
   </div>
@@ -280,7 +282,7 @@
         <div class="muted" style="font-size:12px;margin-top:2px">本輪可投票樓層: <span id="voteBallotFloors" class="mono" style="color:var(--cyan-bright)">無</span></div>
         <div class="map-scroll" style="margin-top:8px"><div id="mapArea"></div></div>
         <div class="map-scroll-hint">↔ 地圖較寬，可左右滑動查看</div>
-        <div class="bridge-note">🪜 樓梯上下樓｜🌉 天橋跨天井(1步)｜<span style="color:var(--cyan-bright)">▸◂</span> 走道可同層橫移｜<span style="color:var(--ember-bright)">⛔</span> 天井阻隔不可橫移。藍框＝可移動抵達，琥珀框＝目前所在。</div>
+        <div class="bridge-note" id="bridgeNoteGame"></div>
       </div>
       <div class="card" style="margin-top:12px">
         <div class="panel-title">房間動作</div>
@@ -575,6 +577,15 @@ const PROF_ICON={
   chemist:"🧪", embalmer:"⚰️", hacker:"💻", tycoon:"💰", shade:"👻", tamer:"🐕",
   merc:"🔪", geneFreak:"🧬", outsider:"🚪", climber:"🧗"
 };
+// 去圖示模式 (低調模式 companion toggle): when on, every emoji "picture" in the UI is swapped
+// for a plain bracketed-text stand-in instead — unlike 低調模式 (the boss key), this is meant to
+// stay on for normal play, so the everyday screen reads as flat/office-like rather than a game.
+function iconsOff(){ return document.documentElement.hasAttribute("data-no-icons"); }
+function profIcon(id){
+  if(!iconsOff()) return PROF_ICON[id]||"❔";
+  const nm=PROFESSIONS[id]&&PROFESSIONS[id].name;
+  return nm ? "["+nm.charAt(0)+"]" : "[?]";
+}
 
 /* ===================== GAME STATE ===================== */
 let STATE=null;
@@ -937,7 +948,7 @@ let selectedProf=null;
 Object.entries(PROFESSIONS).forEach(([id,p])=>{
   const div=document.createElement("div");
   div.className="prof-card"; div.dataset.id=id;
-  div.innerHTML=`<div class="prof-head"><span class="prof-icon">${PROF_ICON[id]||"❔"}</span><h3>${p.name}</h3></div>`+
+  div.innerHTML=`<div class="prof-head"><span class="prof-icon">${profIcon(id)}</span><h3>${p.name}</h3></div>`+
     p.skills.map(s=>`<div class="sk"><b>${s.name}</b>｜${s.desc}</div>`).join("");
   div.addEventListener("click",()=>{
     document.querySelectorAll(".prof-card").forEach(c=>c.classList.remove("selected"));
@@ -949,6 +960,72 @@ Object.entries(PROFESSIONS).forEach(([id,p])=>{
   });
   profGrid.appendChild(div);
 });
+
+/* ---------- 去圖示模式: unlike 低調模式's full disguise, this is meant to stay ON for normal
+   play — every decorative emoji (profession portraits, stairs/bridge/chasm map markers, button
+   prefixes) is swapped for plain text, so day-to-day play just reads as a flat internal tool
+   instead of hiding it behind a cover screen. Persisted like the theme toggle. ---- */
+function bridgeNoteSpawnHtml(){
+  const bridge=iconsOff()?"[橋]":"🌉", chasm=iconsOff()?"[阻]":"⛔";
+  return "紅色為出生點。<span style=\"color:var(--cyan-bright)\">▸◂</span> 為走道，同層房間可直接橫移；"+
+    "<span style=\"color:var(--ember-bright)\">"+chasm+"</span> 為天井阻隔，同層無法跨越；"+
+    "中央天井僅在 <b>"+bridge+" B105↔B106</b> 與 <b>"+bridge+" B305↔B306</b> 兩處有天橋可花1步直接通行。";
+}
+function bridgeNoteGameHtml(){
+  const stairs=iconsOff()?"[上下]":"🪜", bridge=iconsOff()?"[橋]":"🌉", chasm=iconsOff()?"[阻]":"⛔";
+  return stairs+" 樓梯上下樓｜"+bridge+" 天橋跨天井(1步)｜<span style=\"color:var(--cyan-bright)\">▸◂</span> 走道可同層橫移｜"+
+    "<span style=\"color:var(--ember-bright)\">"+chasm+"</span> 天井阻隔不可橫移。藍框＝可移動抵達，琥珀框＝目前所在。";
+}
+function refreshBridgeNotes(){
+  document.getElementById("bridgeNoteSpawn").innerHTML=bridgeNoteSpawnHtml();
+  document.getElementById("bridgeNoteGame").innerHTML=bridgeNoteGameHtml();
+}
+(()=>{
+  const ICONS_KEY="confinement_escape_icons_off";
+  const iconsBtn=document.getElementById("iconsBtn");
+  const voteBtn=document.getElementById("voteBtn");
+  const muteBtn2=document.getElementById("muteBtn");
+  const voiceBtn2=document.getElementById("voiceMuteBtn");
+  const themeBtn2=document.getElementById("themeBtn");
+  const stealthBtn2=document.getElementById("stealthBtn");
+  // Every other button that carries a decorative emoji prefix normally only redraws its own
+  // label inside its own click handler — resync all of them here too, so toggling icon mode
+  // updates every button on screen immediately instead of waiting for its next own click.
+  function syncButtonLabels(){
+    iconsBtn.textContent = iconsOff() ? "恢復圖示" : "🖼 去圖示模式";
+    voteBtn.textContent = (iconsOff()?"":"☠ ")+"投票毒區";
+    muteBtn2.textContent = (iconsOff()?"":(SFX.isMuted()?"🔇 ":"🔊 "))+(SFX.isMuted()?"音效已關閉":"音效");
+    voiceBtn2.textContent = (iconsOff()?"":(VOICE.isMuted()?"🔈 ":"🗣 "))+(VOICE.isMuted()?"語音已關閉":"語音");
+    const isLight=document.documentElement.getAttribute("data-theme")==="light";
+    themeBtn2.textContent = (iconsOff()?"":(isLight?"☀️ ":"🌙 "))+(isLight?"明亮介面":"暗色介面");
+    stealthBtn2.textContent = (iconsOff()?"":"🥷 ")+"低調模式";
+  }
+  function applyIconMode(on){
+    document.documentElement.toggleAttribute("data-no-icons",on);
+    refreshBridgeNotes();
+    syncButtonLabels();
+    document.querySelectorAll(".prof-card").forEach(card=>{
+      const icon=card.querySelector(".prof-icon");
+      if(icon) icon.textContent=profIcon(card.dataset.id);
+    });
+    // Only the map's own markers need a redraw here — rebuilding the whole spawn grid would
+    // also wipe the "selected" highlight on whichever spawn room the player already clicked.
+    if(!document.getElementById("spawnSelect").classList.contains("hidden")) renderStaticMap("spawnMapArea", SPAWN_ROOMS);
+    if(STATE){
+      if(STATE.gameOver) renderEndScreen();
+      else if(!document.getElementById("game").classList.contains("hidden")) renderAll();
+    }
+  }
+  let saved=false;
+  try{ saved=localStorage.getItem(ICONS_KEY)==="1"; }catch(e){}
+  applyIconMode(saved);
+  iconsBtn.addEventListener("click",()=>{
+    const next=!iconsOff();
+    applyIconMode(next);
+    try{ localStorage.setItem(ICONS_KEY,next?"1":"0"); }catch(e){}
+  });
+})();
+
 function updateAllocMax(){
   const max = selectedProf==="geneFreak" ? 12 : 10;
   document.getElementById("ptsTotal").textContent=max;
@@ -1194,12 +1271,12 @@ const FLOOR_CONNECTORS_BY_ROOM=(()=>{
 function roomMarkersHtml(r){
   let html="";
   const vlinks=verticalLinkTargets(r);
-  if(vlinks.length) html+=`<span class="vmark" title="樓梯／梯子可通往：${vlinks.map(id=>id+(ROOMS[id].name?" "+ROOMS[id].name:"")).join("、")}">🪜</span>`;
-  if(BRIDGE_SIDE[r.id]) html+=`<span class="hbridge ${BRIDGE_SIDE[r.id]}" title="天橋，花1步可跨越天井">🌉</span>`;
+  if(vlinks.length) html+=`<span class="vmark" title="樓梯／梯子可通往：${vlinks.map(id=>id+(ROOMS[id].name?" "+ROOMS[id].name:"")).join("、")}">${iconsOff()?"[上下]":"🪜"}</span>`;
+  if(BRIDGE_SIDE[r.id]) html+=`<span class="hbridge ${BRIDGE_SIDE[r.id]}" title="天橋，花1步可跨越天井">${iconsOff()?"[橋]":"🌉"}</span>`;
   (FLOOR_CONNECTORS_BY_ROOM[r.id]||[]).forEach(c=>{
     html+=c.connected?
       `<span class="hbridge ${c.side}" title="走道相通，可直接橫移至 ${c.other}">${c.side==="right"?"▸":"◂"}</span>` :
-      `<span class="hbridge ${c.side} chasm" title="天井阻隔，此樓層無法直接橫移過去">⛔</span>`;
+      `<span class="hbridge ${c.side} chasm" title="天井阻隔，此樓層無法直接橫移過去">${iconsOff()?"[阻]":"⛔"}</span>`;
   });
   return html;
 }
@@ -2512,7 +2589,7 @@ function showRoundSummary(){
   const voteLines=STATE.voteLog.map(v=>v.name+" → "+FLOOR_LABEL[v.floor]+(v.weight>1?"（權重"+v.weight+"）":"")).join("、")||"無人投票";
   const poisonedList=[...STATE.poisoned].map(f=>FLOOR_LABEL[f]).join("、")||"無";
   html+="<div style='margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--line)'>"+
-    "☠ 本輪投票明細："+voteLines+"<br>"+
+    (iconsOff()?"":"☠ ")+"本輪投票明細："+voteLines+"<br>"+
     "目前已中毒樓層：<span style='color:var(--ember-bright)'>"+poisonedList+"</span>"+
     "</div>";
   STATE.players.forEach(p=>{
@@ -2522,7 +2599,7 @@ function showRoundSummary(){
       ? "「"+p.roundStartRoom+"」→「"+p.room+" "+(ROOMS[p.room].name||"")+"」"
       : "「"+p.room+" "+(ROOMS[p.room].name||"")+"」（未移動）";
     html+="<div style='margin-bottom:6px;padding-bottom:6px;border-bottom:1px dashed var(--line)'>"+
-      "<b>"+p.name+"</b>（"+PROF_ICON[p.prof]+" "+PROFESSIONS[p.prof].name+"） HP "+p.hp+(p.ghost?" [暗影]":p.alive?"":" 💀")+"<br>"+
+      "<b>"+p.name+"</b>（"+profIcon(p.prof)+" "+PROFESSIONS[p.prof].name+"） HP "+p.hp+(p.ghost?" [暗影]":p.alive?"":" 💀")+"<br>"+
       "路徑："+path+"　同房："+companions+"<br>"+
       "本輪扣血："+events+
       "</div>";
@@ -2576,7 +2653,7 @@ function renderEndScreen(){
   list.innerHTML="";
   ranked.forEach((p,i)=>{
     const div=document.createElement("div"); div.className="rank-row";
-    div.innerHTML="<span>#"+(i+1)+" "+p.name+" ("+PROF_ICON[p.prof]+" "+PROFESSIONS[p.prof].name+")"+(p.alive?"":" 💀")+"</span><span class='mono'>HP "+p.hp+"</span>";
+    div.innerHTML="<span>#"+(i+1)+" "+p.name+" ("+profIcon(p.prof)+" "+PROFESSIONS[p.prof].name+")"+(p.alive?"":" 💀")+"</span><span class='mono'>HP "+p.hp+"</span>";
     list.appendChild(div);
   });
   document.getElementById("endScreen").classList.remove("hidden");
@@ -2591,7 +2668,7 @@ function renderAll(){
   document.getElementById("poisonedFloors").textContent=[...STATE.poisoned].map(f=>FLOOR_LABEL[f]).join("、")||"無";
   document.getElementById("voteBallotFloors").textContent=(STATE.voteBallot||[]).filter(f=>!STATE.poisoned.has(f)).map(f=>FLOOR_LABEL[f]).join("、")||"無";
   document.getElementById("youName").textContent=p.name;
-  document.getElementById("youProf").textContent=PROF_ICON[p.prof]+" "+PROFESSIONS[p.prof].name;
+  document.getElementById("youProf").textContent=profIcon(p.prof)+" "+PROFESSIONS[p.prof].name;
   if(p.ghost){
     document.getElementById("hpBar").style.width=Math.min(100,(p.ghostDrainTotal/2*100))+"%";
     document.getElementById("hpText").textContent="暗影吸血進度 "+p.ghostDrainTotal+"/2（吸滿2點復活）";
@@ -2765,7 +2842,7 @@ function renderAll(){
     }
     if(p.prof==="climber" && p.flags.climberVertical){
       const climbBtn=document.createElement("button"); climbBtn.className="btn small";
-      climbBtn.textContent="🧗 垂直攀爬（直接上下樓，消耗1步）";
+      climbBtn.textContent=(iconsOff()?"":"🧗 ")+"垂直攀爬（直接上下樓，消耗1步）";
       climbBtn.onclick=()=>openClimberVerticalModal(p);
       raEl.appendChild(climbBtn);
     }
@@ -2781,7 +2858,7 @@ function renderAll(){
   const apEl=document.getElementById("allPlayers"); apEl.innerHTML="";
   STATE.players.forEach(pl=>{
     const line=document.createElement("div");
-    line.textContent=pl.name+" ["+PROF_ICON[pl.prof]+" "+PROFESSIONS[pl.prof].name+"] HP:"+pl.hp+(pl.ghost?" 暗影":pl.alive?"":" 💀");
+    line.textContent=pl.name+" ["+profIcon(pl.prof)+" "+PROFESSIONS[pl.prof].name+"] HP:"+pl.hp+(pl.ghost?" 暗影":pl.alive?"":" 💀");
     apEl.appendChild(line);
   });
 
