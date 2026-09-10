@@ -11,6 +11,26 @@
     --toxic:#6ee06b; --toxic-bright:#a8ffa0; --ember:#e0524c; --ember-bright:#ff8a7a;
     --ink:#e7edf7; --muted:#7c8bab; --gold:#e8c15a;
   }
+  /* ---- light theme: same variable set, swapped by a data-theme attribute on <html> so every
+     rule below (including inline style="color:var(--x)" in the markup) repaints for free. ---- */
+  html[data-theme="light"]{
+    --bg:#eef2fa; --bg-deep:#f6f8fd; --panel:#ffffff; --panel-2:#eef1f9; --line:#d7deec;
+    --cyan:#0e8a94; --cyan-bright:#036672; --violet:#6952d6; --amber:#b9790a; --amber-bright:#8a5a00;
+    --toxic:#2f9e3b; --toxic-bright:#1f7a29; --ember:#d1453f; --ember-bright:#b23029;
+    --ink:#1b2333; --muted:#5b6478; --gold:#a9790a;
+  }
+  html[data-theme="light"] body{
+    background:radial-gradient(ellipse 900px 500px at 50% -8%,#e2ebfc 0%,transparent 60%),
+      radial-gradient(ellipse 700px 420px at 90% 100%,#f2e6fb 0%,transparent 55%), var(--bg-deep);
+  }
+  html[data-theme="light"] .btn:disabled{background:linear-gradient(180deg,#ccd4e2,#aab3c6);color:#69728a;box-shadow:0 4px 0 #8b96ac}
+  html[data-theme="light"] .prof-card.selected .prof-icon{background:#dff5f7}
+  html[data-theme="light"] .hpbar-outer{background:#dfe5f2}
+  html[data-theme="light"] .room-chip.here{background:#fff3d6}
+  html[data-theme="light"] .room-chip.poison{background:#e3f7e2}
+  html[data-theme="light"] .room-chip.spawn{background:#fbe4e3}
+  html[data-theme="light"] #log div{border-bottom-color:#e0e6f2}
+  html[data-theme="light"] .skillbtn:not(:disabled):hover{background:#e6ecf7}
   *{box-sizing:border-box}
   html{scroll-behavior:smooth}
   html,body{margin:0;min-height:100%;background:var(--bg-deep);color:var(--ink)}
@@ -104,6 +124,12 @@
   .floor-plan .floor-label{width:auto;display:flex;align-items:center;justify-content:center;
     background:var(--panel-2);border:1px solid var(--line);border-radius:6px}
   .floor-plan .room-chip{min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+  /* the grid itself is min-width:680px, so on a narrower screen it's the SCROLL CONTAINER
+     (map-scroll, the actual parent with overflow-x:auto) that needs to scroll, not the grid —
+     a lone overflow-x on the grid does nothing since the grid never overflows itself. */
+  .map-scroll{overflow-x:auto}
+  .map-scroll-hint{display:none}
+  @media (max-width:700px){ .map-scroll-hint{display:block;font-size:11px;color:var(--muted);margin-top:4px} }
   .room-chip.vlink{border-style:dashed}
   .room-chip .vmark{position:absolute;bottom:-6px;left:50%;transform:translateX(-50%);font-size:8px;
     color:var(--muted);background:var(--bg);padding:0 3px}
@@ -148,6 +174,7 @@
       <div class="muted mono" style="font-size:10.5px;margin-top:2px">葉晉廷製作 · 請勿隨意分享</div>
     </div>
     <div id="topStatus" class="row"></div>
+    <button class="btn small ghost" id="themeBtn" title="切換明亮/暗黑介面">🌙 暗色介面</button>
     <button class="btn small ghost" id="muteBtn" title="開關音效">🔊 音效</button>
     <button class="btn small ghost" id="voiceMuteBtn" title="開關角色語音">🗣 語音</button>
     <button class="btn small warn hidden" id="abandonBtn">放棄測試，重新開始</button>
@@ -183,7 +210,8 @@
       <div style="margin-top:14px"><button class="btn" id="confirmSpawnBtn" disabled>確認出生點，開始第一輪</button></div>
       <div style="margin-top:18px;border-top:1px solid var(--line);padding-top:12px">
         <div class="panel-title" style="margin-bottom:6px">整體地圖（參考用）</div>
-        <div id="spawnMapArea" class="static-map"></div>
+        <div class="map-scroll"><div id="spawnMapArea" class="static-map"></div></div>
+        <div class="map-scroll-hint">↔ 地圖較寬，可左右滑動查看</div>
         <div class="bridge-note">紅色為出生點。<span style="color:var(--cyan-bright)">▸◂</span> 為走道，同層房間可直接橫移；<span style="color:var(--ember-bright)">⛔</span> 為天井阻隔，同層無法跨越；中央天井僅在 <b>🌉 B105↔B106</b> 與 <b>🌉 B305↔B306</b> 兩處有天橋可花1步直接通行。</div>
       </div>
     </div>
@@ -222,7 +250,9 @@
           </div>
         </div>
         <div class="muted" style="font-size:12px;margin-top:4px">目前已中毒樓層: <span id="poisonedFloors" class="mono" style="color:var(--ember-bright)">無</span></div>
-        <div id="mapArea" style="margin-top:8px"></div>
+        <div class="muted" style="font-size:12px;margin-top:2px">本輪可投票樓層: <span id="voteBallotFloors" class="mono" style="color:var(--cyan-bright)">無</span></div>
+        <div class="map-scroll" style="margin-top:8px"><div id="mapArea"></div></div>
+        <div class="map-scroll-hint">↔ 地圖較寬，可左右滑動查看</div>
         <div class="bridge-note">🪜 樓梯上下樓｜🌉 天橋跨天井(1步)｜<span style="color:var(--cyan-bright)">▸◂</span> 走道可同層橫移｜<span style="color:var(--ember-bright)">⛔</span> 天井阻隔不可橫移。藍框＝可移動抵達，琥珀框＝目前所在。</div>
       </div>
       <div class="card" style="margin-top:12px">
@@ -453,7 +483,7 @@ const PROFESSIONS = {
   ]},
   hacker:{name:"黑客", skills:[
     {name:"系統監控", desc:"（永久被動）可查看任意1個房間目前人數與各玩家武力值(無法得知是否持槍)。", passive:true},
-    {name:"遠端操控", desc:"移動階段可使用，放棄本回合房間功能，改為在任意位置使用基因室/總控室/操作室其一。整局限用2次，不可重複房間。", uses:2}
+    {name:"遠端操控", desc:"移動結束可使用，若身處功能房間需放棄該房間功能，改為在任意位置使用基因室/總控室/操作室其一（3選1）。整局限用2次，不可重複選擇同一房間。", uses:2}
   ]},
   tycoon:{name:"富豪", skills:[
     {name:"腰纏萬貫", desc:"你的金條不佔負重。金庫2根+大倉庫1根金條，測試開始即歸你所有。每回合限用1根金條。", passive:true}
@@ -555,8 +585,21 @@ function restoreGame(){
   let data;
   try{ data=JSON.parse(raw); }catch(e){ return false; }
   if(!data || !data.state || !data.state.players) return false;
+  // A save referencing a room/prof id that no longer exists (renamed/removed in a later version
+  // of this file) can't be safely resumed — renderAll() etc. index ROOMS/PROFESSIONS directly
+  // without guards, so it would throw mid-render with STATE already pointing at the bad data.
+  // Reject it up front instead, so the player gets a fresh game rather than a stuck white screen.
+  const st=data.state;
+  const roomIdOk=id=>id===undefined || id===null || !!ROOMS[id];
+  const stateLooksValid = st.players.every(p=>
+    p && PROFESSIONS[p.prof] && roomIdOk(p.room) && roomIdOk(p.spawnRoom) && roomIdOk(p.roundStartRoom)
+  );
+  if(!stateLooksValid){
+    console.warn("[SAVE] discarding save: references a room/prof id that no longer exists.");
+    clearSavedGame();
+    return false;
+  }
   try{
-    const st=data.state;
     st.poisoned=new Set(st.poisoned||[]);
     st.detoxedRooms=new Set(st.detoxedRooms||[]);
     st.players.forEach(p=>{
@@ -571,17 +614,22 @@ function restoreGame(){
       // saves made before per-wine exclusion tracking existed won't have this.
       if(!p.flags.wineExcludedQueue) p.flags.wineExcludedQueue=[];
     });
-    STATE=st;
     Object.keys(data.rooms||{}).forEach(id=>{
       if(!ROOMS[id]) return;
       const rd=data.rooms[id];
       if(rd.stock) ROOMS[id].stock=rd.stock;
       if(rd.airdropBag!==undefined) ROOMS[id].airdropBag=rd.airdropBag;
     });
+    STATE=st;
     showScreen(data.screen);
     log("<i class='muted'>（已還原先前的進度）</i>");
     return true;
-  }catch(e){ console.error("restore failed",e); return false; }
+  }catch(e){
+    console.error("restore failed",e);
+    STATE=null;
+    clearSavedGame();
+    return false;
+  }
 }
 
 /* ===================== SOUND EFFECTS ===================== */
@@ -647,17 +695,39 @@ document.addEventListener("click",e=>{
   muteBtn.addEventListener("click",()=>{ SFX.setMuted(!SFX.isMuted()); syncMuteLabel(); });
 })();
 
+/* ---------- light/dark theme toggle, persisted across sessions ---------- */
+(()=>{
+  const THEME_KEY="confinement_escape_theme";
+  const themeBtn=document.getElementById("themeBtn");
+  const applyTheme=(t)=>{
+    if(t==="light") document.documentElement.setAttribute("data-theme","light");
+    else document.documentElement.removeAttribute("data-theme");
+    themeBtn.textContent = t==="light" ? "☀️ 明亮介面" : "🌙 暗色介面";
+  };
+  let saved="dark";
+  try{ saved=localStorage.getItem(THEME_KEY)||"dark"; }catch(e){}
+  applyTheme(saved);
+  themeBtn.addEventListener("click",()=>{
+    const next = document.documentElement.getAttribute("data-theme")==="light" ? "dark" : "light";
+    applyTheme(next);
+    try{ localStorage.setItem(THEME_KEY,next); }catch(e){}
+  });
+})();
+
 /* ===================== VOICE LINES ===================== */
 // Web Speech API only — no audio files, no API key, no network cost. Most browsers only ship
 // ONE zh-TW voice, so "different voice per character" is faked with per-profession rate/pitch
 // offsets on that single voice rather than actually picking 16 distinct voices.
+// rate/pitch are kept close to 1.0 — most zh-TW system voices distort badly (sound "怪腔"/機械)
+// once pitch drifts past roughly ±0.2 or rate past roughly ±0.15, so offsets here are intentionally
+// subtle rather than the wide per-character swings a game might reach for.
 const PROF_VOICE={
-  fatty:{rate:0.85,pitch:0.7}, bomb:{rate:1.0,pitch:0.75}, gambler:{rate:1.15,pitch:1.15},
-  scavenger:{rate:1.05,pitch:0.9}, trucker:{rate:1.1,pitch:0.65}, bartender:{rate:0.95,pitch:1.0},
-  chemist:{rate:1.0,pitch:1.1}, embalmer:{rate:0.8,pitch:0.6}, hacker:{rate:1.2,pitch:1.2},
-  tycoon:{rate:0.9,pitch:0.85}, shade:{rate:0.75,pitch:1.4}, tamer:{rate:1.0,pitch:0.95},
-  merc:{rate:1.05,pitch:0.7}, geneFreak:{rate:1.1,pitch:1.25}, outsider:{rate:0.9,pitch:1.05},
-  climber:{rate:1.15,pitch:1.0}
+  fatty:{rate:0.93,pitch:0.85}, bomb:{rate:1.0,pitch:0.88}, gambler:{rate:1.08,pitch:1.08},
+  scavenger:{rate:1.03,pitch:0.95}, trucker:{rate:1.05,pitch:0.85}, bartender:{rate:0.98,pitch:1.0},
+  chemist:{rate:1.0,pitch:1.05}, embalmer:{rate:0.9,pitch:0.85}, hacker:{rate:1.1,pitch:1.1},
+  tycoon:{rate:0.95,pitch:0.93}, shade:{rate:0.9,pitch:1.2}, tamer:{rate:1.0,pitch:0.98},
+  merc:{rate:1.03,pitch:0.85}, geneFreak:{rate:1.05,pitch:1.13}, outsider:{rate:0.95,pitch:1.03},
+  climber:{rate:1.08,pitch:1.0}
 };
 // One line per ACTIVE skill activation (passive skills have no discrete "use" moment to speak on).
 const SKILL_QUOTES={
@@ -678,25 +748,56 @@ const VOICE=(()=>{
   const supported="speechSynthesis" in window;
   let muted=localStorage.getItem("voiceMuted")==="1";
   let voice=null;
+  // Not all zh voices are equal: old local "Desktop"/SAPI voices are the classic robotic-sounding
+  // ones, while network "Natural"/"Online"/"Neural" voices (Edge's Microsoft ones, notably) and
+  // Google's voices sound far more human. Score candidates instead of just taking the first zh hit,
+  // so we land on the best-sounding option actually installed rather than whatever is first in the list.
+  function scoreVoice(v){
+    let s=0;
+    if(/zh[-_]TW/i.test(v.lang)) s+=10; else if(/zh/i.test(v.lang)) s+=5; else return -1;
+    if(/natural|online|neural/i.test(v.name)) s+=6;
+    if(/google/i.test(v.name)) s+=3;
+    if(/desktop/i.test(v.name)) s-=4;
+    if(v.localService===false) s+=1;
+    return s;
+  }
   function pickVoice(){
     if(!supported) return null;
     const list=speechSynthesis.getVoices();
-    return list.find(v=>/zh[-_]TW/i.test(v.lang)) || list.find(v=>/zh/i.test(v.lang)) || list[0] || null;
+    const ranked=list.map(v=>({v,s:scoreVoice(v)})).filter(x=>x.s>=0).sort((a,b)=>b.s-a.s);
+    return (ranked[0]&&ranked[0].v) || list[0] || null;
   }
   if(supported){
     voice=pickVoice();
-    speechSynthesis.onvoiceschanged=()=>{ voice=pickVoice(); };
+    speechSynthesis.onvoiceschanged=()=>{
+      voice=pickVoice();
+      console.info("[VOICE] voices loaded:",speechSynthesis.getVoices().map(v=>v.name+" ("+v.lang+")"),"picked:",voice&&voice.name);
+    };
+    if(!voice) console.warn("[VOICE] no voice available yet at page load — waiting for voiceschanged (or the browser/OS may have no TTS voice installed at all).");
+  } else {
+    console.warn("[VOICE] speechSynthesis not supported in this browser.");
   }
-  function speak(text,profKey){
+  // opts.queue:true lets lines queue and play in order (used when several players' skills fire
+  // back-to-back in the same synchronous AI turn loop) instead of the default "cut off whatever
+  // is currently speaking", which is only appropriate for rapid, throwaway browsing clicks
+  // (e.g. clicking through profession cards).
+  function speak(text,profKey,opts){
     if(!supported || muted || !text) return;
     try{
       const u=new SpeechSynthesisUtterance(text);
       const cfg=PROF_VOICE[profKey]||{rate:1,pitch:1};
-      u.lang="zh-TW"; u.rate=cfg.rate; u.pitch=cfg.pitch;
-      if(voice) u.voice=voice;
-      speechSynthesis.cancel(); // don't stack overlapping lines when several skills fire back-to-back
+      // opts.hype:true is for the "necessary" moment — a skill actually firing — so it gets a
+      // small extra push toward fast/loud/punchy on top of the per-character base, staying inside
+      // the same safe (non-distorting) range rather than stacking onto it unbounded.
+      const hype=opts&&opts.hype;
+      u.rate=Math.min(1.2,cfg.rate+(hype?0.08:0));
+      u.pitch=Math.min(1.25,cfg.pitch+(hype?0.04:0));
+      u.volume=hype?1:0.9;
+      if(voice){ u.voice=voice; u.lang=voice.lang; } else { u.lang="zh-TW"; }
+      u.onerror=(e)=>console.warn("[VOICE] utterance error:",e.error);
+      if(!(opts&&opts.queue)) speechSynthesis.cancel();
       speechSynthesis.speak(u);
-    }catch(e){}
+    }catch(e){ console.warn("[VOICE] speak() threw:",e); }
   }
   return {
     isMuted:()=>muted,
@@ -704,7 +805,7 @@ const VOICE=(()=>{
     speak
   };
 })();
-function speakSkill(p,key){ VOICE.speak(SKILL_QUOTES[key],p.prof); }
+function speakSkill(p,key){ VOICE.speak(SKILL_QUOTES[key],p.prof,{queue:true,hype:true}); }
 // Self-introduction line spoken when a profession card is clicked on the setup screen —
 // separate from SKILL_QUOTES since there's no player object yet at that point (VOICE.speak
 // is called directly with the profession id instead of going through speakSkill(p,key)).
@@ -816,9 +917,9 @@ function makePlayer(id,isAI,profId,stats,name){
     room: MEETING_ROOM, spawnRoom:null, stepsLeft:0,
     inv:[], // array of item ids
     flags:{gamblerUses:0, gamblerWinUses:0, gamblerForceWin:false, gamblerBonusOps:0,
-      scavengerUses:0, truckerUses:0, truckerDoubled:false, truckerDiscardedNonTrash:false,
+      scavengerUses:0, truckerUses:0, truckerDoubled:false,
       chemistUses:0, embalmerUses:0, hackerUses:0, hackerUsedRooms:[],
-      tamerUses:0, geneUses:0, climberDietUsed:false, adrenalineRound:0, dietThisRound:false,
+      tamerUses:0, geneUses:0, climberDietUsed:false, dietThisRound:false,
       goldUsedThisRound:false, visited102:false, remoteRoomOverride:null,
       pendingItemUses:[], wineExcludedQueue:[], roomCommitted:false},
     pendingActions:{targetRoom:null, movementDone:false, roomActed:false},
@@ -887,7 +988,7 @@ function startGame(){
     if(power+speed+carry>cap){ carry=Math.max(1,cap-power-speed); }
     players.push(makePlayer(i,true,pid,{power,speed,carry}));
   }
-  STATE={round:1, phase:"positioning", players, poisoned:new Set(), detoxedRooms:new Set(), voteCounts:{}, voteLog:[], discardPile:[], gameOver:false};
+  STATE={round:1, phase:"positioning", players, poisoned:new Set(), detoxedRooms:new Set(), voteCounts:{}, voteLog:[], voteBallot:[], discardPile:[], gameOver:false};
   // profession init effects
   players.forEach(p=>{
     if(p.prof==="tamer"){ p.power+=1; p.carry+=1; }
@@ -994,18 +1095,26 @@ const FLOOR_CONNECTORS=(()=>{
   });
   return out;
 })();
+// Indexed by room id so roomMarkersHtml() (called once per room on every renderAll) doesn't
+// rescan the whole FLOOR_CONNECTORS dict per room — built once here in the same iteration order
+// the old per-room scan used, so per-room marker order is unchanged.
+const FLOOR_CONNECTORS_BY_ROOM=(()=>{
+  const idx={};
+  Object.values(FLOOR_CONNECTORS).forEach(c=>{
+    (idx[c.a]=idx[c.a]||[]).push({side:"right",other:c.b,connected:c.connected});
+    (idx[c.b]=idx[c.b]||[]).push({side:"left",other:c.a,connected:c.connected});
+  });
+  return idx;
+})();
 function roomMarkersHtml(r){
   let html="";
   const vlinks=verticalLinkTargets(r);
   if(vlinks.length) html+=`<span class="vmark" title="樓梯／梯子可通往：${vlinks.map(id=>id+(ROOMS[id].name?" "+ROOMS[id].name:"")).join("、")}">🪜</span>`;
   if(BRIDGE_SIDE[r.id]) html+=`<span class="hbridge ${BRIDGE_SIDE[r.id]}" title="天橋，花1步可跨越天井">🌉</span>`;
-  Object.values(FLOOR_CONNECTORS).forEach(c=>{
-    if(c.a===r.id) html+=c.connected?
-      `<span class="hbridge right" title="走道相通，可直接橫移至 ${c.b}">▸</span>` :
-      `<span class="hbridge right chasm" title="天井阻隔，此樓層無法直接橫移過去">⛔</span>`;
-    else if(c.b===r.id) html+=c.connected?
-      `<span class="hbridge left" title="走道相通，可直接橫移至 ${c.a}">◂</span>` :
-      `<span class="hbridge left chasm" title="天井阻隔，此樓層無法直接橫移過去">⛔</span>`;
+  (FLOOR_CONNECTORS_BY_ROOM[r.id]||[]).forEach(c=>{
+    html+=c.connected?
+      `<span class="hbridge ${c.side}" title="走道相通，可直接橫移至 ${c.other}">${c.side==="right"?"▸":"◂"}</span>` :
+      `<span class="hbridge ${c.side} chasm" title="天井阻隔，此樓層無法直接橫移過去">⛔</span>`;
   });
   return html;
 }
@@ -1065,7 +1174,6 @@ function beginRound(){
     p.roundStartRoom = p.room; // lets 回手 undo all movement made so far this round, for free
     p.roundStartSteps = p.stepsLeft;
     p.roundEvents=[]; // cleared for the new round — showRoundSummary already read last round's
-    if(p.flags.adrenalineRound===STATE.round-1+1){} // no-op placeholder
     p.flags.goldUsedThisRound=false;
     p.flags.rocketUsedThisRound=false; // 火箭筒 is reusable now — limited to once per round instead of one-shot
     p.flags.recycleUsedThisRound=false; // 循環回收裝置 is a durable item too — limited to once per round
@@ -1079,10 +1187,23 @@ function beginRound(){
     p.actedThisRound=false; // turn-order bookkeeping (順序牌) — set true once this player's turn resolves
     p.pendingActions={targetRoom:null, movementDone:false, roomActed:false};
   });
+  // Stock this round's airdrop schedule into the shared bag exactly once — collectAirdrop()
+  // only draws from it, so several pickups this round don't each re-add the whole schedule.
+  const airdropSched=AIRDROP_SCHEDULE[STATE.round];
+  if(airdropSched){
+    const bag = ROOMS["202"].airdropBag = ROOMS["202"].airdropBag || [];
+    airdropSched.forEach(it=>bag.push(it));
+  }
   STATE.voteCounts={};
   STATE.voteLog=[]; // per-round {name,floor,weight} entries — who voted for what, human and AI alike
+  // 每輪隨機開放3個未中毒樓層供投票 (避免一次性太多樓層淪為毒氣區)：所有玩家與AI本輪都只能從這3個
+  // 候選樓層中選擇，若剩餘未中毒樓層不足3個則全數開放。
+  {
+    const availFloors=Object.keys(FLOOR_LABEL).map(Number).filter(f=>!STATE.poisoned.has(f));
+    STATE.voteBallot=shuffleArr(availFloors).slice(0,3);
+  }
   // 順序牌: a fresh random turn order each round, over everyone still taking turns — alive
-  // players AND 暗影 (ghosts get a real turn to move and hunt for blood, not an auto-skip).
+  // players AND 暗影 (ghosts get a real turn to move, not an auto-skip).
   STATE.turnOrder=shuffleArr(STATE.players.filter(p=>p.alive||p.ghost).map(p=>p.id));
   STATE.turnIndex=0;
   STATE.phase="positioning";
@@ -1109,21 +1230,16 @@ function advanceTurn(){
   }
   settleRound();
 }
-// A ghost's turn: move freely (wall-passing, any room, no step cost) toward whichever room
-// currently holds the most living targets, to maximize the blood it drains at settlement.
-// With no living players left anywhere it just drifts to a random room.
+// A ghost's turn: move freely (wall-passing, any room, no step cost). The ghost does NOT know
+// where living players are — it can't target them directly. Instead it drifts with a bias toward
+// 功能房間 (rooms with a `special` function, e.g. 控制室/手術室/餐廳/傳送室...), since those are
+// where players tend to congregate to use room functions, giving it a chance at blood without
+// omniscient tracking.
 function resolveGhostAITurn(p){
-  const counts={};
-  STATE.players.forEach(x=>{ if(x.alive && !x.ghost) counts[x.room]=(counts[x.room]||0)+1; });
-  const rooms=Object.keys(counts);
-  if(rooms.length){
-    let best=rooms[0], bestN=-1;
-    rooms.forEach(r=>{ if(counts[r]>bestN){ bestN=counts[r]; best=r; } });
-    p.room=best;
-  } else {
-    const opts=Object.keys(ROOMS);
-    p.room=opts[Math.floor(Math.random()*opts.length)];
-  }
+  const funcRooms=Object.keys(ROOMS).filter(id=>ROOMS[id].special);
+  const allRooms=Object.keys(ROOMS);
+  const pool = (funcRooms.length && Math.random()<0.7) ? funcRooms : allRooms;
+  p.room=pool[Math.floor(Math.random()*pool.length)];
   p.flags.roomCommitted=true;
 }
 document.getElementById("endTurnBtn").addEventListener("click",()=>{
@@ -1142,11 +1258,6 @@ function tryMove(p,target){
   if(dist===Infinity || dist>steps) return false;
   p.room=target; p.stepsLeft-=dist;
   return true;
-}
-function playerEffectiveSpeed(p){
-  let s=p.speed;
-  if(p.flags.truckerDoubled) s=Math.min(10,s*2);
-  return s;
 }
 // 每輪強制移動: a player may not end their turn back in the room they started the round in —
 // unless they physically can't move at all this round (e.g. 0 speed), in which case forcing it
@@ -1338,6 +1449,13 @@ function doRoomAction(){
     openHelipadModal(p);
     return;
   }
+  // 傳送室 is the same shape again — teleporting is a relocation, not "using the room's function",
+  // so it does NOT commit you or burn this round's room-action: you can still move further, or
+  // stop and use whatever room's function you land in (e.g. teleport into 垃圾場 and then draw there).
+  if(room.special==="teleport"){
+    openTeleportModal(p);
+    return;
+  }
   // 好賭成性's "本輪房間可操作兩次" means a genuine second use of the room's function, not a
   // one-shot doubled draw — track uses-vs-allowance so the button stays live for a real 2nd call.
   const totalOps=1+(p.flags.gamblerBonusOps||0);
@@ -1369,9 +1487,9 @@ function doSpecialRoom(p,room){
       openRespecModal(p,p.power+p.speed+p.carry);
       break;
     }
-    // "slide" (回收站) is handled earlier in doRoomAction, before this switch is ever reached —
-    // it's a free one-way move, not a room-function use, so it never lands here.
-    case "teleport": openTeleportModal(p); break;
+    // "slide" (回收站) and "teleport" (傳送室) are both handled earlier in doRoomAction, before
+    // this switch is ever reached — they're free relocations, not a room-function use, so
+    // neither ever lands here.
     case "control": openControlModal(p); break;
     case "helipad":
       // Boarding (roundStartRoom==="202") is intercepted earlier in doRoomAction as a non-
@@ -1389,11 +1507,11 @@ function carrySpendStep(p){
   p.stepsLeft--; return true;
 }
 function collectAirdrop(p){
-  const sched=AIRDROP_SCHEDULE[STATE.round];
-  if(!sched) return;
-  const bag = ROOMS["202"].airdropBag = ROOMS["202"].airdropBag || [];
-  sched.forEach(it=>bag.push(it));
-  if(bag.length){
+  // The round's schedule is stocked into the bag exactly once, by beginRound() — this only
+  // draws from it, so multiple pickups in the same round (arrival + boarding, several players)
+  // share one round's supply instead of each re-adding the whole schedule and inflating it.
+  const bag = ROOMS["202"].airdropBag;
+  if(bag && bag.length){
     const pick=bag.shift();
     if(carryRoom(p)>0){ p.inv.push(pick); log(p.name+" 從停機坪空投獲得: "+ITEMS[pick].name); }
   }
@@ -1410,10 +1528,11 @@ function openRespecModal(p,cap){
     <div class="statbar"><label>武力值</label><input type="number" id="rsPower" min="0" max="${cap}" value="${p.power}"></div>
     <div class="statbar"><label>移動步數</label><input type="number" id="rsSpeed" min="0" max="${cap}" value="${p.speed}"></div>
     <div class="statbar"><label>背包空間</label><input type="number" id="rsCarry" min="0" max="${cap}" value="${p.carry}"></div>
+    <div id="rsErr" class="muted" style="color:var(--ember-bright);min-height:1.2em"></div>
     <button class="btn small" id="rsOk">確認</button> <button class="btn small ghost" id="rsCancel">取消</button>`);
   document.getElementById("rsOk").onclick=()=>{
     const a=+document.getElementById("rsPower").value,b=+document.getElementById("rsSpeed").value,c=+document.getElementById("rsCarry").value;
-    if(a+b+c!==cap){ alert("點數需剛好分配完"); return; }
+    if(a+b+c!==cap){ document.getElementById("rsErr").textContent="點數需剛好分配完（目前共 "+(a+b+c)+" / "+cap+" 點）"; return; }
     p.power=a; p.speed=b; p.carry=c; closeModal(); renderAll();
     log(p.name+" 於操作室重新分配了基因點數。");
   };
@@ -1426,7 +1545,7 @@ function openTeleportModal(p){
   document.getElementById("tpOk").onclick=()=>{
     if(!carrySpendStep(p)){ closeModal(); return; }
     p.room=document.getElementById("tpSel").value; closeModal(); renderAll();
-    log(p.name+" 使用傳送室前往 "+p.room+"。");
+    log(p.name+" 使用傳送室前往 "+p.room+"，可繼續移動或停留操作該房間的功能。");
   };
   document.getElementById("tpCancel").onclick=closeModal;
 }
@@ -1683,6 +1802,31 @@ function useRecycleDevice(p){
 }
 
 /* ===================== PROFESSION SKILLS (human buttons) ===================== */
+// Per-round-cap active skills' {counter flag, max uses}, in ONE place — used to gate the skill
+// in useProfSkill(), mirror-check it in the AI's pre-checks, and render "x/N used" in the skill
+// list, instead of the same numbers being hand-copied into three places (and able to drift apart).
+// climber:1 (節食) is boolean rather than a counter, hence the separate `bool` flag.
+const SKILL_USE_LIMITS={
+  "gambler:0":{flag:"gamblerUses",max:3},
+  "gambler:1":{flag:"gamblerWinUses",max:1},
+  "scavenger:1":{flag:"scavengerUses",max:2},
+  "trucker:0":{flag:"truckerUses",max:3},
+  "chemist:0":{flag:"chemistUses",max:2},
+  "hacker:1":{flag:"hackerUses",max:2},
+  "tamer:0":{flag:"tamerUses",max:4},
+  "geneFreak:1":{flag:"geneUses",max:2},
+  "climber:1":{flag:"climberDietUsed",max:1,bool:true},
+  "embalmer:1":{flag:"embalmerUses",max:1},
+};
+function skillUsedCount(p,key){
+  const lim=SKILL_USE_LIMITS[key];
+  if(!lim) return 0;
+  return lim.bool ? (p.flags[lim.flag]?1:0) : (p.flags[lim.flag]||0);
+}
+function skillUseCapReached(p,key){
+  const lim=SKILL_USE_LIMITS[key];
+  return lim ? skillUsedCount(p,key)>=lim.max : false;
+}
 function useProfSkill(p,idx){
   const prof=PROFESSIONS[p.prof];
   const sk=prof.skills[idx];
@@ -1690,7 +1834,7 @@ function useProfSkill(p,idx){
   // shared across a player's own skill slots — using one locks out the other for the rest of the round.
   if(p.flags.skillUsedThisRound){ flashMsg("本輪已使用過職業技能，請下輪再使用。"); return; }
   if(p.prof==="gambler" && idx===0){
-    if(p.flags.gamblerUses>=3){ flashMsg("已用完3次"); return; }
+    if(skillUseCapReached(p,"gambler:0")){ flashMsg("已用完3次"); return; }
     // 好賭成性 must be gambled BEFORE the room's function is used this round — rolling for "an
     // extra use" after you've already used it once would be resolving the bet retroactively.
     if(p.flags.roomActsUsedThisRound>0){ flashMsg("已使用過房間功能，好賭成性必須在使用房間功能前發動。"); return; }
@@ -1703,7 +1847,7 @@ function useProfSkill(p,idx){
     else { p.flags.gamblerBonusOps=1; msg+="成功！本輪房間可操作兩次。"; }
     log(p.name+" "+msg); speakSkill(p,"gambler:0");
   } else if(p.prof==="gambler" && idx===1){
-    if(p.flags.gamblerWinUses>=1){ flashMsg("已用完"); return; }
+    if(skillUseCapReached(p,"gambler:1")){ flashMsg("已用完"); return; }
     // 逢賭必贏 does NOT consume this round's skillUsedThisRound budget — it exists specifically to
     // set up an immediate 好賭成性 in the SAME round (guaranteed to roll 6), which is 賭徒's only
     // other skill. Locking the round budget here would make 逢賭必贏 unable to ever do what its own
@@ -1711,7 +1855,7 @@ function useProfSkill(p,idx){
     p.flags.gamblerWinUses++; p.flags.gamblerForceWin=true;
     log(p.name+" 使用逢賭必贏：下次好賭成性必定成功。"); speakSkill(p,"gambler:1");
   } else if(p.prof==="scavenger" && idx===1){
-    if(p.flags.scavengerUses>=2){ flashMsg("已用完2次"); return; }
+    if(skillUseCapReached(p,"scavenger:1")){ flashMsg("已用完2次"); return; }
     if(countItem(p,"trash")<1){ flashMsg("背包內沒有垃圾"); return; }
     if(carryRoom(p)<=0){ flashMsg("背包空間不足，無法容納轉換後的道具"); return; }
     p.flags.scavengerUses++; p.flags.skillUsedThisRound=true; removeItem(p,"trash");
@@ -1719,15 +1863,18 @@ function useProfSkill(p,idx){
     addItem(p,gain);
     log(p.name+" 使用變廢為寶：垃圾轉為「"+ITEMS[gain].name+"」。"); speakSkill(p,"scavenger:1");
   } else if(p.prof==="trucker" && idx===0){
-    if(p.flags.truckerUses>=3){ flashMsg("已用完3次"); return; }
+    if(skillUseCapReached(p,"trucker:0")){ flashMsg("已用完3次"); return; }
     const nonTrash=p.inv.find(x=>x!=="trash");
     if(!nonTrash){ flashMsg("沒有可丟棄的非垃圾道具卡"); return; }
     removeItem(p,nonTrash); STATE.discardPile.push(nonTrash);
     p.flags.truckerUses++; p.flags.truckerDoubled=true; p.flags.truckerJustUsed=true; p.flags.skillUsedThisRound=true;
     log(p.name+" 使用卸載加速：丟棄「"+ITEMS[nonTrash].name+"」，本輪速度變兩倍。"); speakSkill(p,"trucker:0");
-    p.stepsLeft=Math.min(10,p.stepsLeft*2);
+    // Double the round's total steps, not just what's left — p.roundStartSteps is this round's
+    // full allotment, so "start + remaining" nets out to (2 * speed) minus whatever was already
+    // spent, giving the same result as doubling upfront no matter when mid-round this fires.
+    p.stepsLeft=Math.min(10,p.roundStartSteps+p.stepsLeft);
   } else if(p.prof==="chemist" && idx===0){
-    if(p.flags.chemistUses>=2){ flashMsg("已用完2次"); return; }
+    if(skillUseCapReached(p,"chemist:0")){ flashMsg("已用完2次"); return; }
     const poisonedFloors=[...STATE.poisoned];
     const floorOpts=poisonedFloors.map(f=>`<option value="${f}">${FLOOR_LABEL[f]}</option>`).join("");
     openModal(`<h3>毒性調和</h3>
@@ -1745,8 +1892,7 @@ function useProfSkill(p,idx){
     };
     document.getElementById("chCancel").onclick=closeModal;
   } else if(p.prof==="hacker" && idx===1){
-    if(p.flags.hackerUses>=2){ flashMsg("已用完2次"); return; }
-    if(p.room==="B202"){ flashMsg("手術室內無法使用遠端操控"); return; }
+    if(skillUseCapReached(p,"hacker:1")){ flashMsg("已用完2次"); return; }
     openModal(`<h3>遠端操控：選擇要使用的房間功能</h3>
       <button class="btn small" data-r="201">基因庫</button>
       <button class="btn small" data-r="B101">控制室</button>
@@ -1764,7 +1910,7 @@ function useProfSkill(p,idx){
     });
     document.getElementById("hackCancel").onclick=closeModal;
   } else if(p.prof==="tamer" && idx===0){
-    if(p.flags.tamerUses>=4){ flashMsg("已用完4次"); return; }
+    if(skillUseCapReached(p,"tamer:0")){ flashMsg("已用完4次"); return; }
     p.flags.skillUsedThisRound=true; speakSkill(p,"tamer:0");
     const cands=Object.keys(ROOMS).filter(r=> bfsDist(p.room,r)<=5 && bfsDist(p.room,r)>0 && (Object.values(ROOMS[r].stock).some(v=>v>0)||r==="202"));
     if(cands.length===0){ log(p.name+" 派遣巡迴獵犬：附近沒有可搜索的庫存房間，無功而返。"); p.flags.tamerUses++; return; }
@@ -1778,7 +1924,7 @@ function useProfSkill(p,idx){
       log(p.name+" 派遣巡迴獵犬前往「"+target+"」，獲得: "+ITEMS[pick].name);
     } else { log(p.name+" 派遣巡迴獵犬前往「"+target+"」，但無法獲得道具。"); }
   } else if(p.prof==="geneFreak" && idx===1){
-    if(p.flags.geneUses>=2){ flashMsg("已用完2次"); return; }
+    if(skillUseCapReached(p,"geneFreak:1")){ flashMsg("已用完2次"); return; }
     p.flags.geneUses++; p.flags.skillUsedThisRound=true; speakSkill(p,"geneFreak:1");
     openRespecModal(p,p.power+p.speed+p.carry);
   } else if(p.prof==="climber" && idx===0){
@@ -1786,11 +1932,11 @@ function useProfSkill(p,idx){
     p.hp--; p.flags.climberVertical=true; p.flags.skillUsedThisRound=true;
     log(p.name+" 支付1點生命，發動垂直攀爬。","dmg"); speakSkill(p,"climber:0");
   } else if(p.prof==="climber" && idx===1){
-    if(p.flags.climberDietUsed){ flashMsg("已用完"); return; }
+    if(skillUseCapReached(p,"climber:1")){ flashMsg("已用完"); return; }
     p.flags.climberDietUsed=true; p.flags.dietThisRound=true; p.flags.skillUsedThisRound=true;
     log(p.name+" 使用節食：本輪不需支付水/糧。"); speakSkill(p,"climber:1");
   } else if(p.prof==="embalmer" && idx===1){
-    if(p.flags.embalmerUses>=1){ flashMsg("已用完"); return; }
+    if(skillUseCapReached(p,"embalmer:1")){ flashMsg("已用完"); return; }
     p.flags.embalmerUses++; p.flags.skillUsedThisRound=true;
     p.flags.embalmerChoiceMode=true;
     log(p.name+" 啟用亡者遺贈：下次道具進入停屍間時可自行選擇。"); speakSkill(p,"embalmer:1");
@@ -1817,11 +1963,11 @@ document.getElementById("voteBtn").addEventListener("click",()=>{
   const p=you();
   if(!isMyTurn()){ flashMsg("尚未輪到你的回合。"); return; }
   if(p.flags.votedThisRound){ flashMsg("本輪已投過票。"); return; }
-  // already-poisoned floors are permanently off the ballot — no point re-voting a floor that's already toxic.
-  const availFloors=Object.keys(FLOOR_LABEL).map(Number).filter(f=>!STATE.poisoned.has(f));
-  if(!availFloors.length){ flashMsg("所有樓層皆已中毒，無可投票對象。"); return; }
+  // 本輪只能從開局時隨機抽出的3個候選樓層中投票（避免一次性太多樓層淪為毒氣區）。
+  const availFloors=(STATE.voteBallot||[]).filter(f=>!STATE.poisoned.has(f));
+  if(!availFloors.length){ flashMsg("本輪無可投票樓層。"); return; }
   const opts=availFloors.map(f=>`<option value="${f}">${FLOOR_LABEL[f]}</option>`).join("");
-  openModal(`<h3>投票毒氣樓層</h3><select id="voteSel">${opts}</select><br><br>
+  openModal(`<h3>投票毒氣樓層（本輪候選）</h3><select id="voteSel">${opts}</select><br><br>
     <button class="btn small warn" id="voteOk">投票</button> <button class="btn small ghost" id="voteCancel">取消</button>`);
   document.getElementById("voteOk").onclick=()=>{
     const f=+document.getElementById("voteSel").value;
@@ -1867,7 +2013,9 @@ document.getElementById("tradeBtn").addEventListener("click",()=>{
 
 /* ===================== AI ===================== */
 function aiChooseTarget(p){
-  const reach=reachableRooms(p.room, playerEffectiveSpeed(p) + p.stepsLeft-p.speed>=0?p.stepsLeft:p.speed);
+  // aiConsiderTruckerBoost() runs before this and already folds any 卸載加速 doubling into
+  // p.stepsLeft, so the reachable-rooms budget is simply the steps actually left this turn.
+  const reach=reachableRooms(p.room, p.stepsLeft);
   let cands=Object.keys(reach);
   // 每輪強制移動: AI can't just camp in its current room either — except staying at 202 when
   // that's the boarding round (roundStartRoom already "202"), the same exception as the human path.
@@ -1900,13 +2048,13 @@ function aiChooseTarget(p){
 // 卸載加速 (trucker) only matters if it runs BEFORE this round's movement is chosen, since it's
 // the only skill that changes how FAR the AI can travel this round.
 function aiConsiderTruckerBoost(p){
-  if(p.prof!=="trucker" || p.flags.skillUsedThisRound || p.flags.truckerUses>=3) return;
+  if(p.prof!=="trucker" || p.flags.skillUsedThisRound || skillUseCapReached(p,"trucker:0")) return;
   if(p.speed>4) return; // already fast enough to cross most of the floor plan unaided
   if(!p.inv.find(x=>x!=="trash")) return; // 卸載加速 requires discarding a non-垃圾 item
   useProfSkill(p,0);
 }
 // Everything else is decided AFTER movement/room-resolution, since it either depends on where
-// the AI ended up (chemist/climber-escape/hacker's B202 lockout) or doesn't care about position
+// the AI ended up (chemist/climber-escape) or doesn't care about position
 // at all (tamer/scavenger/embalmer). chemist and hacker bypass useProfSkill for the branches that
 // would otherwise open a human-only modal (毒性調和's floor picker, 遠端操控's room picker) and
 // instead directly apply the same effect those modal buttons perform.
@@ -1925,17 +2073,17 @@ function aiConsiderSkillAfterMove(p){
       return;
     }
     // 節食: only worth spending the once-per-game use when it actually replaces a real payment.
-    if(!p.flags.climberDietUsed && countItem(p,"water")===0 && countItem(p,"food")===0) useProfSkill(p,1);
+    if(!skillUseCapReached(p,"climber:1") && countItem(p,"water")===0 && countItem(p,"food")===0) useProfSkill(p,1);
     return;
   }
   if(p.prof==="scavenger"){
-    if(p.flags.scavengerUses<2 && countItem(p,"trash")>=1 && carryRoom(p)>0) useProfSkill(p,1);
+    if(!skillUseCapReached(p,"scavenger:1") && countItem(p,"trash")>=1 && carryRoom(p)>0) useProfSkill(p,1);
     return;
   }
-  if(p.prof==="tamer"){ if(p.flags.tamerUses<4) useProfSkill(p,0); return; }
-  if(p.prof==="embalmer"){ if(p.flags.embalmerUses<1) useProfSkill(p,1); return; }
+  if(p.prof==="tamer"){ if(!skillUseCapReached(p,"tamer:0")) useProfSkill(p,0); return; }
+  if(p.prof==="embalmer"){ if(!skillUseCapReached(p,"embalmer:1")) useProfSkill(p,1); return; }
   if(p.prof==="chemist"){
-    if(p.flags.chemistUses>=2) return;
+    if(skillUseCapReached(p,"chemist:0")) return;
     const poisonedFloors=[...STATE.poisoned];
     if(!poisonedFloors.length) return; // nothing to mitigate — don't burn a limited use for +2 boost
     const target=poisonedFloors.includes(room.floor)?room.floor:poisonedFloors[0];
@@ -1944,7 +2092,7 @@ function aiConsiderSkillAfterMove(p){
     return;
   }
   if(p.prof==="hacker"){
-    if(p.flags.hackerUses>=2 || p.room==="B202") return;
+    if(skillUseCapReached(p,"hacker:1")) return;
     if(!p.flags.hackerUsedRooms.includes("201")){
       p.flags.hackerUsedRooms.push("201"); p.flags.hackerUses++; p.flags.skillUsedThisRound=true;
       p.power++; p.speed++; p.carry++;
@@ -1990,10 +2138,12 @@ function resolveAITurn(p){
     if(countItem(p,"water")>0){ removeItem(p,"water"); p.flags.pendingItemUses.push("water"); }
     if(countItem(p,"food")>0){ removeItem(p,"food"); p.flags.pendingItemUses.push("food"); }
   }
-  // poison vote (one per player per round, after acting): avoid own floor (the room it's going to
-  // this round) and any floor already poisoned — pick a random floor from what's left.
+  // poison vote (one per player per round, after acting): pick from this round's 3 random ballot
+  // floors only, avoiding own floor (the room it's going to this round) when possible.
   const myFloor=ROOMS[p.room].floor;
-  const floorOpts=Object.keys(FLOOR_LABEL).map(Number).filter(f=>f!==myFloor && !STATE.poisoned.has(f));
+  const ballot=(STATE.voteBallot||[]).filter(f=>!STATE.poisoned.has(f));
+  let floorOpts=ballot.filter(f=>f!==myFloor);
+  if(!floorOpts.length) floorOpts=ballot;
   if(floorOpts.length){
     const voteFloor=floorOpts[Math.floor(Math.random()*floorOpts.length)];
     const voteWeight=p.flags.voteWeight||1;
@@ -2012,6 +2162,10 @@ function damagePlayer(p,amount,cause){
   if(amount<=0) return;
   p.roundEvents=p.roundEvents||[];
   if(p.flags.adrenalineActive){ p.hp=Math.max(1,p.hp-amount); p.roundEvents.push({cause,amount}); return; }
+  // Already eliminated this round (e.g. a 3+-fighter free-for-all where an earlier fighter's hit
+  // already killed the target) — record the hit for the log, but don't re-run killPlayer's
+  // side effects (item drop, embalmer bonus, shade's speed+2, ...) a second time on the same death.
+  if(!p.alive){ p.roundEvents.push({cause,amount}); return; }
   p.hp-=amount;
   p.roundEvents.push({cause,amount});
   if(p.hp<=0){ p.hp=0; killPlayer(p,cause); }
@@ -2103,9 +2257,15 @@ function settleRound(){
     const target=gunners.length>0
       ? gunners.reduce((best,f)=>combatPower(f)>combatPower(best)?f:best, gunners[0])
       : fighters.reduce((best,f)=>combatPower(f)>combatPower(best)?f:best, fighters[0]);
+    // Every other fighter gets a full, independent exchange against target — simultaneously, not
+    // sequentially — so target dying to an earlier fighter's hit does NOT exempt the fighters
+    // still to come from theirs. target's gun/power are frozen from the start of this free-for-all
+    // so a mid-loop death (which immediately clears the dead player's inventory) can't rob target
+    // of its gun bonus for the fights still pending against it.
+    const targetGun=hasGun(target), targetPower=combatPower(target);
     fighters.forEach(f=>{
-      if(f===target || !f.alive || !target.alive) return;
-      resolveCombat(target,f,r);
+      if(f===target) return;
+      resolveCombat(target,f,r,{aGun:targetGun,aPower:targetPower});
     });
     outsiders.forEach(p=>{ p.hp=Math.min(p.maxhp,p.hp+1); log(p.name+"（邊緣存在感）自動恢復1點生命。","heal"); });
   });
@@ -2232,14 +2392,16 @@ function settleRound(){
   renderAll();
   showRoundSummary();
 }
-function resolveCombat(a,b,roomId){
-  const roomIsOR = roomId==="B202";
-  const aGun=hasGun(a), bGun=hasGun(b);
+// frozenA (optional) overrides a's gun/power reads — used by the 3+-fighter free-for-all so every
+// fighter fights the SAME target stats regardless of resolution order (see settleRound above).
+function resolveCombat(a,b,roomId,frozenA){
+  const aGun=frozenA?frozenA.aGun:hasGun(a), bGun=hasGun(b);
+  const aPower=frozenA?frozenA.aPower:combatPower(a);
   let dmgToA=0, dmgToB=0;
   if(bGun && !aGun){ dmgToA=combatPower(b); }
-  else if(aGun && !bGun){ dmgToB=combatPower(a); }
+  else if(aGun && !bGun){ dmgToB=aPower; }
   else {
-    const diff=combatPower(a)-combatPower(b);
+    const diff=aPower-combatPower(b);
     if(diff>0) dmgToB=diff; else if(diff<0) dmgToA=-diff;
   }
   // profession damage reduction (肥宅, 防爆小組 vs gun) — note WHICH skill reduced it, not just
@@ -2286,7 +2448,24 @@ function showRoundSummary(){
     closeModal();
     if(STATE.round>=6){ endGame(); }
     else { STATE.round++; STATE.phase="positioning";
-      STATE.players.forEach(p=>{ if(p.flags.adrenalineNextSpeed){ p.speed_backup=p.speed; p.speed=p.flags.adrenalineNextSpeed; p.flags.__adrenalineRestoreNext=true; } else if(p.flags.__adrenalineRestoreNext){ p.speed=p.speed_backup; p.flags.__adrenalineRestoreNext=false; } });
+      // Track the boost as a DELTA rather than snapshotting/overwriting the whole speed value:
+      // that way any permanent speed gain (基因庫/操作室) picked up mid-boost survives the
+      // restore (only the boost amount is subtracted back out), and using adrenaline again
+      // while already boosted just extends the boost instead of re-snapshotting the boosted
+      // value as if it were the "real" speed (which used to permanently strand speed at 10).
+      STATE.players.forEach(p=>{
+        if(p.flags.adrenalineNextSpeed){
+          if(!p.flags.__adrenalineRestoreNext){
+            p.flags.adrenalineBoostDelta = p.flags.adrenalineNextSpeed - p.speed;
+            p.speed += p.flags.adrenalineBoostDelta;
+          }
+          p.flags.__adrenalineRestoreNext=true;
+        } else if(p.flags.__adrenalineRestoreNext){
+          p.speed -= p.flags.adrenalineBoostDelta;
+          p.flags.__adrenalineRestoreNext=false;
+          p.flags.adrenalineBoostDelta=0;
+        }
+      });
       logRound(STATE.round); beginRound(); }
   };
 }
@@ -2325,6 +2504,7 @@ function renderAll(){
   document.getElementById("roundNo").textContent=STATE.round;
   document.getElementById("phaseName").textContent="行動階段";
   document.getElementById("poisonedFloors").textContent=[...STATE.poisoned].map(f=>FLOOR_LABEL[f]).join("、")||"無";
+  document.getElementById("voteBallotFloors").textContent=(STATE.voteBallot||[]).filter(f=>!STATE.poisoned.has(f)).map(f=>FLOOR_LABEL[f]).join("、")||"無";
   document.getElementById("youName").textContent=p.name;
   document.getElementById("youProf").textContent=PROF_ICON[p.prof]+" "+PROFESSIONS[p.prof].name;
   if(p.ghost){
@@ -2395,17 +2575,8 @@ function renderAll(){
   } else {
   PROFESSIONS[p.prof].skills.forEach((s,idx)=>{
     const btn=document.createElement("button"); btn.className="skillbtn";
-    let usesLeft="";
-    if(p.prof==="gambler"&&idx===0) usesLeft=" ("+(3-p.flags.gamblerUses)+"/3)";
-    if(p.prof==="gambler"&&idx===1) usesLeft=" ("+(1-p.flags.gamblerWinUses)+"/1)";
-    if(p.prof==="scavenger"&&idx===1) usesLeft=" ("+(2-p.flags.scavengerUses)+"/2)";
-    if(p.prof==="trucker"&&idx===0) usesLeft=" ("+(3-p.flags.truckerUses)+"/3)";
-    if(p.prof==="chemist"&&idx===0) usesLeft=" ("+(2-p.flags.chemistUses)+"/2)";
-    if(p.prof==="hacker"&&idx===1) usesLeft=" ("+(2-p.flags.hackerUses)+"/2)";
-    if(p.prof==="tamer"&&idx===0) usesLeft=" ("+(4-p.flags.tamerUses)+"/4)";
-    if(p.prof==="geneFreak"&&idx===1) usesLeft=" ("+(2-p.flags.geneUses)+"/2)";
-    if(p.prof==="climber"&&idx===1) usesLeft=" ("+(p.flags.climberDietUsed?0:1)+"/1)";
-    if(p.prof==="embalmer"&&idx===1) usesLeft=" ("+(1-p.flags.embalmerUses)+"/1)";
+    const lim=SKILL_USE_LIMITS[p.prof+":"+idx];
+    const usesLeft=lim?" ("+(lim.max-skillUsedCount(p,p.prof+":"+idx))+"/"+lim.max+")":"";
     btn.innerHTML=`<b>${s.name}${usesLeft}</b>${s.desc}`;
     if(p.prof==="hacker" && idx===0){
       // 系統監控 is a "permanent passive" in name, but it's an on-demand lookup, not something
@@ -2446,6 +2617,12 @@ function renderAll(){
       else if(fattyHere) occTxt="肥";
       chip.innerHTML=`${r.id}${r.name?("<small>"+r.name+"</small>"):""}`+roomMarkersHtml(r)+(occTxt?`<span class="occ">${occTxt}</span>`:"");
       chip.onclick=()=>onRoomClick(r.id);
+      // Clickable but a plain <div> — give it button semantics/keyboard access rather than
+      // leaving it reachable only by mouse/touch.
+      chip.setAttribute("role","button");
+      chip.tabIndex=0;
+      chip.setAttribute("aria-label","房間 "+r.id+(r.name?" "+r.name:""));
+      chip.addEventListener("keydown",(e)=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); onRoomClick(r.id); } });
       gridPlace(chip, r.floor, r.order, r.span);
       mapEl.appendChild(chip);
     });
@@ -2454,6 +2631,12 @@ function renderAll(){
   // room actions — a player may only act in the ONE room they finally stop in this round;
   // using the room's function, or explicitly ending movement, both lock further movement.
   const raEl=document.getElementById("roomActions"); raEl.innerHTML="";
+  function roomActionLabel(room,p){
+    return room.special==="gene"?"使用基因庫" : room.special==="respec"?"重新分配點數" :
+      room.special==="slide"?"滑向垃圾場(1步)" : room.special==="teleport"?"傳送" : room.special==="control"?"控制室功能" :
+      room.special==="helipad"?(p.roundStartRoom==="202"?"領取空投／搭乘直升機":"領取空投（本輪需停留，下輪才能搭機）") :
+      room.draw>0?"搜索房間 (最多"+room.draw+"張)" : "使用房間功能";
+  }
   const room=ROOMS[p.room];
   const roomOpsLeft=(1+(p.flags.gamblerBonusOps||0))-(p.flags.roomActsUsedThisRound||0);
   if(p.ghost){
@@ -2465,10 +2648,7 @@ function renderAll(){
     // but the action button reappears for the extra operation instead of vanishing after one use.
     raEl.innerHTML="<span class='pill' style='color:var(--amber-bright);border-color:var(--amber-bright)'>已確定停留於「"+p.room+" "+(room.name||"")+"」－本輪不可再移動，但還可再操作 "+roomOpsLeft+" 次</span><br><br>";
     const btn=document.createElement("button"); btn.className="btn small";
-    btn.textContent = room.special==="gene"?"使用基因庫" : room.special==="respec"?"重新分配點數" :
-      room.special==="slide"?"滑向垃圾場(1步)" : room.special==="teleport"?"傳送" : room.special==="control"?"控制室功能" :
-      room.special==="helipad"?(p.roundStartRoom==="202"?"領取空投／搭乘直升機":"領取空投（本輪需停留，下輪才能搭機）") :
-      room.draw>0?"搜索房間 (最多"+room.draw+"張)" : "使用房間功能";
+    btn.textContent = roomActionLabel(room,p);
     btn.onclick=doRoomAction;
     raEl.appendChild(btn);
   } else {
@@ -2478,10 +2658,7 @@ function renderAll(){
     const mustMoveFirst = p.room===p.roundStartRoom && !isHelipadBoarding && mustMoveThisRound(p);
     if(room.draw>0 || room.special){
       const btn=document.createElement("button"); btn.className="btn small";
-      btn.textContent = room.special==="gene"?"使用基因庫" : room.special==="respec"?"重新分配點數" :
-        room.special==="slide"?"滑向垃圾場(1步)" : room.special==="teleport"?"傳送" : room.special==="control"?"控制室功能" :
-        room.special==="helipad"?(p.roundStartRoom==="202"?"領取空投／搭乘直升機":"領取空投（本輪需停留，下輪才能搭機）") :
-        room.draw>0?"搜索房間 (最多"+room.draw+"張)" : "使用房間功能";
+      btn.textContent = roomActionLabel(room,p);
       if(p.flags.roomLocked){ btn.disabled=true; btn.title="好賭成性失敗，本輪無法房間操作"; }
       else if(mustMoveFirst){ btn.disabled=true; btn.title="每輪必須先移動到不同的房間，才能停留操作"; }
       btn.onclick=doRoomAction;
