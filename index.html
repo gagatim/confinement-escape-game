@@ -164,6 +164,32 @@
   @keyframes modalFade{from{opacity:0}to{opacity:1}}
   @keyframes modalPop{from{opacity:0;transform:scale(.96) translateY(6px)}to{opacity:1;transform:scale(1) translateY(0)}}
   .tag{display:inline-block;font-size:10px;padding:1px 6px;border-radius:4px;background:var(--panel-2);border:1px solid var(--line);margin-left:4px}
+
+  /* ---- 低調模式 (boss key): a fake spreadsheet that covers the whole viewport above
+     everything (even the modal), styled to read as a boring Office app rather than "a game
+     got minimized" — plain white/gray, a system sans font, real-looking column/row chrome. ---- */
+  #stealthOverlay{position:fixed;inset:0;z-index:999;background:#fff;color:#1a1a1a;
+    font-family:Calibri,Arial,"Microsoft JhengHei",sans-serif;overflow:auto;cursor:default;
+    -webkit-font-smoothing:auto;text-rendering:auto}
+  #stealthOverlay .sr-hint{position:fixed;top:6px;right:10px;font-size:10px;color:#bbb;z-index:1}
+  .sr-ribbon{background:#f3f2f1;border-bottom:1px solid #d0d0d0;padding:6px 14px;font-size:13px;color:#444}
+  .sr-ribbon .sr-tabs{display:flex;gap:18px;margin-bottom:6px}
+  .sr-ribbon .sr-tabs span{padding-bottom:4px}
+  .sr-ribbon .sr-tabs span.on{color:#106ebe;border-bottom:2px solid #106ebe;font-weight:600}
+  .sr-formulabar{display:flex;align-items:center;gap:8px;background:#fff;border-bottom:1px solid #d0d0d0;
+    padding:4px 14px;font-size:12px;color:#555}
+  .sr-formulabar .sr-cellref{border:1px solid #d0d0d0;border-radius:2px;padding:2px 8px;background:#fafafa;min-width:40px}
+  .sr-formulabar .sr-fx{flex:1;border:1px solid #d0d0d0;border-radius:2px;padding:2px 8px;background:#fafafa}
+  .sr-sheet{padding:0;overflow-x:auto}
+  .sr-sheet table{border-collapse:collapse;font-size:12.5px;min-width:100%;color:#1a1a1a}
+  .sr-sheet th,.sr-sheet td{border:1px solid #e1e1e1;padding:4px 10px;white-space:nowrap;text-align:left;color:#1a1a1a}
+  .sr-sheet thead th{background:#f3f2f1;color:#555;font-weight:600;text-align:center;position:sticky;top:0}
+  .sr-sheet tbody th{background:#f3f2f1;color:#555;font-weight:600;text-align:center;position:sticky;left:0}
+  .sr-sheet tbody tr:nth-child(even){background:#fafafa}
+  .sr-sheet td.num{text-align:right;font-family:"JetBrains Mono",Consolas,monospace}
+  .sr-tabbar{display:flex;gap:2px;background:#f3f2f1;border-top:1px solid #d0d0d0;padding:6px 10px;font-size:12px;color:#666}
+  .sr-tabbar span{padding:4px 12px;border-radius:3px 3px 0 0}
+  .sr-tabbar span.on{background:#fff;color:#106ebe;font-weight:600;border:1px solid #d0d0d0;border-bottom:none}
 </style>
 
 <div class="wrap">
@@ -174,6 +200,7 @@
       <div class="muted mono" style="font-size:10.5px;margin-top:2px">葉晉廷製作 · 請勿隨意分享</div>
     </div>
     <div id="topStatus" class="row"></div>
+    <button class="btn small ghost" id="stealthBtn" title="老闆鍵：一鍵偽裝成報表（快捷鍵：按住 Alt 再按 ` 鍵可隨時觸發，不用把滑鼠移過來）">🥷 低調模式</button>
     <button class="btn small ghost" id="themeBtn" title="切換明亮/暗黑介面">🌙 暗色介面</button>
     <button class="btn small ghost" id="muteBtn" title="開關音效">🔊 音效</button>
     <button class="btn small ghost" id="voiceMuteBtn" title="開關角色語音">🗣 語音</button>
@@ -299,6 +326,37 @@
 </div>
 
 <div id="modal-bg" class="hidden"><div class="card" id="modal"></div></div>
+
+<!-- ============ 低調模式 (boss key) — fake spreadsheet cover ============ -->
+<div id="stealthOverlay" class="hidden" title="點擊任意處返回">
+  <div class="sr-hint">按 Esc 或點擊畫面返回</div>
+  <div class="sr-ribbon">
+    <div class="sr-tabs"><span>檔案</span><span class="on">常用</span><span>插入</span><span>頁面配置</span><span>公式</span><span>資料</span><span>校閱</span><span>檢視</span></div>
+  </div>
+  <div class="sr-formulabar"><span class="sr-cellref">B14</span><span class="sr-fx" id="srFx">=SUM(C4:C13)</span></div>
+  <div class="sr-sheet"><table id="srTable">
+    <thead><tr><th></th><th>A</th><th>B</th><th>C</th><th>D</th><th>E</th><th>F</th><th>G</th></tr></thead>
+    <tbody>
+      <tr><th>1</th><td></td><td><b>部門</b></td><td><b>Q1</b></td><td><b>Q2</b></td><td><b>Q3</b></td><td><b>Q4</b></td><td><b>全年合計</b></td></tr>
+      <tr><th>2</th><td></td><td>業務一部</td><td class="num">1,284,000</td><td class="num">1,392,500</td><td class="num">1,410,220</td><td class="num">1,502,880</td><td class="num">5,589,600</td></tr>
+      <tr><th>3</th><td></td><td>業務二部</td><td class="num">986,400</td><td class="num">1,021,750</td><td class="num">1,088,300</td><td class="num">1,140,600</td><td class="num">4,237,050</td></tr>
+      <tr><th>4</th><td></td><td>行銷部</td><td class="num">452,100</td><td class="num">468,900</td><td class="num">501,200</td><td class="num">489,750</td><td class="num">1,911,950</td></tr>
+      <tr><th>5</th><td></td><td>研發部</td><td class="num">1,760,000</td><td class="num">1,802,300</td><td class="num">1,845,600</td><td class="num">1,920,100</td><td class="num">7,328,000</td></tr>
+      <tr><th>6</th><td></td><td>財務部</td><td class="num">312,500</td><td class="num">318,900</td><td class="num">325,400</td><td class="num">330,100</td><td class="num">1,286,900</td></tr>
+      <tr><th>7</th><td></td><td>人資部</td><td class="num">268,000</td><td class="num">271,500</td><td class="num">275,900</td><td class="num">280,300</td><td class="num">1,095,700</td></tr>
+      <tr><th>8</th><td></td><td>客服部</td><td class="num">540,200</td><td class="num">558,900</td><td class="num">572,100</td><td class="num">601,400</td><td class="num">2,272,600</td></tr>
+      <tr><th>9</th><td></td><td>採購部</td><td class="num">398,700</td><td class="num">405,200</td><td class="num">412,900</td><td class="num">420,500</td><td class="num">1,637,300</td></tr>
+      <tr><th>10</th><td></td><td>總管理處</td><td class="num">210,000</td><td class="num">215,600</td><td class="num">218,300</td><td class="num">221,900</td><td class="num">865,800</td></tr>
+      <tr><th>11</th><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+      <tr><th>12</th><td></td><td><b>合計</b></td><td class="num">6,211,900</td><td class="num">6,455,550</td><td class="num">6,649,920</td><td class="num">6,907,530</td><td class="num">26,224,900</td></tr>
+      <tr><th>13</th><td></td><td>YoY 成長率</td><td class="num">4.2%</td><td class="num">3.9%</td><td class="num">3.0%</td><td class="num">3.9%</td><td class="num">3.7%</td></tr>
+      <tr><th>14</th><td></td><td>目標達成率</td><td class="num">101%</td><td class="num">98%</td><td class="num">99%</td><td class="num">—</td><td class="num">—</td></tr>
+      <tr><th>15</th><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+      <tr><th>16</th><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+    </tbody>
+  </table></div>
+  <div class="sr-tabbar"><span class="on">Q3彙總</span><span>部門明細</span><span>原始資料</span><span>+</span></div>
+</div>
 
 <script>
 "use strict";
@@ -711,6 +769,33 @@ document.addEventListener("click",e=>{
     const next = document.documentElement.getAttribute("data-theme")==="light" ? "dark" : "light";
     applyTheme(next);
     try{ localStorage.setItem(THEME_KEY,next); }catch(e){}
+  });
+})();
+
+/* ---------- 低調模式 (boss key): instantly cover the game with a fake spreadsheet ---------- */
+(()=>{
+  const overlay=document.getElementById("stealthOverlay");
+  const stealthBtn=document.getElementById("stealthBtn");
+  const REAL_TITLE=document.title;
+  let active=false;
+  function setStealth(on){
+    active=on;
+    overlay.classList.toggle("hidden",!on);
+    document.title = on ? "Q3彙總表.xlsx - Excel" : REAL_TITLE;
+    // Cut any voice line that's mid-sentence the instant you need to look busy — a skill quote
+    // finishing itself over a fake spreadsheet would blow the cover. This only stops what's
+    // already playing/queued (nothing else can start on its own: the game is turn-based with
+    // no timers, so nothing fires again until you click back into it) and doesn't touch the
+    // user's actual 🔊/🗣 mute preferences, which stay exactly as they were.
+    if(on){ try{ if("speechSynthesis" in window) speechSynthesis.cancel(); }catch(e){} }
+  }
+  stealthBtn.addEventListener("click",()=>setStealth(true));
+  overlay.addEventListener("click",()=>setStealth(false));
+  document.addEventListener("keydown",(e)=>{
+    // Alt+` is the panic key — reachable blind, near the corner of the keyboard, and not a
+    // combo any text field or the game itself listens for, so it's safe to trigger from anywhere.
+    if(e.altKey && e.key==="`"){ e.preventDefault(); setStealth(!active); return; }
+    if(e.key==="Escape" && active){ setStealth(false); }
   });
 })();
 
