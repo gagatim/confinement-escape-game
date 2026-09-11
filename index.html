@@ -523,7 +523,7 @@ const PROFESSIONS = {
   ]},
   scavenger:{name:"拾荒者", skills:[
     {name:"拾荒嗅覺", desc:"你的垃圾不佔負重，每次在房間抽取物品有50%機率額外獲得1個垃圾（由垃圾場扣除）。", passive:true},
-    {name:"變廢為寶", desc:"行動階段可使用，將背包內的垃圾隨機轉為水或糧，每局限用2次。", uses:2}
+    {name:"變廢為寶", desc:"行動階段可使用，將背包內的垃圾隨機轉為水或糧，每局限用2次。(可以選擇數量，可以一次性多個無上限)", uses:2}
   ]},
   trucker:{name:"貨車司機", skills:[
     {name:"卸載加速", desc:"移動階段可使用，丟棄1張非垃圾道具卡，本輪速度變為兩倍(上限10)。整局限用3次。", uses:3},
@@ -1700,6 +1700,34 @@ function openRespecModal(p,cap){
   };
   document.getElementById("rsCancel").onclick=closeModal;
 }
+function openScavengerModal(p){
+  // Trash is weightless for the scavenger (weightlessTrash), but water/food are not, so each
+  // conversion costs 1 unit of carry space — the max is capped by whichever runs out first.
+  const max=Math.min(countItem(p,"trash"),carryRoom(p));
+  openModal(`<h3>變廢為寶：選擇要轉換的垃圾數量</h3>
+    <div class="statbar"><label>數量</label><input type="number" id="swQty" min="1" max="${max}" value="${max}"></div>
+    <div class="muted">背包垃圾：${countItem(p,"trash")}　可用空間：${carryRoom(p)}</div>
+    <div id="swErr" class="muted" style="color:var(--ember-bright);min-height:1.2em"></div>
+    <button class="btn small" id="swOk">確認轉換</button> <button class="btn small ghost" id="swCancel">取消</button>`);
+  document.getElementById("swOk").onclick=()=>{
+    const qty=Math.floor(+document.getElementById("swQty").value);
+    if(!qty || qty<1 || qty>max){ document.getElementById("swErr").textContent="數量需介於 1 到 "+max+" 之間"; return; }
+    p.flags.scavengerUses++; p.flags.skillUsedThisRound=true;
+    const gains={water:0,food:0};
+    for(let i=0;i<qty;i++){
+      removeItem(p,"trash");
+      const gain=Math.random()<0.5?"water":"food";
+      addItem(p,gain);
+      gains[gain]++;
+    }
+    const parts=[];
+    if(gains.water) parts.push(ITEMS.water.name+"x"+gains.water);
+    if(gains.food) parts.push(ITEMS.food.name+"x"+gains.food);
+    closeModal(); renderAll();
+    log(p.name+" 使用變廢為寶：垃圾轉為「"+parts.join("、")+"」。"); speakSkill(p,"scavenger:1");
+  };
+  document.getElementById("swCancel").onclick=closeModal;
+}
 function openTeleportModal(p){
   const opts=Object.keys(ROOMS).map(id=>`<option value="${id}">${id} ${ROOMS[id].name||""}</option>`).join("");
   openModal(`<h3>傳送室：選擇目的地</h3><select id="tpSel">${opts}</select><br><br>
@@ -2020,10 +2048,7 @@ function useProfSkill(p,idx){
     if(skillUseCapReached(p,"scavenger:1")){ flashMsg("已用完2次"); return; }
     if(countItem(p,"trash")<1){ flashMsg("背包內沒有垃圾"); return; }
     if(carryRoom(p)<=0){ flashMsg("背包空間不足，無法容納轉換後的道具"); return; }
-    p.flags.scavengerUses++; p.flags.skillUsedThisRound=true; removeItem(p,"trash");
-    const gain=Math.random()<0.5?"water":"food";
-    addItem(p,gain);
-    log(p.name+" 使用變廢為寶：垃圾轉為「"+ITEMS[gain].name+"」。"); speakSkill(p,"scavenger:1");
+    openScavengerModal(p);
   } else if(p.prof==="trucker" && idx===0){
     if(skillUseCapReached(p,"trucker:0")){ flashMsg("已用完3次"); return; }
     const nonTrash=p.inv.find(x=>x!=="trash");
@@ -2239,7 +2264,23 @@ function aiConsiderSkillAfterMove(p){
     return;
   }
   if(p.prof==="scavenger"){
-    if(!skillUseCapReached(p,"scavenger:1") && countItem(p,"trash")>=1 && carryRoom(p)>0) useProfSkill(p,1);
+    // 變廢為寶 now opens a human-only quantity-picker modal, so the AI applies the same
+    // effect directly here (converting as much trash as it has room for) instead.
+    if(!skillUseCapReached(p,"scavenger:1") && countItem(p,"trash")>=1 && carryRoom(p)>0){
+      const qty=Math.min(countItem(p,"trash"),carryRoom(p));
+      p.flags.scavengerUses++; p.flags.skillUsedThisRound=true;
+      const gains={water:0,food:0};
+      for(let i=0;i<qty;i++){
+        removeItem(p,"trash");
+        const gain=Math.random()<0.5?"water":"food";
+        addItem(p,gain);
+        gains[gain]++;
+      }
+      const parts=[];
+      if(gains.water) parts.push(ITEMS.water.name+"x"+gains.water);
+      if(gains.food) parts.push(ITEMS.food.name+"x"+gains.food);
+      log(p.name+" 使用變廢為寶：垃圾轉為「"+parts.join("、")+"」。"); speakSkill(p,"scavenger:1");
+    }
     return;
   }
   if(p.prof==="tamer"){ if(!skillUseCapReached(p,"tamer:0")) useProfSkill(p,0); return; }
