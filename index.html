@@ -164,6 +164,22 @@
   #modal{max-width:520px;width:100%;max-height:80vh;overflow-y:auto;animation:modalPop .18s cubic-bezier(.2,.9,.3,1.2)}
   @keyframes modalFade{from{opacity:0}to{opacity:1}}
   @keyframes modalPop{from{opacity:0;transform:scale(.96) translateY(6px)}to{opacity:1;transform:scale(1) translateY(0)}}
+  /* ---- 激光室 screen shake: a brief jolt on the whole page when the human player's own
+     character walks into 102, so the laser reads as an actual hazard instead of a silent
+     -1HP flag. Applied to <body> so it shakes everything (map, panels, log) at once. ---- */
+  @keyframes laserShake{
+    0%,100%{transform:translate(0,0)}
+    10%{transform:translate(-7px,3px)}
+    20%{transform:translate(6px,-4px)}
+    30%{transform:translate(-6px,-2px)}
+    40%{transform:translate(5px,3px)}
+    50%{transform:translate(-4px,-3px)}
+    60%{transform:translate(4px,2px)}
+    70%{transform:translate(-3px,2px)}
+    80%{transform:translate(2px,-2px)}
+    90%{transform:translate(-1px,1px)}
+  }
+  body.laser-shake{animation:laserShake .45s ease}
   .tag{display:inline-block;font-size:10px;padding:1px 6px;border-radius:4px;background:var(--panel-2);border:1px solid var(--line);margin-left:4px}
 
   /* ---- 低調模式 (boss key): a fake spreadsheet that covers the whole viewport above
@@ -2389,6 +2405,12 @@ function resolveAITurn(p){
 function applyLaser(p){
   p.pendingLaser=true;
 }
+function screenShake(){
+  document.body.classList.remove("laser-shake");
+  void document.body.offsetWidth; // restart the animation if it's still running from a rapid re-render
+  document.body.classList.add("laser-shake");
+  setTimeout(()=>document.body.classList.remove("laser-shake"),450);
+}
 function damagePlayer(p,amount,cause){
   if(amount<=0) return;
   p.roundEvents=p.roundEvents||[];
@@ -2916,7 +2938,7 @@ function renderAll(){
       raEl.appendChild(climbBtn);
     }
   }
-  if(!p.ghost && room.special==="laser") log_once(p,"laser-"+STATE.round,()=>{ applyLaser(p); log(p.name+" 經過激光室，結算時將扣1點生命。","dmg"); });
+  if(!p.ghost && room.special==="laser") log_once(p,"laser-"+STATE.round,()=>{ applyLaser(p); log(p.name+" 經過激光室，結算時將扣1點生命。","dmg"); screenShake(); });
 
   // here list
   const hereEl=document.getElementById("hereList");
