@@ -1493,6 +1493,7 @@ function beginRound(){
     p.roundEvents=[]; // cleared for the new round — showRoundSummary already read last round's
     p.flags.goldUsedThisRound=false;
     p.flags.rocketShotsThisRound=0; // 火箭筒 is reusable now — capped per round (拆彈教官 gets 2 instead of 1)
+    p.flags.rocketRoomsThisRound=[]; // 拆彈教官's 2 shots must hit 2 different rooms
     p.flags.recycleUsedThisRound=false; // 循環回收裝置 is a durable item too — limited to once per round
     p.flags.smugglerBonusUsedThisRound=false; // 走私客的熟悉門路: once per round
     p.flags.dietThisRound=false;
@@ -2230,19 +2231,25 @@ function useGoldAtRoom(p){
   });
   bindModalClose("goldCancel");
 }
-// 拆彈教官's 軍火專精: 2 shots per round instead of the usual 1.
+// 拆彈教官's 軍火專精: 2 shots per round instead of the usual 1 — at 2 DIFFERENT rooms, per its
+// own skill description, so a 2nd shot can't just double up on the 1st's target (which combined
+// with 防爆演練's self-immunity would make one round-consequence-free room a guaranteed 8 damage).
 function rocketShotCap(p){ return p.prof==="demolitions"?2:1; }
 function useRocket(p){
   if(!p.flags.roomCommitted){ flashMsg("請先移動並確定停留在房間後，才能使用道具。"); return; }
   if(p.flags.rocketShotsThisRound>=rocketShotCap(p)){ flashMsg("火箭筒每回合限用"+rocketShotCap(p)+"次"); return; }
-  openModal(`<h3>火箭筒：選擇目標房間</h3><select id="rkSel">${Object.keys(ROOMS).map(id=>`<option value="${id}">${id} ${ROOMS[id].name||""}</option>`).join("")}</select>
+  const alreadyTargeted=p.flags.rocketRoomsThisRound||[];
+  const roomIds=Object.keys(ROOMS).filter(id=>!alreadyTargeted.includes(id));
+  openModal(`<h3>火箭筒：選擇目標房間</h3><select id="rkSel">${roomIds.map(id=>`<option value="${id}">${id} ${ROOMS[id].name||""}</option>`).join("")}</select>
     <br><br><button class="btn small warn" id="rkOk">發射</button> <button class="btn small ghost" id="rkCancel">取消</button>`);
   document.getElementById("rkOk").onclick=()=>{
+    const target=document.getElementById("rkSel").value;
     // 每回合限用次數(見 rocketShotCap)，但發射後不會消耗掉這張道具卡——留在背包裡，下輪還能再用
     p.flags.rocketShotsThisRound++;
+    p.flags.rocketRoomsThisRound=(p.flags.rocketRoomsThisRound||[]).concat(target);
     STATE.rocketTargets=STATE.rocketTargets||[];
-    STATE.rocketTargets.push({room:document.getElementById("rkSel").value, shooterId:p.id});
-    log(p.name+" 發射火箭筒瞄準 "+document.getElementById("rkSel").value+"（結算時生效）。");
+    STATE.rocketTargets.push({room:target, shooterId:p.id});
+    log(p.name+" 發射火箭筒瞄準 "+target+"（結算時生效）。");
     closeModal(); renderAll();
   };
   bindModalClose("rkCancel");
@@ -2653,8 +2660,12 @@ function resolveAITurn(p){
   if(room.special==="respec"){ /* AI keeps stats */ }
   // 醫官's 醫者仁心 (solo surgery-room heal) — the AI doesn't otherwise run doSpecialRoom's
   // general special-room switch, so this needs the same inline treatment as gene/respec/helipad
-  // above for an AI medic to ever get any value out of its own signature ability.
-  if(room.special==="surgery" && p.prof==="medic"){
+  // above for an AI medic to ever get any value out of its own signature ability. Must still only
+  // fire when truly alone: with 2+ others here the room's normal rules (mutual heal at exactly 2,
+  // free-for-all combat at 3+) already apply via settleRound's roomGroups pass — granting a heal
+  // here regardless of headcount would give an AI medic a free 4 HP even inside a crowded-room
+  // brawl a human medic in the same spot could never trigger.
+  if(room.special==="surgery" && p.prof==="medic" && playersInRoom(p.room,true).length===1){
     p.flags.__surgeryHeal=true;
     log(p.room+" 手術室：醫官獨自坐診，結算階段將恢復4點生命。");
   }
@@ -2687,6 +2698,15 @@ function resolveAITurn(p){
       chosen.forEach(r=>STATE.rocketTargets.push({room:r, shooterId:p.id}));
       log(p.name+" 發射火箭筒瞄準 "+chosen.join("、")+"（結算時生效）。");
     }
+  }
+  // 工程師's 內建回收裝置 — same AI-blindness gap 火箭筒 had above (the base game never gave AI
+  // any use of the physical item either); pick the discard pile's best item by the same priority
+  // resolveAIDraw already uses, same as a human engineer's 精密回收 choosing instead of random.
+  if(p.prof==="engineer" && !p.flags.recycleUsedThisRound && STATE.discardPile.length>0 && carryRoom(p)>0){
+    const priority=(it)=>(ITEMS[it].weapon?0:(it==="pill"||it==="adrenaline")?1:(it==="water"||it==="food")?2:3);
+    let bestIdx=0;
+    STATE.discardPile.forEach((it,i)=>{ if(priority(it)<priority(STATE.discardPile[bestIdx])) bestIdx=i; });
+    doRecycle(p,bestIdx);
   }
   // 節食 (either from 餐廳 or 攀岩者's skill) exempts this round's hunger payment entirely — queuing
   // water/food anyway would just waste the item for no benefit.
