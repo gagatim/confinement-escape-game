@@ -495,6 +495,31 @@ function bfsDist(from,to){
   }
   return Infinity;
 }
+// Returns the actual shortest room-by-room route (incl. both endpoints) rather than just the
+// step count bfsDist gives — used to show players the corridors/ladders their move actually
+// passed through instead of silently teleporting them to the clicked destination.
+function bfsPath(from,to){
+  if(from===to) return [from];
+  let q=[from], seen=new Map([[from,null]]);
+  while(q.length){
+    const node=q.shift();
+    for(const n of (ADJ[node]||[])){
+      if(seen.has(n)) continue;
+      seen.set(n,node);
+      if(n===to){
+        const path=[n];
+        let cur=n;
+        while(seen.get(cur)!==null){ cur=seen.get(cur); path.unshift(cur); }
+        return path;
+      }
+      q.push(n);
+    }
+  }
+  return null;
+}
+function pathLabel(path){
+  return path.map(id=>ROOMS[id]&&ROOMS[id].name?id+"("+ROOMS[id].name+")":id).join(" → ");
+}
 function reachableRooms(from,maxSteps){
   let out={[from]:0}, q=[[from,0]];
   while(q.length){
@@ -1440,6 +1465,10 @@ function onRoomClick(roomId){
   }
   const dist=bfsDist(p.room,roomId);
   if(dist===Infinity || dist>p.stepsLeft){ flashMsg("步數不足或無法到達"); return; }
+  if(dist>0){
+    const path=bfsPath(p.room,roomId);
+    if(path && path.length>2) log(p.name+" 移動路徑："+pathLabel(path)+"（共"+dist+"步）");
+  }
   p.room=roomId; p.stepsLeft-=dist;
   if(roomId==="102"){ applyLaser(p); }
   SFX.move();
