@@ -644,19 +644,24 @@ const PROFESSIONS = {
   survivor:{name:"求生教官", skills:[
     {name:"強健體魄", desc:"（被動）生命上限永久+2（初始12血）。", passive:true},
     {name:"野戰急救", desc:"整局限用1次，直接無中生有做出1張藥片放入背包。", uses:1}
+  ]},
+  shopper:{name:"購物大媽", skills:[
+    {name:"精挑細選", desc:"（被動）抽取道具時多看1張，選1張放回房間，實際獲得數量不變。", passive:true},
+    {name:"跳樓大拍賣", desc:"可直接跳到下一層樓（只能往下），消耗1步，整局限用3次；3次用完後速度永久-2。", uses:3}
   ]}
 };
-// 擴充模式: these 7 professions are hidden from the setup screen (and never randomly given to
+// 擴充模式: these 8 professions are hidden from the setup screen (and never randomly given to
 // AI) unless the player opts into 擴充模式 — keeps a first game to the original 16, same as
 // before this expansion was added, while letting anyone who wants the extra roster turn it on.
-const EXPANSION_PROFS=new Set(["medic","pilot","demolitions","chef","engineer","smuggler","survivor"]);
+const EXPANSION_PROFS=new Set(["medic","pilot","demolitions","chef","engineer","smuggler","survivor","shopper"]);
 // One small emoji "portrait" per profession — shown on the selection card and anywhere a player's
 // profession is listed in-game, so each of the 16 is visually distinct at a glance, not just by name.
 const PROF_ICON={
   fatty:"🍔", bomb:"💣", gambler:"🎲", scavenger:"♻️", trucker:"🚚", bartender:"🍸",
   chemist:"🧪", embalmer:"⚰️", hacker:"💻", tycoon:"💰", shade:"👻", tamer:"🐕",
   merc:"🔪", geneFreak:"🧬", outsider:"🚪", climber:"🧗", engineer:"🔧",
-  medic:"🩺", pilot:"✈️", demolitions:"🧨", chef:"🍳", smuggler:"🧳", survivor:"🎒"
+  medic:"🩺", pilot:"✈️", demolitions:"🧨", chef:"🍳", smuggler:"🧳", survivor:"🎒",
+  shopper:"🛍️"
 };
 // 去圖示模式 (低調模式 companion toggle): when on, every emoji "picture" in the UI is swapped
 // for a plain bracketed-text stand-in instead — unlike 低調模式 (the boss key), this is meant to
@@ -1009,7 +1014,8 @@ const SELECT_QUOTES={
   demolitions:"倒數三秒，別離太近。",
   chef:"吃飽才有力氣逃命。",
   smuggler:"這些東西，我都有辦法弄到。",
-  survivor:"荒野求生，我教過上百人。"
+  survivor:"荒野求生，我教過上百人。",
+  shopper:"折扣的東西，我從不錯過。"
 };
 (()=>{
   const voiceBtn=document.getElementById("voiceMuteBtn");
@@ -1194,7 +1200,7 @@ function makePlayer(id,isAI,profId,stats,name){
       chemistUses:0, embalmerUses:0, hackerUses:0, hackerUsedRooms:[],
       tamerUses:0, geneUses:0, climberDietUsed:false, dietThisRound:false,
       goldUsedThisRound:false, visited102:false, remoteRoomOverride:null,
-      survivorFirstAidUsed:false,
+      survivorFirstAidUsed:false, shopperJumpUses:0, shopperSpeedPenaltyApplied:false,
       pendingItemUses:[], wineExcludedQueue:[], roomCommitted:false},
     pendingActions:{targetRoom:null, movementDone:false, roomActed:false},
     weaponWeightless: profId==="merc",
@@ -1684,8 +1690,19 @@ function itemCostsCarry(p,item){
 // which to keep up to remaining carry space (weightless items are always kept for free).
 function resolveHumanDraw(p,roomId,maxDraw){
   const room=ROOMS[roomId];
-  const drawnItems=drawItemsFromStock(p,roomId,maxDraw);
+  // 購物大媽的精挑細選: see 1 extra item, but must put exactly 1 of the reveal back — actual
+  // kept amount stays maxDraw either way, so this only ever improves WHICH ones you keep.
+  const extra = p.prof==="shopper" ? 1 : 0;
+  const drawnItems=drawItemsFromStock(p,roomId,maxDraw+extra);
   if(!drawnItems.length){ log("在「"+(room.name||roomId)+"」搜索到: （無收穫）"); return; }
+  if(extra && drawnItems.length>maxDraw){
+    openShopperReturnModal(p,drawnItems,roomId,maxDraw);
+    return;
+  }
+  resolveHumanKeep(p,drawnItems,roomId);
+}
+function resolveHumanKeep(p,drawnItems,roomId){
+  const room=ROOMS[roomId];
   const names=drawnItems.map(g=>ITEMS[g].name).join("、");
   const costingCount=drawnItems.filter(it=>itemCostsCarry(p,it)).length;
   const cap=carryRoom(p);
@@ -1696,6 +1713,26 @@ function resolveHumanDraw(p,roomId,maxDraw){
     log("在「"+(room.name||roomId)+"」搜索到: "+names+"（背包空間不足，請選擇要保留的道具）");
     openDrawSelectionModal(p,drawnItems,roomId);
   }
+}
+// 精挑細選's own modal: pick exactly 1 of the extra-revealed items to put back into the room's
+// stock before the normal keep/carry-limit flow (resolveHumanKeep) runs on what's left.
+function openShopperReturnModal(p,drawnItems,roomId,maxDraw){
+  const names=drawnItems.map(g=>ITEMS[g].name).join("、");
+  const opts=drawnItems.map((item,idx)=>`<option value="${idx}">${ITEMS[item].name}</option>`).join("");
+  openModal(`<h3>精挑細選：多看了1張，選1張放回房間</h3>
+    <div class="muted" style="margin-bottom:8px">搜索到: ${names}</div>
+    <select id="shopperReturnSel">${opts}</select><br><br>
+    <button class="btn small" id="shopperReturnOk">放回選中的道具</button>`);
+  document.getElementById("shopperReturnOk").onclick=()=>{
+    const idx=+document.getElementById("shopperReturnSel").value;
+    const returned=drawnItems[idx];
+    ROOMS[roomId].stock[returned]=(ROOMS[roomId].stock[returned]||0)+1;
+    const kept=drawnItems.filter((_,i)=>i!==idx);
+    log(p.name+"（精挑細選）放回了「"+ITEMS[returned].name+"」。");
+    closeModal();
+    resolveHumanKeep(p,kept,roomId);
+    renderAll();
+  };
 }
 // Lets the player choose freely across BOTH their existing inventory and the newly drawn
 // items — not just "which of the new ones fit in whatever space is left". Dropping an old
@@ -1741,8 +1778,17 @@ function openDrawSelectionModal(p,drawnItems,roomId){
 // AI draw: reveal everything, then greedily keep the most useful items up to carry space
 // (weapons and meds first), returning whatever doesn't fit to the room's stock.
 function resolveAIDraw(p,roomId,maxDraw){
-  const drawnItems=drawItemsFromStock(p,roomId,maxDraw);
   const priority=(it)=>(ITEMS[it].weapon?0:(it==="pill"||it==="adrenaline")?1:(it==="water"||it==="food")?2:3);
+  const extra = p.prof==="shopper" ? 1 : 0;
+  let drawnItems=drawItemsFromStock(p,roomId,maxDraw+extra);
+  if(extra && drawnItems.length>maxDraw){
+    // 精挑細選: keep the best maxDraw of what was revealed, put the single worst back.
+    const ranked=drawnItems.map((it,i)=>({it,i})).sort((a,b)=>priority(a.it)-priority(b.it));
+    const worst=ranked[ranked.length-1].it;
+    ROOMS[roomId].stock[worst]=(ROOMS[roomId].stock[worst]||0)+1;
+    drawnItems=drawnItems.slice();
+    drawnItems.splice(drawnItems.indexOf(worst),1);
+  }
   const order=drawnItems.map((it,i)=>({it,i})).sort((a,b)=>priority(a.it)-priority(b.it));
   let remaining=carryRoom(p);
   order.forEach(({it})=>{
@@ -1979,6 +2025,30 @@ function openClimberVerticalModal(p){
     log(p.name+" 使用垂直攀爬，直接前往 "+p.room+"。");
   };
   bindModalClose("climbCancel");
+}
+// 購物大媽的跳樓大拍賣: like 垂直攀爬 but DOWN only (floor+1 — see FLOOR_LABEL, higher index is
+// deeper), capped at 3 uses for the whole game (not per round) via SKILL_USE_LIMITS, applying a
+// one-time permanent -2 speed the moment the 3rd use is spent.
+function openShopperJumpModal(p){
+  const room=ROOMS[p.room];
+  const dests=Object.values(ROOMS).filter(r=>r.floor===room.floor+1);
+  if(!dests.length){ flashMsg("此樓層沒有可直接跳下去的目標。"); return; }
+  const left=3-skillUsedCount(p,"shopper:1");
+  const opts=dests.map(r=>`<option value="${r.id}">${FLOOR_LABEL[r.floor]} ${r.id} ${r.name||""}</option>`).join("");
+  openModal(`<h3>跳樓大拍賣：直接跳到下一層樓（剩餘${left}次）</h3><select id="shopperJumpSel">${opts}</select><br><br>
+    <button class="btn small" id="shopperJumpOk">跳下去(消耗1步)</button> <button class="btn small ghost" id="shopperJumpCancel">取消</button>`);
+  document.getElementById("shopperJumpOk").onclick=()=>{
+    if(p.flags.roomCommitted){ flashMsg("本輪已確定停留於此房間，無法再移動。"); closeModal(); return; }
+    if(!carrySpendStep(p)){ closeModal(); return; }
+    p.flags.shopperJumpUses++; p.flags.skillUsedThisRound=true;
+    if(p.flags.shopperJumpUses>=3 && !p.flags.shopperSpeedPenaltyApplied){
+      p.speed=Math.max(0,p.speed-2); p.flags.shopperSpeedPenaltyApplied=true;
+      log(p.name+"（跳樓大拍賣用完3次）速度永久-2。");
+    }
+    p.room=document.getElementById("shopperJumpSel").value; closeModal(); renderAll();
+    log(p.name+" 使用跳樓大拍賣，直接跳到 "+p.room+"。");
+  };
+  bindModalClose("shopperJumpCancel");
 }
 function openControlModal(p){
   // 解毒 targets a single ROOM permanently (a surgical exception), separate from the
@@ -2232,6 +2302,7 @@ const SKILL_USE_LIMITS={
   "climber:1":{flag:"climberDietUsed",max:1,bool:true},
   "embalmer:1":{flag:"embalmerUses",max:1},
   "survivor:1":{flag:"survivorFirstAidUsed",max:1,bool:true},
+  "shopper:1":{flag:"shopperJumpUses",max:3},
 };
 function skillUsedCount(p,key){
   const lim=SKILL_USE_LIMITS[key];
@@ -2358,6 +2429,9 @@ function useProfSkill(p,idx){
     p.flags.survivorFirstAidUsed=true; p.flags.skillUsedThisRound=true;
     addItem(p,"pill");
     log(p.name+" 使用野戰急救：無中生有做出1張藥片。"); speakSkill(p,"survivor:1");
+  } else if(p.prof==="shopper" && idx===1){
+    if(skillUseCapReached(p,"shopper:1")){ flashMsg("已用完3次"); return; }
+    openShopperJumpModal(p);
   }
   renderAll();
 }
@@ -2367,7 +2441,7 @@ function useProfSkill(p,idx){
 // nothing. Every OTHER active skill executes immediately on click, which is risky for a
 // limited-use skill (a stray click permanently burns one of only 1-4 charges) — those get a
 // confirm prompt naming the skill and its effect before anything happens.
-const SKILL_OPENS_OWN_MODAL=new Set(["chemist:0","hacker:1","geneFreak:1"]);
+const SKILL_OPENS_OWN_MODAL=new Set(["chemist:0","hacker:1","geneFreak:1","shopper:1"]);
 function confirmAndUseSkill(p,idx){
   const s=PROFESSIONS[p.prof].skills[idx];
   openModal(`<h3>發動技能：${s.name}</h3><div style="margin-bottom:12px;font-size:13px;line-height:1.6">${s.desc}</div>
@@ -2520,6 +2594,24 @@ function aiConsiderSkillAfterMove(p){
   if(p.prof==="survivor"){
     // 野戰急救: only worth its one-per-game use when actually hurt and not already carrying a cure.
     if(!skillUseCapReached(p,"survivor:1") && p.hp<=6 && countItem(p,"pill")===0 && carryRoom(p)>0) useProfSkill(p,1);
+    return;
+  }
+  if(p.prof==="shopper"){
+    // 跳樓大拍賣: escape a poisoned floor when possible, otherwise take the limited-use jump
+    // opportunistically now and then so a 3-charge ability doesn't just sit unused all game.
+    if(skillUseCapReached(p,"shopper:1") || p.stepsLeft<1) return;
+    const dests=Object.values(ROOMS).filter(r=>r.floor===room.floor+1);
+    if(!dests.length) return;
+    const wantsEscape=roomIsPoisoned(room) && dests.some(r=>!roomIsPoisoned(r));
+    if(!wantsEscape && Math.random()>=0.25) return;
+    const pool = wantsEscape ? dests.filter(r=>!roomIsPoisoned(r)) : dests;
+    p.flags.shopperJumpUses++; p.flags.skillUsedThisRound=true; p.stepsLeft--;
+    if(p.flags.shopperJumpUses>=3 && !p.flags.shopperSpeedPenaltyApplied){
+      p.speed=Math.max(0,p.speed-2); p.flags.shopperSpeedPenaltyApplied=true;
+      log(p.name+"（跳樓大拍賣用完3次）速度永久-2。");
+    }
+    p.room=pool[Math.floor(Math.random()*pool.length)].id;
+    log(p.name+" 使用跳樓大拍賣，直接跳到 "+p.room+"。");
     return;
   }
   if(p.prof==="chemist"){
