@@ -233,6 +233,8 @@
   <div id="setup">
     <div class="card">
       <h2 style="font-size:16px;color:var(--cyan-bright)">1. 選擇職業</h2>
+      <label class="muted" style="display:block;margin-bottom:10px;font-size:13px">
+        <input type="checkbox" id="expansionToggle"> 啟用擴充模式（新增7個職業，AI也可能隨機選到）</label>
       <div class="prof-grid" id="profGrid"></div>
     </div>
     <div class="card" style="margin-top:12px">
@@ -613,14 +615,48 @@ const PROFESSIONS = {
   climber:{name:"攀岩者", skills:[
     {name:"垂直攀爬", desc:"發動技能支付1點生命值，該回合可直接上下移動樓層，移動仍需消耗步數。", uses:99},
     {name:"節食", desc:"整局限用1次，該回合不需支付水/糧。", uses:1}
+  ]},
+  engineer:{name:"工程師", skills:[
+    {name:"內建回收裝置", desc:"（被動）不需持有循環回收裝置道具卡，每輪可直接使用一次回收功能，從棄牌堆中取得1張道具（與持有該道具卡共用每輪1次的限制）。", passive:true},
+    {name:"精密回收", desc:"（被動）使用循環回收裝置（不論是內建還是持有道具卡）時，可自行選擇想要的道具，而非隨機抽取。", passive:true}
+  ]},
+  // ---- 擴充模式職業 (見 EXPANSION_PROFS) ----
+  medic:{name:"醫官", skills:[
+    {name:"醫者仁心", desc:"（被動）手術室的治療原本需要恰好2人在場才會觸發；你1人在場時就能觸發，結算時恢復4點生命。", passive:true},
+    {name:"隨身醫療包", desc:"（被動）藥片與腎上腺素永久不佔負重。", passive:true}
+  ]},
+  pilot:{name:"飛行員", skills:[
+    {name:"熟練起降", desc:"（被動）抵達停機坪領取空投的當輪即可直接搭乘直升機離開，不需要像一般玩家多等1輪。", passive:true},
+    {name:"導航員", desc:"（被動）每次在停機坪領取空投時，額外多抽1張道具（與其他玩家共用同一輪的空投庫存）。", passive:true}
+  ]},
+  demolitions:{name:"拆彈教官", skills:[
+    {name:"軍火專精", desc:"（被動）火箭筒每輪可瞄準2個不同房間（一般玩家每輪限1次）。", passive:true},
+    {name:"防爆演練", desc:"（被動）你發射的火箭筒，對你發射當下所在的房間無效。", passive:true}
+  ]},
+  chef:{name:"廚師", skills:[
+    {name:"一餐抵兩餐", desc:"（被動）每輪只需繳交1份糧食，就能同時免除水與糧的飢餓懲罰。", passive:true},
+    {name:"儲糧有道", desc:"（被動）水與糧食永久不佔負重。", passive:true}
+  ]},
+  smuggler:{name:"走私客", skills:[
+    {name:"暗格夾層", desc:"（被動）背包容量永久+3。", passive:true},
+    {name:"熟悉門路", desc:"（被動）在金庫／武器庫／藥房抽取道具時，40%機率額外多抽1張，每輪最多觸發1次。", passive:true}
+  ]},
+  survivor:{name:"求生教官", skills:[
+    {name:"強健體魄", desc:"（被動）生命上限永久+2（初始12血）。", passive:true},
+    {name:"野戰急救", desc:"整局限用1次，直接無中生有做出1張藥片放入背包。", uses:1}
   ]}
 };
+// 擴充模式: these 7 professions are hidden from the setup screen (and never randomly given to
+// AI) unless the player opts into 擴充模式 — keeps a first game to the original 16, same as
+// before this expansion was added, while letting anyone who wants the extra roster turn it on.
+const EXPANSION_PROFS=new Set(["medic","pilot","demolitions","chef","engineer","smuggler","survivor"]);
 // One small emoji "portrait" per profession — shown on the selection card and anywhere a player's
 // profession is listed in-game, so each of the 16 is visually distinct at a glance, not just by name.
 const PROF_ICON={
   fatty:"🍔", bomb:"💣", gambler:"🎲", scavenger:"♻️", trucker:"🚚", bartender:"🍸",
   chemist:"🧪", embalmer:"⚰️", hacker:"💻", tycoon:"💰", shade:"👻", tamer:"🐕",
-  merc:"🔪", geneFreak:"🧬", outsider:"🚪", climber:"🧗"
+  merc:"🔪", geneFreak:"🧬", outsider:"🚪", climber:"🧗", engineer:"🔧",
+  medic:"🩺", pilot:"✈️", demolitions:"🧨", chef:"🍳", smuggler:"🧳", survivor:"🎒"
 };
 // 去圖示模式 (低調模式 companion toggle): when on, every emoji "picture" in the UI is swapped
 // for a plain bracketed-text stand-in instead — unlike 低調模式 (the boss key), this is meant to
@@ -966,7 +1002,14 @@ const SELECT_QUOTES={
   merc:"武器在手，誰都別想輕舉妄動。",
   geneFreak:"我的基因，天生贏在起跑點。",
   outsider:"沒人會注意到我，這就是我的優勢。",
-  climber:"牆再高，我都爬得上去。"
+  climber:"牆再高，我都爬得上去。",
+  engineer:"壞掉的東西，交給我修。",
+  medic:"別緊張，我馬上幫你止血。",
+  pilot:"繫好安全帶，我們要起飛了。",
+  demolitions:"倒數三秒，別離太近。",
+  chef:"吃飽才有力氣逃命。",
+  smuggler:"這些東西，我都有辦法弄到。",
+  survivor:"荒野求生，我教過上百人。"
 };
 (()=>{
   const voiceBtn=document.getElementById("voiceMuteBtn");
@@ -995,10 +1038,15 @@ function logRound(n){ log(`<span class="r">── 第 ${n} 輪 ──</span>`); 
 /* ---------- setup screen wiring ---------- */
 const profGrid=document.getElementById("profGrid");
 let selectedProf=null;
+// 擴充模式: off by default (unchecked) — matches a fresh game to the original 16-profession
+// roster until the player explicitly opts into the extra 7. Read by startGame()'s AI pool too.
+let expansionMode=false;
 Object.entries(PROFESSIONS).forEach(([id,p])=>{
   const div=document.createElement("div");
   div.className="prof-card"; div.dataset.id=id;
-  div.innerHTML=`<div class="prof-head"><span class="prof-icon">${profIcon(id)}</span><h3>${p.name}</h3></div>`+
+  if(EXPANSION_PROFS.has(id)) div.classList.add("expansion-prof","hidden");
+  div.innerHTML=`<div class="prof-head"><span class="prof-icon">${profIcon(id)}</span><h3>${p.name}</h3>`+
+    (EXPANSION_PROFS.has(id)?`<span class="tag">擴充</span>`:"")+`</div>`+
     p.skills.map(s=>`<div class="sk"><b>${s.name}</b>｜${s.desc}</div>`).join("");
   div.addEventListener("click",()=>{
     document.querySelectorAll(".prof-card").forEach(c=>c.classList.remove("selected"));
@@ -1009,6 +1057,17 @@ Object.entries(PROFESSIONS).forEach(([id,p])=>{
     VOICE.speak(SELECT_QUOTES[id],id);
   });
   profGrid.appendChild(div);
+});
+document.getElementById("expansionToggle").addEventListener("change",(e)=>{
+  expansionMode=e.target.checked;
+  document.querySelectorAll(".prof-card.expansion-prof").forEach(c=>c.classList.toggle("hidden",!expansionMode));
+  // a selected expansion profession that just got hidden can't stay chosen
+  if(!expansionMode && selectedProf && EXPANSION_PROFS.has(selectedProf)){
+    selectedProf=null;
+    document.querySelectorAll(".prof-card").forEach(c=>c.classList.remove("selected"));
+    document.getElementById("startHint").textContent="請先選擇職業";
+    validateStart();
+  }
 });
 
 /* ---------- 去圖示模式: unlike 低調模式's full disguise, this is meant to stay ON for normal
@@ -1119,11 +1178,13 @@ document.getElementById("abandonBtn").addEventListener("click",()=>{
 const AI_NAMES=["阿凱","小美","老周","阿德","阿珍","小胖","阿宏","阿玲"];
 function makePlayer(id,isAI,profId,stats,name){
   const prof=PROFESSIONS[profId];
+  const startHp = profId==="survivor" ? 12 : 10; // 求生教官的強健體魄: +2 生命上限
   const p={
     id, name: name || (isAI? AI_NAMES[id%AI_NAMES.length] : "你"),
     isAI, prof:profId,
-    power:stats.power, speed:stats.speed, carry:stats.carry,
-    hp:10, maxhp:10, alive:true, ghost:false, ghostDrainTotal:0,
+    power:stats.power, speed:stats.speed,
+    carry:stats.carry + (profId==="smuggler"?3:0), // 走私客的暗格夾層: +3 負重
+    hp:startHp, maxhp:startHp, alive:true, ghost:false, ghostDrainTotal:0,
     hpLog:[], // per-round {round,hp,delta} snapshots, filled in at settlement — drives the 每輪血量變化 table
     roundEvents:[], // this round's {cause,amount} damage events — read by showRoundSummary, reset each beginRound
     room: MEETING_ROOM, spawnRoom:null, stepsLeft:0,
@@ -1133,12 +1194,15 @@ function makePlayer(id,isAI,profId,stats,name){
       chemistUses:0, embalmerUses:0, hackerUses:0, hackerUsedRooms:[],
       tamerUses:0, geneUses:0, climberDietUsed:false, dietThisRound:false,
       goldUsedThisRound:false, visited102:false, remoteRoomOverride:null,
+      survivorFirstAidUsed:false,
       pendingItemUses:[], wineExcludedQueue:[], roomCommitted:false},
     pendingActions:{targetRoom:null, movementDone:false, roomActed:false},
     weaponWeightless: profId==="merc",
     weightlessGold: profId==="tycoon",
     weightlessTrash: profId==="scavenger",
-    weightlessWine: profId==="bartender"
+    weightlessWine: profId==="bartender",
+    weightlessMedical: profId==="medic", // 醫官的隨身醫療包: 藥片/腎上腺素不佔負重
+    weightlessRation: profId==="chef" // 廚師的儲糧有道: 水/糧不佔負重
   };
   return p;
 }
@@ -1152,6 +1216,8 @@ function usedCarry(p){
     if(it==="gold" && p.weightlessGold) continue;
     if(it==="wine" && p.weightlessWine) continue;
     if(ITEMS[it].weapon && p.weaponWeightless) continue;
+    if((it==="pill"||it==="adrenaline") && p.weightlessMedical) continue;
+    if((it==="water"||it==="food") && p.weightlessRation) continue;
     n++;
   }
   return n;
@@ -1185,7 +1251,8 @@ function startGame(){
   const stats={power:+document.getElementById("allocPower").value, speed:+document.getElementById("allocSpeed").value, carry:+document.getElementById("allocCarry").value};
   const you=makePlayer(0,false,selectedProf,stats,"你");
   const usedProfs=new Set([selectedProf]);
-  const profIds=Object.keys(PROFESSIONS);
+  // AI only gets expansion professions when 擴充模式 is on — same gate as the setup-screen cards.
+  const profIds=Object.keys(PROFESSIONS).filter(id=>expansionMode||!EXPANSION_PROFS.has(id));
   const players=[you];
   for(let i=1;i<n;i++){
     let pool=profIds.filter(x=>!usedProfs.has(x));
@@ -1419,8 +1486,9 @@ function beginRound(){
     p.roundStartSteps = p.stepsLeft;
     p.roundEvents=[]; // cleared for the new round — showRoundSummary already read last round's
     p.flags.goldUsedThisRound=false;
-    p.flags.rocketUsedThisRound=false; // 火箭筒 is reusable now — limited to once per round instead of one-shot
+    p.flags.rocketShotsThisRound=0; // 火箭筒 is reusable now — capped per round (拆彈教官 gets 2 instead of 1)
     p.flags.recycleUsedThisRound=false; // 循環回收裝置 is a durable item too — limited to once per round
+    p.flags.smugglerBonusUsedThisRound=false; // 走私客的熟悉門路: once per round
     p.flags.dietThisRound=false;
     p.flags.roomCommitted=false; // locks once the player acts in a room or explicitly ends movement
     p.flags.roomActsUsedThisRound=0; // how many times the room's function has been used this round
@@ -1562,6 +1630,8 @@ function undoMovement(){
 function flashMsg(m){ log(`<i class="muted">${m}</i>`); }
 
 /* ===================== ROOM ACTIONS (human) ===================== */
+// 走私客's 熟悉門路 only triggers at these 3 rooms: 金庫, 武器庫, 藥房.
+const SMUGGLER_BONUS_ROOMS=new Set(["B206","B107","B301"]);
 // Draws up to maxDraw items OUT of the room's stock (removed immediately, since they're
 // revealed) with no regard for carry space — the player gets to see everything drawn and
 // choose what to keep afterward, instead of the old behaviour of quietly drawing fewer items
@@ -1586,6 +1656,19 @@ function drawItemsFromStock(p,roomId,maxDraw){
       log(p.name+"（拾荒嗅覺）額外獲得1個垃圾。");
     }
   }
+  // 走私客的熟悉門路: at 金庫/武器庫/藥房, 40% chance to pull one extra item from the same
+  // room's stock, once per round — unlike 拾荒嗅覺 above this isn't a free weightless bonus, it
+  // just adds another drawn item that goes through the same carry-limit/keep-choice handling as
+  // everything else resolveHumanDraw/resolveAIDraw sees from this call.
+  if(p.prof==="smuggler" && !p.flags.smugglerBonusUsedThisRound && SMUGGLER_BONUS_ROOMS.has(roomId) && Math.random()<0.4){
+    const stockKeys=Object.keys(room.stock).filter(k=>room.stock[k]>0);
+    if(stockKeys.length){
+      const pick=stockKeys[Math.floor(Math.random()*stockKeys.length)];
+      room.stock[pick]--; drawnItems.push(pick);
+      p.flags.smugglerBonusUsedThisRound=true;
+      log(p.name+"（熟悉門路）額外多抽到1張道具。");
+    }
+  }
   return drawnItems;
 }
 function itemCostsCarry(p,item){
@@ -1593,6 +1676,8 @@ function itemCostsCarry(p,item){
   if(item==="gold" && p.weightlessGold) return false;
   if(item==="wine" && p.weightlessWine) return false;
   if(ITEMS[item].weapon && p.weaponWeightless) return false;
+  if((item==="pill"||item==="adrenaline") && p.weightlessMedical) return false;
+  if((item==="water"||item==="food") && p.weightlessRation) return false;
   return true;
 }
 // Human draw: reveal everything, auto-keep it all if it fits, otherwise let the player choose
@@ -1672,7 +1757,7 @@ function doRoomAction(){
   const room=ROOMS[p.room];
   // 每輪強制移動 exception: boarding the helicopter at 202 explicitly requires having stayed
   // there since last round (roundStartRoom==="202") — that's the one legitimate "didn't move" case.
-  const isHelipadBoarding = room.special==="helipad" && p.roundStartRoom==="202";
+  const isHelipadBoarding = room.special==="helipad" && canBoardHeliNow(p);
   if(p.room===p.roundStartRoom && !isHelipadBoarding && mustMoveThisRound(p)){
     flashMsg("每輪必須先移動到不同的房間，才能停留操作（不能原地不動）。");
     return;
@@ -1725,7 +1810,12 @@ function doSpecialRoom(p,room){
       break;
     case "surgery": {
       const here=playersInRoom(p.room,true);
-      if(here.length===2){ log(p.room+" 手術室：2人在場，結算階段將各恢復4點生命。"); here.forEach(pl=>pl.flags.__surgeryHeal=true); }
+      // 醫官的醫者仁心: normally the 2-person mutual-treatment rule needs a partner — a medic can
+      // trigger it solo (still only heals themself, since there's no one else here to treat).
+      if(here.length===2 || (here.length===1 && p.prof==="medic")){
+        log(p.room+" 手術室："+(here.length===2?"2人在場":"醫官獨自坐診")+"，結算階段將"+(here.length===2?"各":"")+"恢復4點生命。");
+        here.forEach(pl=>pl.flags.__surgeryHeal=true);
+      }
       else if(here.length>=3){ log(p.room+" 手術室：3人以上，將直接觸發混戰。"); }
       break;
     }
@@ -1755,6 +1845,10 @@ function carrySpendStep(p){
   if(p.stepsLeft<1) { flashMsg("步數不足"); return false; }
   p.stepsLeft--; return true;
 }
+// 飛行員's 熟練起降: normally boarding requires having already been at 202 since the START of
+// this round (i.e. landed last round, waited it out, boarding this one) — a pilot can board the
+// very round they land, skipping that wait entirely.
+function canBoardHeliNow(p){ return p.roundStartRoom==="202" || p.prof==="pilot"; }
 function collectAirdrop(p){
   // The round's schedule is stocked into the bag exactly once, by beginRound() — this only
   // draws from it, so multiple pickups in the same round (arrival + boarding, several players)
@@ -1763,6 +1857,11 @@ function collectAirdrop(p){
   if(bag && bag.length){
     const pick=bag.shift();
     if(carryRoom(p)>0){ p.inv.push(pick); log(p.name+" 從停機坪空投獲得: "+ITEMS[pick].name); }
+  }
+  // 飛行員的導航員: an extra pull from the same round's shared airdrop bag.
+  if(p.prof==="pilot" && bag && bag.length){
+    const pick2=bag.shift();
+    if(carryRoom(p)>0){ p.inv.push(pick2); log(p.name+"（導航員）額外從空投獲得: "+ITEMS[pick2].name); }
   }
 }
 
@@ -1990,7 +2089,10 @@ function resolvePendingItemUses(p){
     if(item==="pill"){ pillsPending.push(item); return; }
     STATE.discardPile.push(item);
     switch(item){
-      case "water": case "food": p.flags["consumed_"+item]=true; log(p.name+" 結算：使用了"+ITEMS[item].name+"。"); break;
+      case "water": case "food":
+        p.flags["consumed_"+item]=true;
+        if(item==="food" && p.prof==="chef") p.flags.consumed_water=true; // 廚師的一餐抵兩餐
+        log(p.name+" 結算：使用了"+ITEMS[item].name+"。"); break;
       case "adrenaline":
         p.flags.adrenalineActive=true; log(p.name+" 結算：注射腎上腺素，下輪速度變10，本輪不會致死。","heal"); break;
       case "wine": {
@@ -2058,32 +2160,59 @@ function useGoldAtRoom(p){
   });
   bindModalClose("goldCancel");
 }
+// 拆彈教官's 軍火專精: 2 shots per round instead of the usual 1.
+function rocketShotCap(p){ return p.prof==="demolitions"?2:1; }
 function useRocket(p){
   if(!p.flags.roomCommitted){ flashMsg("請先移動並確定停留在房間後，才能使用道具。"); return; }
-  if(p.flags.rocketUsedThisRound){ flashMsg("火箭筒每回合限用1次"); return; }
+  if(p.flags.rocketShotsThisRound>=rocketShotCap(p)){ flashMsg("火箭筒每回合限用"+rocketShotCap(p)+"次"); return; }
   openModal(`<h3>火箭筒：選擇目標房間</h3><select id="rkSel">${Object.keys(ROOMS).map(id=>`<option value="${id}">${id} ${ROOMS[id].name||""}</option>`).join("")}</select>
     <br><br><button class="btn small warn" id="rkOk">發射</button> <button class="btn small ghost" id="rkCancel">取消</button>`);
   document.getElementById("rkOk").onclick=()=>{
-    // 一回合限用一次，但發射後不會消耗掉這張道具卡——留在背包裡，下輪還能再用
-    p.flags.rocketUsedThisRound=true;
+    // 每回合限用次數(見 rocketShotCap)，但發射後不會消耗掉這張道具卡——留在背包裡，下輪還能再用
+    p.flags.rocketShotsThisRound++;
     STATE.rocketTargets=STATE.rocketTargets||[];
-    STATE.rocketTargets.push(document.getElementById("rkSel").value);
+    STATE.rocketTargets.push({room:document.getElementById("rkSel").value, shooterId:p.id});
     log(p.name+" 發射火箭筒瞄準 "+document.getElementById("rkSel").value+"（結算時生效）。");
     closeModal(); renderAll();
   };
   bindModalClose("rkCancel");
 }
-function useRecycleDevice(p){
-  if(!p.flags.roomCommitted){ flashMsg("請先移動並確定停留在房間後，才能使用道具。"); return; }
-  if(p.flags.recycleUsedThisRound){ flashMsg("循環回收裝置每回合限用1次"); return; }
-  if(STATE.discardPile.length===0){ flashMsg("棄牌堆是空的"); return; }
-  if(carryRoom(p)<=0){ flashMsg("負重已滿"); return; }
-  const idx=Math.floor(Math.random()*STATE.discardPile.length);
+// Shared by the 循環回收裝置 item card (random pick) and 工程師's 內建回收裝置 (same effect
+// without needing to hold the card) — 精密回收 upgrades EITHER trigger to a chosen pick instead
+// of random, so both paths funnel through here rather than duplicating the validation/resolve logic.
+function recycleChecks(p){
+  if(!p.flags.roomCommitted){ flashMsg("請先移動並確定停留在房間後，才能使用道具。"); return false; }
+  if(p.flags.recycleUsedThisRound){ flashMsg("循環回收裝置每回合限用1次"); return false; }
+  if(STATE.discardPile.length===0){ flashMsg("棄牌堆是空的"); return false; }
+  if(carryRoom(p)<=0){ flashMsg("負重已滿"); return false; }
+  return true;
+}
+function doRecycle(p, discardIdx){
+  const idx = discardIdx!==undefined ? discardIdx : Math.floor(Math.random()*STATE.discardPile.length);
   const item=STATE.discardPile.splice(idx,1)[0];
   p.inv.push(item);
   p.flags.recycleUsedThisRound=true;
   log(p.name+" 使用循環回收裝置，獲得: "+ITEMS[item].name);
   renderAll();
+}
+function useRecycleDevice(p){
+  if(!recycleChecks(p)) return;
+  if(p.prof==="engineer"){ openEngineerRecycleModal(p); return; } // 精密回收: choose instead of random
+  doRecycle(p);
+}
+function useEngineerRecycle(p){
+  if(!recycleChecks(p)) return;
+  openEngineerRecycleModal(p);
+}
+function openEngineerRecycleModal(p){
+  const opts=STATE.discardPile.map((item,idx)=>`<option value="${idx}">${ITEMS[item].name}</option>`).join("");
+  openModal(`<h3>精密回收：選擇要取得的道具</h3><select id="engRecycleSel">${opts}</select><br><br>
+    <button class="btn small" id="engRecycleOk">取得</button> <button class="btn small ghost" id="engRecycleCancel">取消</button>`);
+  document.getElementById("engRecycleOk").onclick=()=>{
+    doRecycle(p, +document.getElementById("engRecycleSel").value);
+    closeModal();
+  };
+  bindModalClose("engRecycleCancel");
 }
 
 /* ===================== PROFESSION SKILLS (human buttons) ===================== */
@@ -2102,6 +2231,7 @@ const SKILL_USE_LIMITS={
   "geneFreak:1":{flag:"geneUses",max:2},
   "climber:1":{flag:"climberDietUsed",max:1,bool:true},
   "embalmer:1":{flag:"embalmerUses",max:1},
+  "survivor:1":{flag:"survivorFirstAidUsed",max:1,bool:true},
 };
 function skillUsedCount(p,key){
   const lim=SKILL_USE_LIMITS[key];
@@ -2222,6 +2352,12 @@ function useProfSkill(p,idx){
     p.flags.embalmerUses++; p.flags.skillUsedThisRound=true;
     p.flags.embalmerChoiceMode=true;
     log(p.name+" 啟用亡者遺贈：下次道具進入停屍間時可自行選擇。"); speakSkill(p,"embalmer:1");
+  } else if(p.prof==="survivor" && idx===1){
+    if(skillUseCapReached(p,"survivor:1")){ flashMsg("已用完"); return; }
+    if(carryRoom(p)<=0){ flashMsg("背包空間不足，無法容納藥片"); return; }
+    p.flags.survivorFirstAidUsed=true; p.flags.skillUsedThisRound=true;
+    addItem(p,"pill");
+    log(p.name+" 使用野戰急救：無中生有做出1張藥片。"); speakSkill(p,"survivor:1");
   }
   renderAll();
 }
@@ -2311,6 +2447,7 @@ function aiChooseTarget(p){
     let score=Math.random()*2;
     const room=ROOMS[r];
     if(p.hp<=5 && (room.stock.pill||room.stock.adrenaline)) score+=5;
+    if(p.prof==="medic" && p.hp<=6 && room.special==="surgery") score+=5; // 醫者仁心: solo 4-HP heal
     if(!hasGun(p) && (room.stock.pistol||room.stock.shotgun||room.stock.knife)) score+=3;
     if(STATE.round>=2 && (room.stock.water||room.stock.food)) score+=2;
     if(room.draw>0) score+=1.5;
@@ -2380,6 +2517,11 @@ function aiConsiderSkillAfterMove(p){
   }
   if(p.prof==="tamer"){ if(!skillUseCapReached(p,"tamer:0")) useProfSkill(p,0); return; }
   if(p.prof==="embalmer"){ if(!skillUseCapReached(p,"embalmer:1")) useProfSkill(p,1); return; }
+  if(p.prof==="survivor"){
+    // 野戰急救: only worth its one-per-game use when actually hurt and not already carrying a cure.
+    if(!skillUseCapReached(p,"survivor:1") && p.hp<=6 && countItem(p,"pill")===0 && carryRoom(p)>0) useProfSkill(p,1);
+    return;
+  }
   if(p.prof==="chemist"){
     if(skillUseCapReached(p,"chemist:0")) return;
     const poisonedFloors=[...STATE.poisoned];
@@ -2417,11 +2559,18 @@ function resolveAITurn(p){
   if(room.draw>0){ resolveAIDraw(p,p.room,room.draw); }
   if(room.special==="gene"){ p.power++; p.speed++; p.carry++; }
   if(room.special==="respec"){ /* AI keeps stats */ }
+  // 醫官's 醫者仁心 (solo surgery-room heal) — the AI doesn't otherwise run doSpecialRoom's
+  // general special-room switch, so this needs the same inline treatment as gene/respec/helipad
+  // above for an AI medic to ever get any value out of its own signature ability.
+  if(room.special==="surgery" && p.prof==="medic"){
+    p.flags.__surgeryHeal=true;
+    log(p.room+" 手術室：醫官獨自坐診，結算階段將恢復4點生命。");
+  }
   if(room.special==="helipad"){
     collectAirdrop(p);
     // same "must stay one round before flying" rule as the human path
     const dests=HELI_TARGETS.filter(id=>id!==p.room);
-    if(p.roundStartRoom==="202" && dests.length && p.stepsLeft>=1){
+    if(canBoardHeliNow(p) && dests.length && p.stepsLeft>=1){
       p.room=dests[Math.floor(Math.random()*dests.length)]; p.stepsLeft--;
     }
   }
@@ -2429,11 +2578,34 @@ function resolveAITurn(p){
   aiConsiderSkillAfterMove(p);
   // simple item usage: declare now, effect resolves at settlement (same as the human path)
   if(p.hp<=4 && countItem(p,"pill")>0){ removeItem(p,"pill"); p.flags.pendingItemUses.push("pill"); }
+  // 火箭筒 is a durable item (never consumed) the base AI otherwise never fires — an AI holding
+  // one now takes its free shot(s) at whichever other occupied room has the most people in it;
+  // 拆彈教官 gets a 2nd shot at a second room instead of just the one.
+  if(countItem(p,"rocket")>0){
+    const shotsAllowed=p.prof==="demolitions"?2:1;
+    const chosen=[];
+    for(let i=0;i<shotsAllowed;i++){
+      const targets=Object.keys(ROOMS).filter(r=>r!==p.room && !chosen.includes(r) && playersInRoom(r,true).length>0);
+      if(!targets.length) break;
+      targets.sort((a,b)=>playersInRoom(b,true).length-playersInRoom(a,true).length);
+      chosen.push(targets[0]);
+    }
+    if(chosen.length){
+      STATE.rocketTargets=STATE.rocketTargets||[];
+      chosen.forEach(r=>STATE.rocketTargets.push({room:r, shooterId:p.id}));
+      log(p.name+" 發射火箭筒瞄準 "+chosen.join("、")+"（結算時生效）。");
+    }
+  }
   // 節食 (either from 餐廳 or 攀岩者's skill) exempts this round's hunger payment entirely — queuing
   // water/food anyway would just waste the item for no benefit.
   if(STATE.round>=2 && !p.flags.dietThisRound){
-    if(countItem(p,"water")>0){ removeItem(p,"water"); p.flags.pendingItemUses.push("water"); }
-    if(countItem(p,"food")>0){ removeItem(p,"food"); p.flags.pendingItemUses.push("food"); }
+    if(p.prof==="chef" && countItem(p,"food")>0){
+      // 一餐抵兩餐: food alone covers both, so don't also burn a water item for nothing.
+      removeItem(p,"food"); p.flags.pendingItemUses.push("food");
+    } else {
+      if(countItem(p,"water")>0){ removeItem(p,"water"); p.flags.pendingItemUses.push("water"); }
+      if(countItem(p,"food")>0){ removeItem(p,"food"); p.flags.pendingItemUses.push("food"); }
+    }
   }
   // poison vote (one per player per round, after acting): pick from this round's 3 random ballot
   // floors only, avoiding own floor (the room it's going to this round) when possible.
@@ -2574,8 +2746,11 @@ function settleRound(){
   });
 
   // rocket launcher (declared during action phase, resolves as part of this round's violence)
-  (STATE.rocketTargets||[]).forEach(r=>{
-    const hit=playersInRoom(r,true);
+  (STATE.rocketTargets||[]).forEach(({room:r, shooterId})=>{
+    let hit=playersInRoom(r,true);
+    // 拆彈教官的防爆演練: their own rocket fire never hits their own current room.
+    const shooter=STATE.players.find(x=>x.id===shooterId);
+    if(shooter && shooter.prof==="demolitions" && shooter.room===r) hit=hit.filter(x=>x.id!==shooterId);
     STATE.__report.rocket.push(r+(hit.length?"（命中 "+hit.map(p=>p.name).join("、")+"）":"（房內無人）"));
     hit.forEach(p=>{
       let dmg=4, note="";
@@ -2804,7 +2979,7 @@ function renderEndScreen(){
 function roomActionLabel(room,p){
   return room.special==="gene"?"使用基因庫" : room.special==="respec"?"重新分配點數" :
     room.special==="slide"?"滑向垃圾場(1步)" : room.special==="teleport"?"傳送" : room.special==="control"?"控制室功能" :
-    room.special==="helipad"?(p.roundStartRoom==="202"?"領取空投／搭乘直升機":"領取空投（本輪需停留，下輪才能搭機）") :
+    room.special==="helipad"?(canBoardHeliNow(p)?"領取空投／搭乘直升機":"領取空投（本輪需停留，下輪才能搭機）") :
     room.draw>0?"搜索房間 (最多"+room.draw+"張)" : "使用房間功能";
 }
 // Static top-panel elements renderAll() touches on every single action — looked up once here
@@ -2861,8 +3036,8 @@ function renderAll(){
     if(["water","food","pill","adrenaline","wine"].includes(id)) actions+=`<button class="btn small" data-use="${id}"${dis}>使用</button>`;
     if(id==="gold") actions+=`<button class="btn small gold" data-gold="1"${dis}>用於本房</button>`;
     if(id==="rocket"){
-      const rocketDisabled=needsCommit||p.flags.rocketUsedThisRound;
-      const rocketTitle=needsCommit?"請先移動並確定停留在房間後，才能使用道具":"火箭筒每回合限用1次";
+      const rocketDisabled=needsCommit||p.flags.rocketShotsThisRound>=rocketShotCap(p);
+      const rocketTitle=needsCommit?"請先移動並確定停留在房間後，才能使用道具":"火箭筒每回合限用"+rocketShotCap(p)+"次";
       actions+=`<button class="btn small warn" data-rocket="1"${rocketDisabled?` disabled title="${rocketTitle}"`:""}>瞄準</button>`;
     }
     if(id==="recycledevice"){
@@ -2905,6 +3080,11 @@ function renderAll(){
       // 系統監控 is a "permanent passive" in name, but it's an on-demand lookup, not something
       // that resolves itself — give it a real query button instead of disabling it like other passives.
       btn.onclick=()=>openHackerMonitorModal(p);
+    } else if(p.prof==="engineer" && idx===0){
+      // 內建回收裝置 is likewise a "passive" that still needs a click to trigger, same pattern as
+      // 系統監控 above — it's not gated by the once-a-round skillUsedThisRound budget, but by its
+      // own recycleUsedThisRound flag (shared with the physical item, so the two can't double-dip).
+      btn.onclick=()=>useEngineerRecycle(p);
     } else if(s.passive){ btn.disabled=true; btn.title="被動技能，自動生效"; }
     else if(p.flags.skillUsedThisRound){ btn.disabled=true; btn.title="本輪已使用過職業技能，下輪才能再使用"; }
     else if(p.prof==="gambler" && idx===0 && p.flags.roomActsUsedThisRound>0){
@@ -2959,7 +3139,7 @@ function renderAll(){
   } else {
     // 每輪強制移動: neither "use this room's function" nor "stay here" is allowed while still
     // parked in the room the round started in — except boarding the helicopter at 202.
-    const isHelipadBoarding = room.special==="helipad" && p.roundStartRoom==="202";
+    const isHelipadBoarding = room.special==="helipad" && canBoardHeliNow(p);
     const mustMoveFirst = p.room===p.roundStartRoom && !isHelipadBoarding && mustMoveThisRound(p);
     if(room.draw>0 || room.special){
       const btn=document.createElement("button"); btn.className="btn small";
