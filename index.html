@@ -1758,11 +1758,10 @@ function openRopeModal(p){
   if(!dests.length){ flashMsg("此樓層沒有可直接上下樓的目標。"); return; }
   const opts=dests.map(r=>`<option value="${r.id}">${FLOOR_LABEL[r.floor]} ${r.id} ${r.name||""}</option>`).join("");
   openModal(`<h3>繩索：直接上下樓（無需梯子/電梯）</h3><select id="ropeSel">${opts}</select><br><br>
-    <button class="btn small" id="ropeOk">使用(消耗1步)</button> <button class="btn small ghost" id="ropeCancel">取消</button>`);
+    <button class="btn small" id="ropeOk">使用(消耗1步，永久道具不會用完)</button> <button class="btn small ghost" id="ropeCancel">取消</button>`);
   document.getElementById("ropeOk").onclick=()=>{
     if(p.flags.roomCommitted){ flashMsg("本輪已確定停留於此房間，無法再移動。"); closeModal(); return; }
     if(!carrySpendStep(p)){ closeModal(); return; }
-    removeItem(p,"rope"); STATE.discardPile.push("rope");
     p.room=document.getElementById("ropeSel").value; closeModal(); renderAll();
     log(p.name+" 使用繩索直接上下樓，前往 "+p.room+"。");
   };
