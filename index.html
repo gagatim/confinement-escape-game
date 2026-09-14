@@ -3,7 +3,11 @@
 <title>禁閉逃殺</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Noto+Sans+TC:wght@400;500;700;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<!-- Loaded non-blocking (media=print swapped to all on load) so a slow/unreachable connection
+     (this is a single-file game people copy around and open locally) never delays first paint —
+     the page renders immediately on its system-font fallback stack and upgrades if the CDN answers. -->
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Noto+Sans+TC:wght@400;500;700;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+<noscript><link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Noto+Sans+TC:wght@400;500;700;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet"></noscript>
 <style>
   :root{
     --bg:#0a0e17; --bg-deep:#05070c; --panel:#121a2c; --panel-2:#0e1524; --line:#263252;
@@ -971,13 +975,18 @@ const SELECT_QUOTES={
   voiceBtn.addEventListener("click",()=>{ VOICE.setMuted(!VOICE.isMuted()); syncVoiceLabel(); });
 })();
 
+const LOG_EL=document.getElementById("log");
+// A long game can log hundreds of lines (every move/skill/item/AI turn writes one); an unbounded
+// #log would keep piling up DOM nodes for the rest of the session, so trim the oldest once it
+// passes a generous cap — well past what anyone scrolls back to read mid-game.
+const LOG_MAX_ENTRIES=500;
 function log(msg,cls){
-  const el=document.getElementById("log");
   const d=document.createElement("div");
   if(cls) d.className=cls;
   d.innerHTML=msg;
-  el.appendChild(d);
-  el.scrollTop=el.scrollHeight;
+  LOG_EL.appendChild(d);
+  while(LOG_EL.childElementCount>LOG_MAX_ENTRIES) LOG_EL.removeChild(LOG_EL.firstChild);
+  LOG_EL.scrollTop=LOG_EL.scrollHeight;
   if(cls==="dmg") SFX.hit();
   else if(cls==="heal") SFX.heal();
 }
@@ -1329,6 +1338,38 @@ function gridPlace(el, floor, col, span){
   el.style.gridRow = (Number(floor)+1);
   el.style.gridColumn = (col+2)+" / span "+(span||1);
 }
+// The live #mapArea's room-chip elements, built once by buildGameMapOnce() and reused for the
+// rest of the page's life — indexed by room id so renderAll() can update classes/occupancy on
+// the existing nodes every render instead of destroying and recreating all ~42 chips.
+const GAME_MAP_CHIPS={};
+let gameMapBuilt=false;
+function buildGameMapOnce(){
+  if(gameMapBuilt) return;
+  const mapEl=document.getElementById("mapArea"); mapEl.innerHTML=""; mapEl.className="floor-plan";
+  const floors={};
+  Object.values(ROOMS).forEach(r=>{ (floors[r.floor]=floors[r.floor]||[]).push(r); });
+  Object.keys(floors).sort((a,b)=>a-b).forEach(fl=>{
+    const lbl=document.createElement("span"); lbl.className="floor-label"; lbl.textContent=FLOOR_LABEL[fl];
+    gridPlace(lbl, fl, -1);
+    mapEl.appendChild(lbl);
+    floors[fl].forEach(r=>{
+      const chip=document.createElement("div"); chip.className="room-chip";
+      if(hasVerticalLink(r)) chip.classList.add("vlink");
+      chip.innerHTML=`${r.id}${r.name?("<small>"+r.name+"</small>"):""}`+roomMarkersHtml(r)+`<span class="occ" hidden></span>`;
+      chip.onclick=()=>onRoomClick(r.id);
+      // Clickable but a plain <div> — give it button semantics/keyboard access rather than
+      // leaving it reachable only by mouse/touch.
+      chip.setAttribute("role","button");
+      chip.tabIndex=0;
+      chip.setAttribute("aria-label","房間 "+r.id+(r.name?" "+r.name:""));
+      chip.addEventListener("keydown",(e)=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); onRoomClick(r.id); } });
+      gridPlace(chip, r.floor, r.order, r.span);
+      mapEl.appendChild(chip);
+      GAME_MAP_CHIPS[r.id]=chip;
+    });
+  });
+  gameMapBuilt=true;
+}
 // read-only reference map (no click handlers, no live game state) — used on the spawn-select
 // screen so players can see the whole connected building before secretly picking a spawn room.
 function renderStaticMap(containerId, highlightIds){
@@ -1477,15 +1518,16 @@ function onRoomClick(roomId){
   if(!isMyTurn()){ flashMsg("尚未輪到你的回合。"); return; }
   if(p.flags.roomCommitted){ flashMsg("本輪已確定停留於此房間，無法再移動（每輪只能在最終抵達的單一房間行動）。"); return; }
   if(p.ghost){ // 暗影無視梯子電梯，能穿牆移動，不受相鄰房間/步數限制
-    p.room=roomId; SFX.move(); renderAll(); return;
+    tryMove(p,roomId); SFX.move(); renderAll(); return;
   }
-  const dist=bfsDist(p.room,roomId);
+  const fromRoom=p.room;
+  const dist=bfsDist(fromRoom,roomId);
   if(dist===Infinity || dist>p.stepsLeft){ flashMsg("步數不足或無法到達"); return; }
   if(dist>0){
-    const path=bfsPath(p.room,roomId);
+    const path=bfsPath(fromRoom,roomId);
     if(path && path.length>2) log(p.name+" 移動路徑："+pathLabel(path)+"（共"+dist+"步）");
   }
-  p.room=roomId; p.stepsLeft-=dist;
+  tryMove(p,roomId); // re-validated above; this is the same bfsDist+move step resolveAITurn uses
   if(roomId==="102"){ applyLaser(p); }
   SFX.move();
   renderAll();
@@ -2360,8 +2402,7 @@ function aiConsiderSkillAfterMove(p){
 function resolveAITurn(p){
   aiConsiderTruckerBoost(p);
   const target=aiChooseTarget(p);
-  const dist=bfsDist(p.room,target);
-  if(dist!==Infinity && dist<=p.stepsLeft){ p.room=target; p.stepsLeft-=dist; }
+  tryMove(p,target);
   if(p.room==="102") applyLaser(p);
   const room=ROOMS[p.room];
   if(room.draw>0){ resolveAIDraw(p,p.room,room.draw); }
@@ -2751,32 +2792,46 @@ function renderEndScreen(){
 }
 
 /* ===================== RENDER ===================== */
+// Static top-panel elements renderAll() touches on every single action — looked up once here
+// (the DOM nodes themselves never change) instead of re-querying by id ~20x per render.
+const EL={
+  roundNo:document.getElementById("roundNo"), phaseName:document.getElementById("phaseName"),
+  poisonedFloors:document.getElementById("poisonedFloors"), voteBallotFloors:document.getElementById("voteBallotFloors"),
+  youName:document.getElementById("youName"), youProf:document.getElementById("youProf"),
+  hpBar:document.getElementById("hpBar"), hpText:document.getElementById("hpText"),
+  stPower:document.getElementById("stPower"), stSpeed:document.getElementById("stSpeed"), stCarry:document.getElementById("stCarry"),
+  curRoom:document.getElementById("curRoom"), stepsLeft:document.getElementById("stepsLeft"),
+  carryUsed:document.getElementById("carryUsed"), carryCap:document.getElementById("carryCap"),
+  inventory:document.getElementById("inventory"), skillList:document.getElementById("skillList"),
+  roomActions:document.getElementById("roomActions"), hereList:document.getElementById("hereList"),
+  allPlayers:document.getElementById("allPlayers"), topStatus:document.getElementById("topStatus")
+};
 function renderAll(){
   if(STATE.gameOver) return;
   const p=you();
-  document.getElementById("roundNo").textContent=STATE.round;
-  document.getElementById("phaseName").textContent="行動階段";
-  document.getElementById("poisonedFloors").textContent=[...STATE.poisoned].map(f=>FLOOR_LABEL[f]).join("、")||"無";
-  document.getElementById("voteBallotFloors").textContent=(STATE.voteBallot||[]).filter(f=>!STATE.poisoned.has(f)).map(f=>FLOOR_LABEL[f]).join("、")||"無";
-  document.getElementById("youName").textContent=p.name;
-  document.getElementById("youProf").textContent=profIcon(p.prof)+" "+PROFESSIONS[p.prof].name;
+  EL.roundNo.textContent=STATE.round;
+  EL.phaseName.textContent="行動階段";
+  EL.poisonedFloors.textContent=[...STATE.poisoned].map(f=>FLOOR_LABEL[f]).join("、")||"無";
+  EL.voteBallotFloors.textContent=(STATE.voteBallot||[]).filter(f=>!STATE.poisoned.has(f)).map(f=>FLOOR_LABEL[f]).join("、")||"無";
+  EL.youName.textContent=p.name;
+  EL.youProf.textContent=profIcon(p.prof)+" "+PROFESSIONS[p.prof].name;
   if(p.ghost){
-    document.getElementById("hpBar").style.width=Math.min(100,(p.ghostDrainTotal/2*100))+"%";
-    document.getElementById("hpText").textContent="暗影吸血進度 "+p.ghostDrainTotal+"/2（吸滿2點復活）";
+    EL.hpBar.style.width=Math.min(100,(p.ghostDrainTotal/2*100))+"%";
+    EL.hpText.textContent="暗影吸血進度 "+p.ghostDrainTotal+"/2（吸滿2點復活）";
   } else {
-    document.getElementById("hpBar").style.width=Math.max(0,(p.hp/p.maxhp*100))+"%";
-    document.getElementById("hpText").textContent="HP "+p.hp+"/"+p.maxhp;
+    EL.hpBar.style.width=Math.max(0,(p.hp/p.maxhp*100))+"%";
+    EL.hpText.textContent="HP "+p.hp+"/"+p.maxhp;
   }
-  document.getElementById("stPower").textContent=combatPower(p);
-  document.getElementById("stSpeed").textContent=p.speed;
-  document.getElementById("stCarry").textContent=p.carry;
-  document.getElementById("curRoom").textContent=p.room+" "+(ROOMS[p.room].name||"");
-  document.getElementById("stepsLeft").textContent=p.ghost?"∞（穿牆）":p.stepsLeft;
-  document.getElementById("carryUsed").textContent=usedCarry(p);
-  document.getElementById("carryCap").textContent=effectiveCarryCap(p)>9000?"∞":effectiveCarryCap(p);
+  EL.stPower.textContent=combatPower(p);
+  EL.stSpeed.textContent=p.speed;
+  EL.stCarry.textContent=p.carry;
+  EL.curRoom.textContent=p.room+" "+(ROOMS[p.room].name||"");
+  EL.stepsLeft.textContent=p.ghost?"∞（穿牆）":p.stepsLeft;
+  EL.carryUsed.textContent=usedCarry(p);
+  EL.carryCap.textContent=effectiveCarryCap(p)>9000?"∞":effectiveCarryCap(p);
 
   // inventory — 暗影 has no items and can't use any (everything was dropped into the mortuary on death)
-  const invEl=document.getElementById("inventory"); invEl.innerHTML="";
+  const invEl=EL.inventory; invEl.innerHTML="";
   if(p.ghost){
     invEl.innerHTML="<div class='muted' style='font-size:12px'>你是暗影，沒有背包。</div>";
   } else {
@@ -2822,7 +2877,7 @@ function renderAll(){
   }
 
   // skills — 暗影 no longer plays as its old profession; it just wanders and drains blood
-  const skEl=document.getElementById("skillList"); skEl.innerHTML="";
+  const skEl=EL.skillList; skEl.innerHTML="";
   if(p.ghost){
     skEl.innerHTML="<div class='muted' style='font-size:12px'>你是暗影：可自由穿牆移動到任意房間，回合結束時若與存活玩家同房，將於結算階段吸取1點生命；目前已吸 "+p.ghostDrainTotal+"/2 點，吸滿即可原地復活。</div>";
   } else {
@@ -2846,44 +2901,32 @@ function renderAll(){
   });
   }
 
-  // map
-  const mapEl=document.getElementById("mapArea"); mapEl.innerHTML=""; mapEl.className="floor-plan";
+  // map — chips are built once (buildGameMapOnce) and reused for the rest of the page's life,
+  // since ROOMS/ADJ never change at runtime; every render just toggles classes/occupancy text on
+  // the existing nodes instead of tearing down and recreating all ~42 chips + their listeners.
+  buildGameMapOnce();
   const reach = p.flags.roomCommitted ? {} :
     p.ghost ? Object.fromEntries(Object.keys(ROOMS).map(id=>[id,0])) : // 暗影能穿牆，任何房間皆可到達
     reachableRooms(p.room,p.stepsLeft);
-  const floors={};
-  Object.values(ROOMS).forEach(r=>{ (floors[r.floor]=floors[r.floor]||[]).push(r); });
-  Object.keys(floors).sort((a,b)=>a-b).forEach(fl=>{
-    const lbl=document.createElement("span"); lbl.className="floor-label"; lbl.textContent=FLOOR_LABEL[fl];
-    gridPlace(lbl, fl, -1);
-    mapEl.appendChild(lbl);
-    floors[fl].forEach(r=>{
-      const chip=document.createElement("div"); chip.className="room-chip";
-      if(hasVerticalLink(r)) chip.classList.add("vlink");
-      if(r.id===p.room) chip.classList.add("here");
-      else if(reach[r.id]!==undefined) chip.classList.add("reachable");
-      if(roomIsPoisoned(r)) chip.classList.add("poison");
-      const occAlive=STATE.players.filter(x=>x.room===r.id && x.alive && !x.ghost);
-      const fattyHere=STATE.players.find(x=>x.prof==="fatty" && x.alive && x.room===r.id);
-      let occTxt="";
-      if(r.id===p.room) occTxt=occAlive.length>1?String(occAlive.length):"";
-      else if(fattyHere) occTxt="肥";
-      chip.innerHTML=`${r.id}${r.name?("<small>"+r.name+"</small>"):""}`+roomMarkersHtml(r)+(occTxt?`<span class="occ">${occTxt}</span>`:"");
-      chip.onclick=()=>onRoomClick(r.id);
-      // Clickable but a plain <div> — give it button semantics/keyboard access rather than
-      // leaving it reachable only by mouse/touch.
-      chip.setAttribute("role","button");
-      chip.tabIndex=0;
-      chip.setAttribute("aria-label","房間 "+r.id+(r.name?" "+r.name:""));
-      chip.addEventListener("keydown",(e)=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); onRoomClick(r.id); } });
-      gridPlace(chip, r.floor, r.order, r.span);
-      mapEl.appendChild(chip);
-    });
+  Object.values(ROOMS).forEach(r=>{
+    const chip=GAME_MAP_CHIPS[r.id];
+    const here=r.id===p.room;
+    chip.classList.toggle("here", here);
+    chip.classList.toggle("reachable", !here && reach[r.id]!==undefined);
+    chip.classList.toggle("poison", roomIsPoisoned(r));
+    const occAlive=STATE.players.filter(x=>x.room===r.id && x.alive && !x.ghost);
+    const fattyHere=STATE.players.find(x=>x.prof==="fatty" && x.alive && x.room===r.id);
+    let occTxt="";
+    if(here) occTxt=occAlive.length>1?String(occAlive.length):"";
+    else if(fattyHere) occTxt="肥";
+    const occEl=chip.querySelector(".occ");
+    occEl.hidden=!occTxt;
+    occEl.textContent=occTxt;
   });
 
   // room actions — a player may only act in the ONE room they finally stop in this round;
   // using the room's function, or explicitly ending movement, both lock further movement.
-  const raEl=document.getElementById("roomActions"); raEl.innerHTML="";
+  const raEl=EL.roomActions; raEl.innerHTML="";
   function roomActionLabel(room,p){
     return room.special==="gene"?"使用基因庫" : room.special==="respec"?"重新分配點數" :
       room.special==="slide"?"滑向垃圾場(1步)" : room.special==="teleport"?"傳送" : room.special==="control"?"控制室功能" :
@@ -2941,12 +2984,12 @@ function renderAll(){
   if(!p.ghost && room.special==="laser") log_once(p,"laser-"+STATE.round,()=>{ applyLaser(p); log(p.name+" 經過激光室，結算時將扣1點生命。","dmg"); screenShake(); });
 
   // here list
-  const hereEl=document.getElementById("hereList");
+  const hereEl=EL.hereList;
   const others=playersInRoom(p.room,false).filter(x=>x.id!==p.id);
   hereEl.textContent = others.length? others.map(x=>x.name+(x.ghost?"[暗影]":"")).join("、") : "（無其他玩家）";
 
   // all players
-  const apEl=document.getElementById("allPlayers"); apEl.innerHTML="";
+  const apEl=EL.allPlayers; apEl.innerHTML="";
   STATE.players.forEach(pl=>{
     const line=document.createElement("div");
     line.textContent=pl.name+" ["+profIcon(pl.prof)+" "+PROFESSIONS[pl.prof].name+"] HP:"+pl.hp+(pl.ghost?" 暗影":pl.alive?"":" 💀");
@@ -2954,7 +2997,7 @@ function renderAll(){
   });
 
   const turnPos=STATE.turnOrder? STATE.turnOrder.indexOf(p.id)+1 : 0;
-  document.getElementById("topStatus").innerHTML=`<span class="badge">回合 ${STATE.round}/6</span>`+
+  EL.topStatus.innerHTML=`<span class="badge">回合 ${STATE.round}/6</span>`+
     (turnPos>0? `<span class="badge">本輪順序：第 ${turnPos}/${STATE.turnOrder.length} 位行動</span>` : "");
   renderHpHistory();
   saveGame();
