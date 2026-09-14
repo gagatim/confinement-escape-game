@@ -1767,11 +1767,12 @@ function collectAirdrop(p){
 }
 
 /* ---- modals ---- */
+const MODAL_EL=document.getElementById("modal"), MODAL_BG_EL=document.getElementById("modal-bg");
 function openModal(html){
-  document.getElementById("modal").innerHTML=html;
-  document.getElementById("modal-bg").classList.remove("hidden");
+  MODAL_EL.innerHTML=html;
+  MODAL_BG_EL.classList.remove("hidden");
 }
-function closeModal(){ document.getElementById("modal-bg").classList.add("hidden"); }
+function closeModal(){ MODAL_BG_EL.classList.add("hidden"); }
 function openRespecModal(p,cap){
   openModal(`<h3>操作室：重新分配基因點數（共 ${cap} 點）</h3>
     <div class="statbar"><label>武力值</label><input type="number" id="rsPower" min="0" max="${cap}" value="${p.power}"></div>
@@ -2792,6 +2793,12 @@ function renderEndScreen(){
 }
 
 /* ===================== RENDER ===================== */
+function roomActionLabel(room,p){
+  return room.special==="gene"?"使用基因庫" : room.special==="respec"?"重新分配點數" :
+    room.special==="slide"?"滑向垃圾場(1步)" : room.special==="teleport"?"傳送" : room.special==="control"?"控制室功能" :
+    room.special==="helipad"?(p.roundStartRoom==="202"?"領取空投／搭乘直升機":"領取空投（本輪需停留，下輪才能搭機）") :
+    room.draw>0?"搜索房間 (最多"+room.draw+"張)" : "使用房間功能";
+}
 // Static top-panel elements renderAll() touches on every single action — looked up once here
 // (the DOM nodes themselves never change) instead of re-querying by id ~20x per render.
 const EL={
@@ -2927,12 +2934,6 @@ function renderAll(){
   // room actions — a player may only act in the ONE room they finally stop in this round;
   // using the room's function, or explicitly ending movement, both lock further movement.
   const raEl=EL.roomActions; raEl.innerHTML="";
-  function roomActionLabel(room,p){
-    return room.special==="gene"?"使用基因庫" : room.special==="respec"?"重新分配點數" :
-      room.special==="slide"?"滑向垃圾場(1步)" : room.special==="teleport"?"傳送" : room.special==="control"?"控制室功能" :
-      room.special==="helipad"?(p.roundStartRoom==="202"?"領取空投／搭乘直升機":"領取空投（本輪需停留，下輪才能搭機）") :
-      room.draw>0?"搜索房間 (最多"+room.draw+"張)" : "使用房間功能";
-  }
   const room=ROOMS[p.room];
   const roomOpsLeft=(1+(p.flags.gamblerBonusOps||0))-(p.flags.roomActsUsedThisRound||0);
   if(p.ghost){
