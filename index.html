@@ -1112,7 +1112,7 @@ document.getElementById("abandonBtn").addEventListener("click",()=>{
     <p class="muted" style="font-size:13px">目前進度將會遺失，回到選擇職業畫面重新開始一局新測試。</p>
     <button class="btn small warn" id="abandonYes">放棄並重新開始</button> <button class="btn small ghost" id="abandonNo">取消</button>`);
   document.getElementById("abandonYes").onclick=()=>{ clearSavedGame(); location.reload(); };
-  document.getElementById("abandonNo").onclick=closeModal;
+  bindModalClose("abandonNo");
 });
 
 /* ---------- player factory ---------- */
@@ -1773,6 +1773,14 @@ function openModal(html){
   MODAL_BG_EL.classList.remove("hidden");
 }
 function closeModal(){ MODAL_BG_EL.classList.add("hidden"); }
+// Nearly every modal's cancel/close button is just this one-liner — a tiny helper instead of
+// repeating `document.getElementById(id).onclick=closeModal;` at each of its ~17 call sites.
+function bindModalClose(id){ document.getElementById(id).onclick=closeModal; }
+// Esc closes whatever action modal is currently open — same effect as its own Cancel/取消
+// button, so it's always safe (never submits a choice, just backs out).
+document.addEventListener("keydown",(e)=>{
+  if(e.key==="Escape" && !MODAL_BG_EL.classList.contains("hidden")) closeModal();
+});
 function openRespecModal(p,cap){
   openModal(`<h3>操作室：重新分配基因點數（共 ${cap} 點）</h3>
     <div class="statbar"><label>武力值</label><input type="number" id="rsPower" min="0" max="${cap}" value="${p.power}"></div>
@@ -1786,7 +1794,7 @@ function openRespecModal(p,cap){
     p.power=a; p.speed=b; p.carry=c; closeModal(); renderAll();
     log(p.name+" 於操作室重新分配了基因點數。");
   };
-  document.getElementById("rsCancel").onclick=closeModal;
+  bindModalClose("rsCancel");
 }
 function openScavengerModal(p){
   // Trash is weightless for the scavenger (weightlessTrash), but water/food are not, so each
@@ -1814,7 +1822,7 @@ function openScavengerModal(p){
     closeModal(); renderAll();
     log(p.name+" 使用變廢為寶：垃圾轉為「"+parts.join("、")+"」。"); speakSkill(p,"scavenger:1");
   };
-  document.getElementById("swCancel").onclick=closeModal;
+  bindModalClose("swCancel");
 }
 function openTeleportModal(p){
   const opts=Object.keys(ROOMS).map(id=>`<option value="${id}">${id} ${ROOMS[id].name||""}</option>`).join("");
@@ -1825,7 +1833,7 @@ function openTeleportModal(p){
     p.room=document.getElementById("tpSel").value; closeModal(); renderAll();
     log(p.name+" 使用傳送室前往 "+p.room+"，可繼續移動或停留操作該房間的功能。");
   };
-  document.getElementById("tpCancel").onclick=closeModal;
+  bindModalClose("tpCancel");
 }
 function openHelipadModal(p){
   const dests=HELI_TARGETS.filter(id=>id!==p.room);
@@ -1838,7 +1846,7 @@ function openHelipadModal(p){
     p.room=document.getElementById("hpSel").value; closeModal(); renderAll();
     log(p.name+" 搭乘直昇機前往 "+p.room+"。");
   };
-  document.getElementById("hpCancel").onclick=closeModal;
+  bindModalClose("hpCancel");
 }
 function openRopeModal(p){
   const room=ROOMS[p.room];
@@ -1853,7 +1861,7 @@ function openRopeModal(p){
     p.room=document.getElementById("ropeSel").value; closeModal(); renderAll();
     log(p.name+" 使用繩索直接上下樓，前往 "+p.room+"。");
   };
-  document.getElementById("ropeCancel").onclick=closeModal;
+  bindModalClose("ropeCancel");
 }
 // 攀岩者's 垂直攀爬: once activated (1 HP paid in useProfSkill), the same "jump straight to any
 // room on floor±1" ability as 繩索, but from a paid skill instead of a consumed item — this was
@@ -1871,7 +1879,7 @@ function openClimberVerticalModal(p){
     p.room=document.getElementById("climbSel").value; closeModal(); renderAll();
     log(p.name+" 使用垂直攀爬，直接前往 "+p.room+"。");
   };
-  document.getElementById("climbCancel").onclick=closeModal;
+  bindModalClose("climbCancel");
 }
 function openControlModal(p){
   // 解毒 targets a single ROOM permanently (a surgical exception), separate from the
@@ -1889,7 +1897,7 @@ function openControlModal(p){
     if(rid){ STATE.detoxedRooms.add(rid); log(p.name+" 於控制室：秘密解毒了「"+rid+" "+(ROOMS[rid].name||"")+"」。"); }
     closeModal(); renderAll();
   };
-  document.getElementById("ctrlCancel").onclick=closeModal;
+  bindModalClose("ctrlCancel");
 }
 // 系統監控: shows headcount and each occupant's base 武力值 for any room — deliberately uses
 // the raw stat, not combatPower(), since a weapon bonus baked into the number would leak whether
@@ -1906,9 +1914,9 @@ function openHackerMonitorModal(p){
       <div>目前人數：${occupants.length}</div>
       <div style="margin-top:6px">${lines}</div><br>
       <button class="btn small ghost" id="hackViewClose">關閉</button>`);
-    document.getElementById("hackViewClose").onclick=closeModal;
+    bindModalClose("hackViewClose");
   };
-  document.getElementById("hackViewCancel").onclick=closeModal;
+  bindModalClose("hackViewCancel");
 }
 
 /* ===================== ITEM USE ===================== */
@@ -1970,7 +1978,7 @@ function openBartenderWineModal(p){
     log(p.name+(isSelf?" 為自己調製了特調果汁":" 舉杯共飲，請 "+target.name+" 喝了一杯果汁")+"（結算階段公開生效）。");
     closeModal(); renderAll();
   };
-  document.getElementById("wineTargetCancel").onclick=closeModal;
+  bindModalClose("wineTargetCancel");
 }
 // 藥片 heals LAST (see resolvePillHealing below) — everything else queued this round (水/糧/
 // 腎上腺素/酒) resolves here, early, since water/food's hunger-flags and adrenaline's death-floor
@@ -2048,7 +2056,7 @@ function useGoldAtRoom(p){
       else { p.inv.push(k); closeModal(); renderAll(); }
     };
   });
-  document.getElementById("goldCancel").onclick=closeModal;
+  bindModalClose("goldCancel");
 }
 function useRocket(p){
   if(!p.flags.roomCommitted){ flashMsg("請先移動並確定停留在房間後，才能使用道具。"); return; }
@@ -2063,7 +2071,7 @@ function useRocket(p){
     log(p.name+" 發射火箭筒瞄準 "+document.getElementById("rkSel").value+"（結算時生效）。");
     closeModal(); renderAll();
   };
-  document.getElementById("rkCancel").onclick=closeModal;
+  bindModalClose("rkCancel");
 }
 function useRecycleDevice(p){
   if(!p.flags.roomCommitted){ flashMsg("請先移動並確定停留在房間後，才能使用道具。"); return; }
@@ -2164,7 +2172,7 @@ function useProfSkill(p,idx){
       STATE.poisonBoost=true; log(p.name+" 令本輪毒氣樓層傷害+2。"); speakSkill(p,"chemist:0b");
       p.flags.chemistUses++; p.flags.skillUsedThisRound=true; closeModal(); renderAll();
     };
-    document.getElementById("chCancel").onclick=closeModal;
+    bindModalClose("chCancel");
   } else if(p.prof==="hacker" && idx===1){
     if(skillUseCapReached(p,"hacker:1")){ flashMsg("已用完2次"); return; }
     openModal(`<h3>遠端操控：選擇要使用的房間功能</h3>
@@ -2182,7 +2190,7 @@ function useProfSkill(p,idx){
         closeModal(); renderAll();
       };
     });
-    document.getElementById("hackCancel").onclick=closeModal;
+    bindModalClose("hackCancel");
   } else if(p.prof==="tamer" && idx===0){
     if(skillUseCapReached(p,"tamer:0")){ flashMsg("已用完4次"); return; }
     p.flags.skillUsedThisRound=true; speakSkill(p,"tamer:0");
@@ -2229,7 +2237,7 @@ function confirmAndUseSkill(p,idx){
   openModal(`<h3>發動技能：${s.name}</h3><div style="margin-bottom:12px;font-size:13px;line-height:1.6">${s.desc}</div>
     <button class="btn small warn" id="skConfirmOk">確定發動</button> <button class="btn small ghost" id="skConfirmCancel">取消</button>`);
   document.getElementById("skConfirmOk").onclick=()=>{ closeModal(); useProfSkill(p,idx); };
-  document.getElementById("skConfirmCancel").onclick=closeModal;
+  bindModalClose("skConfirmCancel");
 }
 
 /* ===================== VOTE / TRADE ===================== */
@@ -2253,7 +2261,7 @@ document.getElementById("voteBtn").addEventListener("click",()=>{
     log(p.name+" 投票毒氣樓層: "+FLOOR_LABEL[f]+"（權重"+weight+"）");
     closeModal();
   };
-  document.getElementById("voteCancel").onclick=closeModal;
+  bindModalClose("voteCancel");
 });
 document.getElementById("tradeBtn").addEventListener("click",()=>{
   const p=you();
@@ -2282,7 +2290,7 @@ document.getElementById("tradeBtn").addEventListener("click",()=>{
     } else { log(target.name+" 拒絕了交易。"); }
     closeModal(); renderAll();
   };
-  document.getElementById("tCancel").onclick=closeModal;
+  bindModalClose("tCancel");
 });
 
 /* ===================== AI ===================== */
