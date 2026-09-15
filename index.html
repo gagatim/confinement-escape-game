@@ -14,6 +14,7 @@
     --cyan:#4cd6e0; --cyan-bright:#9df3fa; --violet:#7c6cf0; --amber:#e0a83c; --amber-bright:#ffce6b;
     --toxic:#6ee06b; --toxic-bright:#a8ffa0; --ember:#e0524c; --ember-bright:#ff8a7a;
     --ink:#e7edf7; --muted:#7c8bab; --gold:#e8c15a;
+    --floor-up:#161a28; --floor-down:#0e1a2a; /* subtle 1F/2F vs 地下樓層 room-chip tint */
   }
   /* ---- light theme: same variable set, swapped by a data-theme attribute on <html> so every
      rule below (including inline style="color:var(--x)" in the markup) repaints for free. ---- */
@@ -22,6 +23,7 @@
     --cyan:#0e8a94; --cyan-bright:#036672; --violet:#6952d6; --amber:#b9790a; --amber-bright:#8a5a00;
     --toxic:#2f9e3b; --toxic-bright:#1f7a29; --ember:#d1453f; --ember-bright:#b23029;
     --ink:#1b2333; --muted:#5b6478; --gold:#a9790a;
+    --floor-up:#f5f1e9; --floor-down:#e9f1f7; /* subtle 1F/2F vs 地下樓層 room-chip tint */
   }
   html[data-theme="light"] body{
     background:radial-gradient(ellipse 900px 500px at 50% -8%,#e2ebfc 0%,transparent 60%),
@@ -107,11 +109,17 @@
   .floor-label{width:32px;font-size:10px;color:var(--muted);font-family:"JetBrains Mono",monospace}
   .room-chip{border:1px solid var(--line);background:var(--panel-2);border-radius:6px;padding:5px 7px;font-size:11px;
     cursor:pointer;position:relative;min-width:52px;text-align:center;line-height:1.3;
-    transition:border-color .12s ease,box-shadow .12s ease,transform .12s ease}
+    transition:border-color .12s ease,border-width .12s ease,box-shadow .12s ease,transform .12s ease}
   .room-chip:hover{border-color:var(--cyan-bright);transform:translateY(-1px)}
   .room-chip small{display:block;font-size:9px;color:var(--muted)}
+  /* 1F/2F vs 地下樓層: a low-contrast tint only (no border/glow change) so it reads as "which
+     zone" at a glance without competing with the state colors below (here/poison/spawn/dead all
+     still take visual priority since they're declared after and set their own background too). */
+  .room-chip.aboveground{background:var(--floor-up)}
+  .room-chip.underground{background:var(--floor-down)}
   .room-chip.reachable{border-color:var(--cyan);box-shadow:0 0 8px rgba(76,214,224,.3)}
-  .room-chip.here{border-color:var(--amber-bright);background:#2a2410;box-shadow:0 0 10px rgba(255,206,107,.4)}
+  .room-chip.here{border-width:2px;border-color:var(--amber-bright);background:#2a2410;
+    box-shadow:0 0 12px 1px rgba(255,206,107,.55)}
   .room-chip.poison{border-color:var(--toxic);background:#122313;color:var(--toxic-bright)}
   .room-chip.dead{opacity:.35;cursor:default}
   .room-chip.dead:hover{transform:none;border-color:var(--line)}
@@ -233,8 +241,9 @@
   <div id="setup">
     <div class="card">
       <h2 style="font-size:16px;color:var(--cyan-bright)">1. 選擇職業</h2>
+      <div class="muted mono" id="profCountInfo" style="font-size:12px;margin-bottom:6px"></div>
       <label class="muted" style="display:block;margin-bottom:10px;font-size:13px">
-        <input type="checkbox" id="expansionToggle"> 啟用擴充模式（新增7個職業，AI也可能隨機選到）</label>
+        <input type="checkbox" id="expansionToggle"> 啟用擴充模式（新增18個職業，AI也可能隨機選到）</label>
       <div class="prof-grid" id="profGrid"></div>
     </div>
     <div class="card" style="margin-top:12px">
@@ -613,7 +622,7 @@ const PROFESSIONS = {
     {name:"邊緣存在感", desc:"（被動）所在房間存活玩家3人以上時：你不參與戰鬥結算，但火箭筒傷害仍有效。你自動恢復1點生命值(固定)。", passive:true}
   ]},
   climber:{name:"攀岩者", skills:[
-    {name:"垂直攀爬", desc:"發動技能支付1點生命值，該回合可直接上下移動樓層，移動仍需消耗步數。", uses:99},
+    {name:"垂直攀爬", desc:"發動技能後，該回合可直接上下移動樓層，移動仍需消耗步數。", uses:99},
     {name:"節食", desc:"整局限用1次，該回合不需支付水/糧。", uses:1}
   ]},
   engineer:{name:"工程師", skills:[
@@ -648,12 +657,51 @@ const PROFESSIONS = {
   shopper:{name:"購物大媽", skills:[
     {name:"精挑細選", desc:"（被動）抽取道具時多看1張，選1張放回房間，實際獲得數量不變。", passive:true},
     {name:"跳樓大拍賣", desc:"可直接跳到下一層樓（只能往下），消耗1步，整局限用3次；3次用完後速度永久-2。", uses:3}
+  ]},
+  runner:{name:"馬拉松跑者", skills:[
+    {name:"耐力訓練", desc:"（被動）若本輪步數用到剛好歸零，結算時恢復2點生命。", passive:true},
+    {name:"長跑", desc:"本回合速度+2。整局限用3次。", uses:3}
+  ]},
+  herbalist:{name:"草藥師", skills:[
+    {name:"藥效增強", desc:"（被動）藥片的治療效果額外+2（原本2點，共4點）。", passive:true},
+    {name:"藥草袋", desc:"（被動）藥片永久不佔負重。", passive:true}
+  ]},
+  veteran:{name:"鐵血老兵", skills:[
+    {name:"破釜沉舟", desc:"（被動）生命值≤3時，受到的所有戰鬥傷害-4（最低0）。", passive:true}
+  ]},
+  pickpocket:{name:"神偷", skills:[
+    {name:"順手牽羊", desc:"整局限用3次：可偷取同房間1名玩家的1張隨機道具（不透過交易，無視對方意願）。", uses:3}
+  ]},
+  diver:{name:"潛水員", skills:[
+    {name:"地下水道", desc:"（被動）移動時只要路徑上有經過地下樓層（B開頭房間），本次移動可多走1步（所需步數-1，最低1步）。", passive:true},
+    {name:"憋氣術", desc:"整局限用2次：發動後本輪進入毒氣房間完全不受毒氣傷害。", uses:2}
+  ]},
+  courier:{name:"郵差", skills:[
+    {name:"超載快遞", desc:"（被動）背包容量永久+1；但若下一輪開始時你的道具仍超過原本負重上限，將強制丟棄1張道具。", passive:true},
+    {name:"專人配送", desc:"整局限用3次：可將背包中1張道具卡直接送給任意一名玩家，不需同房。", uses:3}
+  ]},
+  gourmet:{name:"老饕", skills:[
+    {name:"美食鑑賞", desc:"（被動）使用糧食時有50%機率額外恢復1點生命。", passive:true},
+    {name:"大快朵頤", desc:"整局限用2次：立即繳交2份水，本輪生命上限暫時+2（回合結束後失效）。", uses:2}
+  ]},
+  farmer:{name:"農夫", skills:[
+    {name:"自給自足", desc:"（被動）本輪若飢餓扣血，30%機率額外獲得1份糧食（下輪可用，不佔負重）。", passive:true},
+    {name:"綠手指", desc:"整局限用2次：可將1個垃圾直接轉換成1份水+1份糧，不限房間。", uses:2}
+  ]},
+  caregiver:{name:"護理師", skills:[
+    {name:"悉心照料", desc:"（被動）可消耗背包中1張藥片，立即治療同房間另1名玩家3點生命（一般藥效為2點）。", passive:true},
+    {name:"隨傳隨到", desc:"整局限用2次：可立即移動到目前生命值≤3的玩家所在房間，不消耗步數。", uses:2}
+  ]},
+  miner:{name:"礦工", skills:[
+    {name:"挖礦本能", desc:"（被動）在金庫搜索時可得知剩餘金條數量，且每次搜索有20%機率額外獲得1根金條（不佔負重）。", passive:true},
+    {name:"精煉技術", desc:"整局限用2次：可將背包中2根金條轉換為1份水+1份糧。", uses:2}
   ]}
 };
-// 擴充模式: these 8 professions are hidden from the setup screen (and never randomly given to
+// 擴充模式: these 18 professions are hidden from the setup screen (and never randomly given to
 // AI) unless the player opts into 擴充模式 — keeps a first game to the original 16, same as
-// before this expansion was added, while letting anyone who wants the extra roster turn it on.
-const EXPANSION_PROFS=new Set(["medic","pilot","demolitions","chef","engineer","smuggler","survivor","shopper"]);
+// before this expansion was added, while letting anyone who wants the extra 18-profession roster
+// turn it on.
+const EXPANSION_PROFS=new Set(["medic","pilot","demolitions","chef","engineer","smuggler","survivor","shopper","runner","herbalist","veteran","pickpocket","diver","courier","gourmet","farmer","caregiver","miner"]);
 // One small emoji "portrait" per profession — shown on the selection card and anywhere a player's
 // profession is listed in-game, so each of the 16 is visually distinct at a glance, not just by name.
 const PROF_ICON={
@@ -661,7 +709,8 @@ const PROF_ICON={
   chemist:"🧪", embalmer:"⚰️", hacker:"💻", tycoon:"💰", shade:"👻", tamer:"🐕",
   merc:"🔪", geneFreak:"🧬", outsider:"🚪", climber:"🧗", engineer:"🔧",
   medic:"🩺", pilot:"✈️", demolitions:"🧨", chef:"🍳", smuggler:"🧳", survivor:"🎒",
-  shopper:"🛍️"
+  shopper:"🛍️", runner:"🏃", herbalist:"🌿", veteran:"🎖️", pickpocket:"🥷",
+  diver:"🤿", courier:"📦", gourmet:"🍽️", farmer:"🌾", caregiver:"💕", miner:"⛏️"
 };
 // 去圖示模式 (低調模式 companion toggle): when on, every emoji "picture" in the UI is swapped
 // for a plain bracketed-text stand-in instead — unlike 低調模式 (the boss key), this is meant to
@@ -924,7 +973,17 @@ const SKILL_QUOTES={
   "geneFreak:1":"重新編碼，我還能更強。",
   "climber:0":"撐得住，就往上爬。",
   "climber:1":"餓一頓，死不了。",
-  "embalmer:1":"死者的東西，由我來挑。"
+  "embalmer:1":"死者的東西，由我來挑。",
+  "survivor:1":"這種傷，隨手就能治。",
+  "runner:1":"再衝一段，我還跑得動。",
+  "pickpocket:0":"你不會發現東西什麼時候不見的。",
+  "diver:1":"閉氣，我很拿手。",
+  "courier:1":"貨已經在路上了。",
+  "gourmet:1":"吃這麼多，力氣都回來了。",
+  "farmer:1":"一點垃圾，也能長出東西來。",
+  "caregiver:0":"忍一下，馬上就不痛了。",
+  "caregiver:1":"我來了，撐住！",
+  "miner:1":"金子雖好，命更重要。"
 };
 const VOICE=(()=>{
   const supported="speechSynthesis" in window;
@@ -1015,7 +1074,17 @@ const SELECT_QUOTES={
   chef:"吃飽才有力氣逃命。",
   smuggler:"這些東西，我都有辦法弄到。",
   survivor:"荒野求生，我教過上百人。",
-  shopper:"折扣的東西，我從不錯過。"
+  shopper:"折扣的東西，我從不錯過。",
+  runner:"跑得夠久，命就夠長。",
+  herbalist:"是藥三分毒，但我的不是。",
+  veteran:"我這條命，早就不怕輸。",
+  pickpocket:"你的東西，我看一眼就知道值不值得拿。",
+  diver:"水下的路，我比誰都熟。",
+  courier:"再遠的地方，我都能送到。",
+  gourmet:"沒吃飽，我可不逃命。",
+  farmer:"地不會虧待認真的人。",
+  caregiver:"別怕，有我在。",
+  miner:"哪裡有礦，我一挖就知道。"
 };
 (()=>{
   const voiceBtn=document.getElementById("voiceMuteBtn");
@@ -1045,8 +1114,16 @@ function logRound(n){ log(`<span class="r">── 第 ${n} 輪 ──</span>`); 
 const profGrid=document.getElementById("profGrid");
 let selectedProf=null;
 // 擴充模式: off by default (unchecked) — matches a fresh game to the original 16-profession
-// roster until the player explicitly opts into the extra 7. Read by startGame()'s AI pool too.
+// roster until the player explicitly opts into the extra 18. Read by startGame()'s AI pool too.
 let expansionMode=false;
+// Counted straight off PROFESSIONS/EXPANSION_PROFS rather than hardcoded numbers, so this line
+// can never drift out of sync the way the old "新增7個職業" checkbox label once did after the
+// roster grew past 7 without the copy being updated.
+(()=>{
+  const total=Object.keys(PROFESSIONS).length, expansion=EXPANSION_PROFS.size, base=total-expansion;
+  document.getElementById("profCountInfo").textContent=
+    "目前職業："+base+" 個　擴充職業："+expansion+" 個　總共："+total+" 個";
+})();
 Object.entries(PROFESSIONS).forEach(([id,p])=>{
   const div=document.createElement("div");
   div.className="prof-card"; div.dataset.id=id;
@@ -1189,7 +1266,7 @@ function makePlayer(id,isAI,profId,stats,name){
     id, name: name || (isAI? AI_NAMES[id%AI_NAMES.length] : "你"),
     isAI, prof:profId,
     power:stats.power, speed:stats.speed,
-    carry:stats.carry + (profId==="smuggler"?3:0), // 走私客的暗格夾層: +3 負重
+    carry:stats.carry + (profId==="smuggler"?3:0) + (profId==="courier"?1:0), // 走私客的暗格夾層/郵差的超載快遞
     hp:startHp, maxhp:startHp, alive:true, ghost:false, ghostDrainTotal:0,
     hpLog:[], // per-round {round,hp,delta} snapshots, filled in at settlement — drives the 每輪血量變化 table
     roundEvents:[], // this round's {cause,amount} damage events — read by showRoundSummary, reset each beginRound
@@ -1201,6 +1278,9 @@ function makePlayer(id,isAI,profId,stats,name){
       tamerUses:0, geneUses:0, climberDietUsed:false, dietThisRound:false,
       goldUsedThisRound:false, visited102:false, remoteRoomOverride:null,
       survivorFirstAidUsed:false, shopperJumpUses:0, shopperSpeedPenaltyApplied:false,
+      runnerSprintUses:0, pickpocketUses:0,
+      diverHoldBreathUses:0, diverHoldBreathActive:false, courierUses:0,
+      gourmetUses:0, gourmetBuffActive:false, farmerUses:0, caregiverUses:0, minerUses:0,
       pendingItemUses:[], wineExcludedQueue:[], roomCommitted:false},
     pendingActions:{targetRoom:null, movementDone:false, roomActed:false},
     weaponWeightless: profId==="merc",
@@ -1208,7 +1288,8 @@ function makePlayer(id,isAI,profId,stats,name){
     weightlessTrash: profId==="scavenger",
     weightlessWine: profId==="bartender",
     weightlessMedical: profId==="medic", // 醫官的隨身醫療包: 藥片/腎上腺素不佔負重
-    weightlessRation: profId==="chef" // 廚師的儲糧有道: 水/糧不佔負重
+    weightlessRation: profId==="chef", // 廚師的儲糧有道: 水/糧不佔負重
+    weightlessPill: profId==="herbalist" // 草藥師的藥草袋: 藥片不佔負重
   };
   return p;
 }
@@ -1224,6 +1305,7 @@ function usedCarry(p){
     if(ITEMS[it].weapon && p.weaponWeightless) continue;
     if((it==="pill"||it==="adrenaline") && p.weightlessMedical) continue;
     if((it==="water"||it==="food") && p.weightlessRation) continue;
+    if(it==="pill" && p.weightlessPill) continue;
     n++;
   }
   return n;
@@ -1411,6 +1493,13 @@ function gridPlace(el, floor, col, span){
   el.style.gridRow = (Number(floor)+1);
   el.style.gridColumn = (col+2)+" / span "+(span||1);
 }
+// A handful of underground rooms (e.g. B302, B404) are only 1 column wide on the real floor
+// plan — narrower than the "B404"-style 4-character id needs at any legible font size. A plain
+// id has no space for the browser to wrap on, so on a narrow chip it just spills outside the box
+// and gets painted over by whichever neighboring chip happens to sit on top of it in DOM order.
+// A zero-width space after the "B" costs nothing when the chip has room for one line, but gives
+// the browser a legal break point ("B" / "404") on the tight ones instead of silently overlapping.
+function roomIdLabel(id){ return id[0]==="B" ? "B​"+id.slice(1) : id; }
 // The live #mapArea's room-chip elements, built once by buildGameMapOnce() and reused for the
 // rest of the page's life — indexed by room id so renderAll() can update classes/occupancy on
 // the existing nodes every render instead of destroying and recreating all ~42 chips.
@@ -1427,8 +1516,9 @@ function buildGameMapOnce(){
     mapEl.appendChild(lbl);
     floors[fl].forEach(r=>{
       const chip=document.createElement("div"); chip.className="room-chip";
+      chip.classList.add(r.id[0]==="B"?"underground":"aboveground");
       if(hasVerticalLink(r)) chip.classList.add("vlink");
-      chip.innerHTML=`${r.id}${r.name?("<small>"+r.name+"</small>"):""}`+roomMarkersHtml(r)+`<span class="occ" hidden></span>`;
+      chip.innerHTML=`${roomIdLabel(r.id)}${r.name?("<small>"+r.name+"</small>"):""}`+roomMarkersHtml(r)+`<span class="occ" hidden></span>`;
       chip.onclick=()=>onRoomClick(r.id);
       // Clickable but a plain <div> — give it button semantics/keyboard access rather than
       // leaving it reachable only by mouse/touch.
@@ -1455,9 +1545,10 @@ function renderStaticMap(containerId, highlightIds){
     mapEl.appendChild(lbl);
     floors[fl].forEach(r=>{
       const chip=document.createElement("div"); chip.className="room-chip";
+      chip.classList.add(r.id[0]==="B"?"underground":"aboveground");
       if(highlightIds && highlightIds.includes(r.id)) chip.classList.add("spawn");
       if(hasVerticalLink(r)) chip.classList.add("vlink");
-      chip.innerHTML=`${r.id}${r.name?("<small>"+r.name+"</small>"):""}`+roomMarkersHtml(r);
+      chip.innerHTML=`${roomIdLabel(r.id)}${r.name?("<small>"+r.name+"</small>"):""}`+roomMarkersHtml(r);
       gridPlace(chip, r.floor, r.order, r.span);
       mapEl.appendChild(chip);
     });
@@ -1496,7 +1587,24 @@ function beginRound(){
     p.flags.rocketRoomsThisRound=[]; // 拆彈教官's 2 shots must hit 2 different rooms
     p.flags.recycleUsedThisRound=false; // 循環回收裝置 is a durable item too — limited to once per round
     p.flags.smugglerBonusUsedThisRound=false; // 走私客的熟悉門路: once per round
+    p.flags.diverHoldBreathActive=false; // 潛水員的憋氣術: declared fresh each round it's used
     p.flags.dietThisRound=false;
+    // 郵差的超載快遞: the +1 carry slot only lasts through the round it was filled — if you're
+    // still over your NORMAL (non-courier) cap when the next round starts, the overflow item is
+    // forcibly dropped instead of letting the +1 become a silent permanent extra slot.
+    if(p.prof==="courier"){
+      const baseCap=p.carry-1;
+      if(usedCarry(p)>baseCap){
+        const priority=(it)=>(ITEMS[it].weapon?0:(it==="pill"||it==="adrenaline")?1:(it==="water"||it==="food")?2:3);
+        let worstIdx=-1, worstP=-1;
+        p.inv.forEach((it,i)=>{ if(!itemCostsCarry(p,it)) return; const pr=priority(it); if(pr>=worstP){ worstP=pr; worstIdx=i; } });
+        if(worstIdx>=0){
+          const dropped=p.inv.splice(worstIdx,1)[0];
+          STATE.discardPile.push(dropped);
+          log(p.name+"（超載快遞）上輪超載的道具「"+ITEMS[dropped].name+"」被強制丟棄。");
+        }
+      }
+    }
     p.flags.roomCommitted=false; // locks once the player acts in a room or explicitly ends movement
     p.flags.roomActsUsedThisRound=0; // how many times the room's function has been used this round
     p.flags.gamblerBonusOps=0; // 好賭成性's extra room-use, if any — a fresh roll each round, never carries over
@@ -1570,9 +1678,22 @@ document.getElementById("endTurnBtn").addEventListener("click",()=>{
 });
 
 /* ---------- movement ---------- */
+// 潛水員的地下水道: if the shortest path between from/to passes through ANY underground
+// (B-prefixed) room — start, end, or a room merely passed through along the way — the move
+// costs 1 less step (min 1). reachableRooms/mustMoveThisRound stay plain bfsDist (a conservative
+// underestimate for a diver), same simplification other step-boosting skills (trucker/runner)
+// accept for their AI heuristics.
+function moveDist(p,from,to){
+  const dist=bfsDist(from,to);
+  if(dist>0 && p.prof==="diver"){
+    const path=bfsPath(from,to)||[];
+    if(path.some(r=>r[0]==="B")) return Math.max(1,dist-1);
+  }
+  return dist;
+}
 function tryMove(p,target){
   if(p.ghost){ p.room=target; return true; } // ghosts move freely, no step cost enforced strictly
-  const dist=bfsDist(p.room,target);
+  const dist=moveDist(p,p.room,target);
   let steps = p.stepsLeft;
   if(dist===Infinity || dist>steps) return false;
   p.room=target; p.stepsLeft-=dist;
@@ -1596,7 +1717,7 @@ function onRoomClick(roomId){
     tryMove(p,roomId); SFX.move(); renderAll(); return;
   }
   const fromRoom=p.room;
-  const dist=bfsDist(fromRoom,roomId);
+  const dist=moveDist(p,fromRoom,roomId);
   if(dist===Infinity || dist>p.stepsLeft){ flashMsg("步數不足或無法到達"); return; }
   if(dist>0){
     const path=bfsPath(fromRoom,roomId);
@@ -1676,6 +1797,16 @@ function drawItemsFromStock(p,roomId,maxDraw){
       log(p.name+"（熟悉門路）額外多抽到1張道具。");
     }
   }
+  // 礦工的挖礦本能: at 金庫 specifically, reveal the remaining gold stock and a flat 20% chance
+  // per search of 1 completely free (weightless) extra gold coin — unlike 熟悉門路 above this
+  // never costs carry and has no once-per-round cap, since it's a small side bonus, not a real draw.
+  if(p.prof==="miner" && roomId==="B206"){
+    if(Math.random()<0.2 && room.stock.gold>0){
+      room.stock.gold--; p.inv.push("gold");
+      log(p.name+"（挖礦本能）額外挖到1根金條（不佔負重）。");
+    }
+    log(p.name+"（挖礦本能）金庫目前剩餘金條："+(room.stock.gold||0)+"根。");
+  }
   return drawnItems;
 }
 function itemCostsCarry(p,item){
@@ -1685,6 +1816,7 @@ function itemCostsCarry(p,item){
   if(ITEMS[item].weapon && p.weaponWeightless) return false;
   if((item==="pill"||item==="adrenaline") && p.weightlessMedical) return false;
   if((item==="water"||item==="food") && p.weightlessRation) return false;
+  if(item==="pill" && p.weightlessPill) return false;
   return true;
 }
 // Human draw: reveal everything, auto-keep it all if it fits, otherwise let the player choose
@@ -2009,9 +2141,8 @@ function openRopeModal(p){
   };
   bindModalClose("ropeCancel");
 }
-// 攀岩者's 垂直攀爬: once activated (1 HP paid in useProfSkill), the same "jump straight to any
-// room on floor±1" ability as 繩索, but from a paid skill instead of a consumed item — this was
-// previously just a flag (climberVertical) that nothing ever read, so paying the HP did nothing.
+// 攀岩者's 垂直攀爬: once activated (free — see useProfSkill), the same "jump straight to any
+// room on floor±1" ability as 繩索, but from a skill instead of a consumed item.
 function openClimberVerticalModal(p){
   const room=ROOMS[p.room];
   const dests=Object.values(ROOMS).filter(r=>r.floor===room.floor-1||r.floor===room.floor+1);
@@ -2163,7 +2294,13 @@ function resolvePendingItemUses(p){
       case "water": case "food":
         p.flags["consumed_"+item]=true;
         if(item==="food" && p.prof==="chef") p.flags.consumed_water=true; // 廚師的一餐抵兩餐
-        log(p.name+" 結算：使用了"+ITEMS[item].name+"。"); break;
+        log(p.name+" 結算：使用了"+ITEMS[item].name+"。");
+        // 老饕的美食鑑賞: a coin-flip bonus HP riding on the food declare itself.
+        if(item==="food" && p.prof==="gourmet" && Math.random()<0.5){
+          p.hp=Math.min(p.maxhp,p.hp+1);
+          log(p.name+"（美食鑑賞）額外恢復1點生命。","heal");
+        }
+        break;
       case "adrenaline":
         p.flags.adrenalineActive=true; log(p.name+" 結算：注射腎上腺素，下輪速度變10，本輪不會致死。","heal"); break;
       case "wine": {
@@ -2200,8 +2337,9 @@ function resolvePillHealing(p){
     uses.forEach(item=>{
       if(item!=="pill") return;
       STATE.discardPile.push(item);
-      p.hp=Math.min(p.maxhp,p.hp+2);
-      log(p.name+" 結算：服用藥片，恢復2點生命。","heal");
+      const heal = p.prof==="herbalist" ? 4 : 2; // 草藥師的藥效增強
+      p.hp=Math.min(p.maxhp,p.hp+heal);
+      log(p.name+" 結算：服用藥片，恢復"+heal+"點生命。","heal");
     });
   }
   p.flags.pendingItemUses=[]; // clear regardless — a pill queued by a player who died first is simply wasted
@@ -2310,6 +2448,14 @@ const SKILL_USE_LIMITS={
   "embalmer:1":{flag:"embalmerUses",max:1},
   "survivor:1":{flag:"survivorFirstAidUsed",max:1,bool:true},
   "shopper:1":{flag:"shopperJumpUses",max:3},
+  "runner:1":{flag:"runnerSprintUses",max:3},
+  "pickpocket:0":{flag:"pickpocketUses",max:3},
+  "diver:1":{flag:"diverHoldBreathUses",max:2},
+  "courier:1":{flag:"courierUses",max:3},
+  "gourmet:1":{flag:"gourmetUses",max:2},
+  "farmer:1":{flag:"farmerUses",max:2},
+  "caregiver:1":{flag:"caregiverUses",max:2},
+  "miner:1":{flag:"minerUses",max:2},
 };
 function skillUsedCount(p,key){
   const lim=SKILL_USE_LIMITS[key];
@@ -2418,9 +2564,8 @@ function useProfSkill(p,idx){
     p.flags.geneUses++; p.flags.skillUsedThisRound=true; speakSkill(p,"geneFreak:1");
     openRespecModal(p,p.power+p.speed+p.carry);
   } else if(p.prof==="climber" && idx===0){
-    if(p.hp<=1){ flashMsg("生命值不足"); return; }
-    p.hp--; p.flags.climberVertical=true; p.flags.skillUsedThisRound=true;
-    log(p.name+" 支付1點生命，發動垂直攀爬。","dmg"); speakSkill(p,"climber:0");
+    p.flags.climberVertical=true; p.flags.skillUsedThisRound=true;
+    log(p.name+" 發動垂直攀爬。"); speakSkill(p,"climber:0");
   } else if(p.prof==="climber" && idx===1){
     if(skillUseCapReached(p,"climber:1")){ flashMsg("已用完"); return; }
     p.flags.climberDietUsed=true; p.flags.dietThisRound=true; p.flags.skillUsedThisRound=true;
@@ -2439,6 +2584,52 @@ function useProfSkill(p,idx){
   } else if(p.prof==="shopper" && idx===1){
     if(skillUseCapReached(p,"shopper:1")){ flashMsg("已用完3次"); return; }
     openShopperJumpModal(p);
+  } else if(p.prof==="runner" && idx===1){
+    if(skillUseCapReached(p,"runner:1")){ flashMsg("已用完3次"); return; }
+    p.flags.runnerSprintUses++; p.flags.skillUsedThisRound=true;
+    p.stepsLeft+=2; // matches 貨車司機's 卸載加速 precedent of only touching stepsLeft, not roundStartSteps
+    log(p.name+" 使用長跑：本輪速度+2。"); speakSkill(p,"runner:1");
+  } else if(p.prof==="pickpocket" && idx===0){
+    if(skillUseCapReached(p,"pickpocket:0")){ flashMsg("已用完3次"); return; }
+    openPickpocketModal(p);
+  } else if(p.prof==="diver" && idx===1){
+    if(skillUseCapReached(p,"diver:1")){ flashMsg("已用完2次"); return; }
+    p.flags.diverHoldBreathUses++; p.flags.skillUsedThisRound=true;
+    p.flags.diverHoldBreathActive=true;
+    log(p.name+" 使用憋氣術：本輪進入毒氣房間將完全不受傷害。"); speakSkill(p,"diver:1");
+  } else if(p.prof==="courier" && idx===1){
+    if(skillUseCapReached(p,"courier:1")){ flashMsg("已用完3次"); return; }
+    openCourierDeliverModal(p);
+  } else if(p.prof==="gourmet" && idx===1){
+    if(skillUseCapReached(p,"gourmet:1")){ flashMsg("已用完2次"); return; }
+    if(countItem(p,"water")<2){ flashMsg("需要2份水才能發動"); return; }
+    removeItem(p,"water"); removeItem(p,"water");
+    STATE.discardPile.push("water"); STATE.discardPile.push("water");
+    p.flags.gourmetUses++; p.flags.skillUsedThisRound=true;
+    p.maxhp+=2; p.hp+=2; p.flags.gourmetBuffActive=true;
+    log(p.name+" 使用大快朵頤：繳交2份水，本輪生命上限暫時+2。"); speakSkill(p,"gourmet:1");
+  } else if(p.prof==="farmer" && idx===1){
+    if(skillUseCapReached(p,"farmer:1")){ flashMsg("已用完2次"); return; }
+    if(countItem(p,"trash")<1){ flashMsg("背包內沒有垃圾可轉換"); return; }
+    const trashCost=itemCostsCarry(p,"trash")?1:0;
+    if(carryRoom(p)+trashCost<2){ flashMsg("背包空間不足，需要至少可再容納2份新道具"); return; }
+    removeItem(p,"trash"); STATE.discardPile.push("trash");
+    p.flags.farmerUses++; p.flags.skillUsedThisRound=true;
+    addItem(p,"water"); addItem(p,"food");
+    log(p.name+" 使用綠手指：垃圾轉換成1份水+1份糧。"); speakSkill(p,"farmer:1");
+  } else if(p.prof==="caregiver" && idx===1){
+    if(skillUseCapReached(p,"caregiver:1")){ flashMsg("已用完2次"); return; }
+    openCaregiverRushModal(p);
+  } else if(p.prof==="miner" && idx===1){
+    if(skillUseCapReached(p,"miner:1")){ flashMsg("已用完2次"); return; }
+    if(countItem(p,"gold")<2){ flashMsg("需要2根金條才能發動"); return; }
+    const freedByGold=itemCostsCarry(p,"gold")?2:0;
+    if(carryRoom(p)+freedByGold<2){ flashMsg("背包空間不足，需要至少可再容納2份新道具"); return; }
+    removeItem(p,"gold"); removeItem(p,"gold");
+    STATE.discardPile.push("gold"); STATE.discardPile.push("gold");
+    p.flags.minerUses++; p.flags.skillUsedThisRound=true;
+    addItem(p,"water"); addItem(p,"food");
+    log(p.name+" 使用精煉技術：2根金條轉換為1份水+1份糧。"); speakSkill(p,"miner:1");
   }
   renderAll();
 }
@@ -2448,13 +2639,108 @@ function useProfSkill(p,idx){
 // nothing. Every OTHER active skill executes immediately on click, which is risky for a
 // limited-use skill (a stray click permanently burns one of only 1-4 charges) — those get a
 // confirm prompt naming the skill and its effect before anything happens.
-const SKILL_OPENS_OWN_MODAL=new Set(["chemist:0","hacker:1","geneFreak:1","shopper:1"]);
+const SKILL_OPENS_OWN_MODAL=new Set(["chemist:0","hacker:1","geneFreak:1","shopper:1","pickpocket:0","courier:1","caregiver:1"]);
 function confirmAndUseSkill(p,idx){
   const s=PROFESSIONS[p.prof].skills[idx];
   openModal(`<h3>發動技能：${s.name}</h3><div style="margin-bottom:12px;font-size:13px;line-height:1.6">${s.desc}</div>
     <button class="btn small warn" id="skConfirmOk">確定發動</button> <button class="btn small ghost" id="skConfirmCancel">取消</button>`);
   document.getElementById("skConfirmOk").onclick=()=>{ closeModal(); useProfSkill(p,idx); };
   bindModalClose("skConfirmCancel");
+}
+
+// 神偷的順手牽羊: unlike 交易 below, this needs no consent from the target and isn't limited to
+// items they'd willingly trade — picks a random item straight out of their inventory.
+function openPickpocketModal(p){
+  const others=playersInRoom(p.room,true).filter(x=>x.id!==p.id);
+  if(!others.length){ flashMsg("這裡沒有其他玩家可偷。"); return; }
+  const opts=others.map(o=>`<option value="${o.id}">${o.name}（${o.inv.length}件道具）</option>`).join("");
+  openModal(`<h3>順手牽羊：選擇偷竊對象</h3><select id="pickSel">${opts}</select><br><br>
+    <button class="btn small warn" id="pickOk">下手</button> <button class="btn small ghost" id="pickCancel">取消</button>`);
+  document.getElementById("pickOk").onclick=()=>{
+    const targetId=+document.getElementById("pickSel").value;
+    const target=STATE.players.find(x=>x.id===targetId);
+    if(!target.inv.length){ flashMsg("對方身上沒有道具可偷。"); closeModal(); return; }
+    p.flags.pickpocketUses++; p.flags.skillUsedThisRound=true;
+    const idx=Math.floor(Math.random()*target.inv.length);
+    const item=target.inv.splice(idx,1)[0];
+    log(p.name+" 使用順手牽羊，從 "+target.name+" 身上偷到「"+ITEMS[item].name+"」。"); speakSkill(p,"pickpocket:0");
+    closeModal();
+    if(itemCostsCarry(p,item) && carryRoom(p)<=0){ openDrawSelectionModal(p,[item],p.room); return; }
+    p.inv.push(item);
+    renderAll();
+  };
+  bindModalClose("pickCancel");
+}
+
+// 護理師的悉心照料: not gated by the once-a-round skillUsedThisRound budget (same pattern as
+// 系統監控/內建回收裝置 above) — its only limiter is having a spare pill to spend. Resolves
+// immediately rather than through the settlement queue, so there's no risk of desyncing with
+// the pill-healing queue the way a second parallel "gifted pill" queue would.
+function useCaregiverPill(p){
+  if(!p.flags.roomCommitted){ flashMsg("請先移動並確定停留在房間後，才能使用道具。"); return; }
+  if(countItem(p,"pill")<1){ flashMsg("背包內沒有藥片。"); return; }
+  const others=playersInRoom(p.room,true).filter(x=>x.id!==p.id);
+  if(!others.length){ flashMsg("這裡沒有其他玩家可以照顧。"); return; }
+  const opts=others.map(o=>`<option value="${o.id}">${o.name}（HP ${o.hp}）</option>`).join("");
+  openModal(`<h3>悉心照料：使用藥片治療隊友</h3><select id="caregiverPillSel">${opts}</select><br><br>
+    <button class="btn small warn" id="caregiverPillOk">治療(立即恢復3點生命)</button> <button class="btn small ghost" id="caregiverPillCancel">取消</button>`);
+  document.getElementById("caregiverPillOk").onclick=()=>{
+    const targetId=+document.getElementById("caregiverPillSel").value;
+    const target=STATE.players.find(x=>x.id===targetId);
+    if(!removeItem(p,"pill")){ closeModal(); return; }
+    STATE.discardPile.push("pill");
+    target.hp=Math.min(target.maxhp,target.hp+3);
+    log(p.name+" 使用悉心照料，立即為 "+target.name+" 治療3點生命（HP→"+target.hp+"）。","heal");
+    closeModal(); renderAll();
+  };
+  bindModalClose("caregiverPillCancel");
+}
+// 護理師的隨傳隨到: teleports straight to the room of any currently-≤3-HP player, no step cost,
+// no distance limit — since HP is only ever updated at settlement, "currently ≤3" here already
+// means "≤3 at the end of last round," so no separate historical snapshot needs to be tracked.
+function openCaregiverRushModal(p){
+  const targets=STATE.players.filter(x=>x.id!==p.id && x.alive && !x.ghost && x.hp<=3 && x.room!==p.room);
+  if(!targets.length){ flashMsg("目前沒有生命值≤3的玩家可以前往。"); return; }
+  const opts=targets.map(t=>`<option value="${t.id}">${t.name}（${t.room} ${ROOMS[t.room].name||""}，HP ${t.hp}）</option>`).join("");
+  openModal(`<h3>隨傳隨到：立即前往瀕危玩家所在房間</h3><select id="caregiverRushSel">${opts}</select><br><br>
+    <button class="btn small warn" id="caregiverRushOk">出發(不消耗步數)</button> <button class="btn small ghost" id="caregiverRushCancel">取消</button>`);
+  document.getElementById("caregiverRushOk").onclick=()=>{
+    if(p.flags.roomCommitted){ flashMsg("本輪已確定停留於此房間，無法再移動。"); closeModal(); return; }
+    const targetId=+document.getElementById("caregiverRushSel").value;
+    const target=STATE.players.find(x=>x.id===targetId);
+    p.flags.caregiverUses++; p.flags.skillUsedThisRound=true;
+    p.room=target.room; closeModal(); renderAll();
+    log(p.name+" 使用隨傳隨到，立即前往「"+p.room+"」照顧 "+target.name+"（HP "+target.hp+"）。"); speakSkill(p,"caregiver:1");
+  };
+  bindModalClose("caregiverRushCancel");
+}
+// 郵差的專人配送: unlike 交易/順手牽羊 this needs no shared room at all — pick any item you're
+// holding and any other living player, and it's delivered straight to them.
+function openCourierDeliverModal(p){
+  if(!p.inv.length){ flashMsg("背包內沒有道具可寄送。"); return; }
+  const targets=STATE.players.filter(x=>x.id!==p.id && x.alive && !x.ghost);
+  if(!targets.length){ flashMsg("沒有其他存活玩家可以寄送。"); return; }
+  const itemOpts=p.inv.map((it,i)=>`<option value="${i}">${ITEMS[it].name}</option>`).join("");
+  const targetOpts=targets.map(t=>`<option value="${t.id}">${t.name}（${t.room}）</option>`).join("");
+  openModal(`<h3>專人配送：選擇道具與收件人</h3>
+    <div>道具：<select id="courierItemSel">${itemOpts}</select></div><br>
+    <div>收件人：<select id="courierTargetSel">${targetOpts}</select></div><br><br>
+    <button class="btn small warn" id="courierOk">寄出</button> <button class="btn small ghost" id="courierCancel">取消</button>`);
+  document.getElementById("courierOk").onclick=()=>{
+    const itemIdx=+document.getElementById("courierItemSel").value;
+    const targetId=+document.getElementById("courierTargetSel").value;
+    const target=STATE.players.find(x=>x.id===targetId);
+    const item=p.inv.splice(itemIdx,1)[0];
+    p.flags.courierUses++; p.flags.skillUsedThisRound=true;
+    log(p.name+" 使用專人配送，將「"+ITEMS[item].name+"」寄給了 "+target.name+"。"); speakSkill(p,"courier:1");
+    closeModal();
+    if(itemCostsCarry(target,item) && carryRoom(target)<=0){
+      ROOMS[target.room].stock[item]=(ROOMS[target.room].stock[item]||0)+1;
+      log(target.name+" 背包已滿，包裹被留在了「"+target.room+"」。");
+    } else { target.inv.push(item); }
+    renderAll();
+  };
+  bindModalClose("courierCancel");
 }
 
 /* ===================== VOTE / TRADE ===================== */
@@ -2553,6 +2839,20 @@ function aiConsiderTruckerBoost(p){
   if(!p.inv.find(x=>x!=="trash")) return; // 卸載加速 requires discarding a non-垃圾 item
   useProfSkill(p,0);
 }
+// 長跑 also needs to run BEFORE movement, same reasoning as 卸載加速 above — only spend one of
+// the 3 whole-game charges when the extra 2 steps actually open up somewhere worth reaching.
+function aiConsiderRunnerSprint(p){
+  if(p.prof!=="runner" || p.flags.skillUsedThisRound || skillUseCapReached(p,"runner:1")) return;
+  const reachNow=reachableRooms(p.room,p.stepsLeft);
+  const reachBoosted=reachableRooms(p.room,p.stepsLeft+2);
+  const newlyReachable=Object.keys(reachBoosted).filter(r=>reachNow[r]===undefined);
+  if(!newlyReachable.length) return;
+  const worthIt=newlyReachable.some(r=>{
+    const room=ROOMS[r];
+    return (p.hp<=5 && (room.stock.pill||room.stock.adrenaline)) || room.draw>0 || (!hasGun(p)&&(room.stock.pistol||room.stock.shotgun||room.stock.knife));
+  });
+  if(worthIt) useProfSkill(p,1);
+}
 // Everything else is decided AFTER movement/room-resolution, since it either depends on where
 // the AI ended up (chemist/climber-escape) or doesn't care about position
 // at all (tamer/scavenger/embalmer). chemist and hacker bypass useProfSkill for the branches that
@@ -2563,10 +2863,10 @@ function aiConsiderSkillAfterMove(p){
   const room=ROOMS[p.room];
   if(p.prof==="climber"){
     // 垂直攀爬: escape a poisoned floor immediately rather than riding out this round's damage.
-    if(roomIsPoisoned(room) && p.hp>1 && p.stepsLeft>=1){
+    if(roomIsPoisoned(room) && p.stepsLeft>=1){
       const dests=Object.values(ROOMS).filter(r=>(r.floor===room.floor-1||r.floor===room.floor+1) && !roomIsPoisoned(r));
       if(dests.length){
-        useProfSkill(p,0); // pays 1 HP, sets climberVertical + skillUsedThisRound
+        useProfSkill(p,0); // sets climberVertical + skillUsedThisRound
         p.room=dests[Math.floor(Math.random()*dests.length)].id; p.stepsLeft--;
         log(p.name+" 使用垂直攀爬逃離毒氣樓層，前往 "+p.room+"。");
       }
@@ -2621,6 +2921,80 @@ function aiConsiderSkillAfterMove(p){
     log(p.name+" 使用跳樓大拍賣，直接跳到 "+p.room+"。");
     return;
   }
+  if(p.prof==="pickpocket"){
+    // 順手牽羊: opportunistic, not guaranteed — keeps an AI pickpocket from robbing every
+    // roommate blind every single round it gets the chance.
+    if(skillUseCapReached(p,"pickpocket:0")) return;
+    const targets=playersInRoom(p.room,true).filter(x=>x.id!==p.id && x.inv.length>0);
+    if(!targets.length || Math.random()>=0.5) return;
+    const target=targets[Math.floor(Math.random()*targets.length)];
+    p.flags.pickpocketUses++; p.flags.skillUsedThisRound=true;
+    const idx=Math.floor(Math.random()*target.inv.length);
+    const item=target.inv.splice(idx,1)[0];
+    log(p.name+" 使用順手牽羊，從 "+target.name+" 身上偷到「"+ITEMS[item].name+"」。");
+    if(itemCostsCarry(p,item) && carryRoom(p)<=0){ ROOMS[p.room].stock[item]=(ROOMS[p.room].stock[item]||0)+1; }
+    else { p.inv.push(item); }
+    return;
+  }
+  if(p.prof==="diver"){
+    // 憋氣術: only worth a limited charge when actually standing in a poisoned room this round.
+    if(!skillUseCapReached(p,"diver:1") && roomIsPoisoned(room)){
+      p.flags.diverHoldBreathUses++; p.flags.skillUsedThisRound=true;
+      p.flags.diverHoldBreathActive=true;
+      log(p.name+" 使用憋氣術：本輪進入毒氣房間將完全不受傷害。");
+    }
+    return;
+  }
+  if(p.prof==="farmer"){
+    // 綠手指: same "convert what you can afford" shape as 變廢為寶 above.
+    if(!skillUseCapReached(p,"farmer:1") && countItem(p,"trash")>=1){
+      const trashCost=itemCostsCarry(p,"trash")?1:0;
+      if(carryRoom(p)+trashCost>=2){
+        removeItem(p,"trash"); STATE.discardPile.push("trash");
+        p.flags.farmerUses++; p.flags.skillUsedThisRound=true;
+        addItem(p,"water"); addItem(p,"food");
+        log(p.name+" 使用綠手指：垃圾轉換成1份水+1份糧。");
+      }
+    }
+    return;
+  }
+  if(p.prof==="miner"){
+    if(!skillUseCapReached(p,"miner:1") && countItem(p,"gold")>=2 && STATE.round>=2 && countItem(p,"water")===0 && countItem(p,"food")===0){
+      const freedByGold=itemCostsCarry(p,"gold")?2:0;
+      if(carryRoom(p)+freedByGold>=2){
+        removeItem(p,"gold"); removeItem(p,"gold");
+        STATE.discardPile.push("gold"); STATE.discardPile.push("gold");
+        p.flags.minerUses++; p.flags.skillUsedThisRound=true;
+        addItem(p,"water"); addItem(p,"food");
+        log(p.name+" 使用精煉技術：2根金條轉換為1份水+1份糧。");
+      }
+    }
+    return;
+  }
+  if(p.prof==="gourmet"){
+    if(!skillUseCapReached(p,"gourmet:1") && p.hp<=6 && countItem(p,"water")>=2){
+      removeItem(p,"water"); removeItem(p,"water");
+      STATE.discardPile.push("water"); STATE.discardPile.push("water");
+      p.flags.gourmetUses++; p.flags.skillUsedThisRound=true;
+      p.maxhp+=2; p.hp+=2; p.flags.gourmetBuffActive=true;
+      log(p.name+" 使用大快朵頤：繳交2份水，本輪生命上限暫時+2。");
+    }
+    return;
+  }
+  if(p.prof==="caregiver"){
+    // 隨傳隨到: rush to whichever ≤3-HP ally is available — bypasses the human-only room-picker
+    // modal, same pattern as chemist/hacker above.
+    if(!skillUseCapReached(p,"caregiver:1")){
+      const targets=STATE.players.filter(x=>x.id!==p.id && x.alive && !x.ghost && x.hp<=3 && x.room!==p.room);
+      if(targets.length){
+        const target=targets[Math.floor(Math.random()*targets.length)];
+        p.flags.caregiverUses++; p.flags.skillUsedThisRound=true;
+        p.room=target.room;
+        log(p.name+" 使用隨傳隨到，前往「"+p.room+"」照顧 "+target.name+"（HP "+target.hp+"）。");
+      }
+    }
+    return;
+  }
   if(p.prof==="chemist"){
     if(skillUseCapReached(p,"chemist:0")) return;
     const poisonedFloors=[...STATE.poisoned];
@@ -2651,6 +3025,7 @@ function aiConsiderSkillAfterMove(p){
 // then may act only in that room — never moves again afterward this round.
 function resolveAITurn(p){
   aiConsiderTruckerBoost(p);
+  aiConsiderRunnerSprint(p);
   const target=aiChooseTarget(p);
   tryMove(p,target);
   if(p.room==="102") applyLaser(p);
@@ -2707,6 +3082,18 @@ function resolveAITurn(p){
     let bestIdx=0;
     STATE.discardPile.forEach((it,i)=>{ if(priority(it)<priority(STATE.discardPile[bestIdx])) bestIdx=i; });
     doRecycle(p,bestIdx);
+  }
+  // 護理師的悉心照料 — not gated by skillUsedThisRound (see useCaregiverPill), so it lives here
+  // rather than in aiConsiderSkillAfterMove, same reasoning as 工程師's recycle check above.
+  // 郵差's 專人配送 is deliberately left unused by AI, same precedent as 賭徒/基因怪人 noted
+  // above — sending a card to an arbitrary distant player has no clear heuristic payoff.
+  if(p.prof==="caregiver" && countItem(p,"pill")>0){
+    const hurtAlly=playersInRoom(p.room,true).find(x=>x.id!==p.id && x.hp<=6);
+    if(hurtAlly && Math.random()<0.7){
+      removeItem(p,"pill"); STATE.discardPile.push("pill");
+      hurtAlly.hp=Math.min(hurtAlly.maxhp,hurtAlly.hp+3);
+      log(p.name+" 使用悉心照料，立即為 "+hurtAlly.name+" 治療3點生命（HP→"+hurtAlly.hp+"）。");
+    }
   }
   // 節食 (either from 餐廳 or 攀岩者's skill) exempts this round's hunger payment entirely — queuing
   // water/food anyway would just waste the item for no benefit.
@@ -2823,6 +3210,15 @@ function settleRound(){
     if(p.flags.__surgeryHeal){ p.hp=Math.min(p.maxhp,p.hp+4); p.flags.__surgeryHeal=false; log(p.name+" 於手術室恢復4點生命。","heal"); }
   });
 
+  // 馬拉松跑者的耐力訓練: healed if they spent every step they had this round (0 speed doesn't
+  // count — there must have been steps to actually use up).
+  STATE.players.forEach(p=>{
+    if(p.alive && !p.ghost && p.prof==="runner" && p.roundStartSteps>0 && p.stepsLeft===0){
+      p.hp=Math.min(p.maxhp,p.hp+2);
+      log(p.name+"（耐力訓練）本輪步數用盡，恢復2點生命。","heal");
+    }
+  });
+
   // 2) combat resolution per room
   const roomGroups={};
   STATE.players.forEach(p=>{ if(p.alive && !p.ghost){ (roomGroups[p.room]=roomGroups[p.room]||[]).push(p); } });
@@ -2891,6 +3287,7 @@ function settleRound(){
       let dmg=baseDmg, note="";
       if(ROOMS[p.room].floor===STATE.poisonReduceFloor){ dmg=Math.max(0,dmg-2); note+="〔毒性調和 -2〕"; }
       if(p.prof==="chemist" && dmg>0){ dmg=Math.max(0,dmg-1); note+="〔抗毒 -1〕"; }
+      if(p.prof==="diver" && p.flags.diverHoldBreathActive){ dmg=0; note+="〔憋氣術〕"; }
       if(p.inv.includes("gasmask")){ dmg=0; note+="〔防毒面具〕"; }
       if(p.room==="202") dmg=0;
       damagePlayer(p,dmg,"毒氣");
@@ -2908,7 +3305,14 @@ function settleRound(){
       let missing=0;
       if(!p.flags.consumed_water) missing++;
       if(!p.flags.consumed_food) missing++;
-      if(missing>0){ damagePlayer(p,missing,"飢餓"); log(p.name+" 缺水/糧，受到 "+missing+" 點傷害。","dmg"); STATE.__report.hunger.push(p.name+" -"+missing); }
+      if(missing>0){
+        damagePlayer(p,missing,"飢餓"); log(p.name+" 缺水/糧，受到 "+missing+" 點傷害。","dmg"); STATE.__report.hunger.push(p.name+" -"+missing);
+        // 農夫的自給自足: a small consolation chance out of hunger, exempt from carry (pushed directly).
+        if(p.alive && p.prof==="farmer" && Math.random()<0.3){
+          p.inv.push("food");
+          log(p.name+"（自給自足）意外採集到1份糧食（不佔負重），下輪可用。","heal");
+        }
+      }
     });
   }
 
@@ -2954,6 +3358,13 @@ function settleRound(){
     p.flags.roomLocked=false; p.flags.voteWeight=1;
     p.flags.__embalmerGotThisRound=false;
     p.flags.climberVertical=false;
+    // 老饕的大快朵頤: the +2 生命上限 only lasts through the round it was taken.
+    if(p.flags.gourmetBuffActive){
+      p.maxhp=Math.max(1,p.maxhp-2);
+      if(p.hp>p.maxhp) p.hp=p.maxhp;
+      p.flags.gourmetBuffActive=false;
+      log(p.name+"（大快朵頤）暫時生命上限效果結束。");
+    }
   });
 
   // Public settlement broadcast: always print the full fixed set of category lines, every
@@ -3000,6 +3411,7 @@ function resolveCombat(a,b,roomId,frozenA){
     let d=dmg, note="";
     if(p.prof==="fatty" && d>0){ const before=d; d=Math.max(0,d-2); note+="〔肥肉坦克 -"+(before-d)+"〕"; }
     if(p.prof==="bomb" && attackerHasGun && d>0){ const before=d; d=Math.max(0,d-3); note+="〔防爆盾牌 -"+(before-d)+"〕"; }
+    if(p.prof==="veteran" && p.hp<=3 && d>0){ const before=d; d=Math.max(0,d-4); note+="〔破釜沉舟 -"+(before-d)+"〕"; }
     return {d,note};
   };
   const ra=reduce(a,dmgToA,bGun), rb=reduce(b,dmgToB,aGun);
@@ -3197,6 +3609,10 @@ function renderAll(){
       // 系統監控 above — it's not gated by the once-a-round skillUsedThisRound budget, but by its
       // own recycleUsedThisRound flag (shared with the physical item, so the two can't double-dip).
       btn.onclick=()=>useEngineerRecycle(p);
+    } else if(p.prof==="caregiver" && idx===0){
+      // 悉心照料 is the same "passive that needs a click" shape as 系統監控/內建回收裝置 above —
+      // limited only by having a spare pill, not by the once-a-round skill budget.
+      btn.onclick=()=>useCaregiverPill(p);
     } else if(s.passive){ btn.disabled=true; btn.title="被動技能，自動生效"; }
     else if(p.flags.skillUsedThisRound){ btn.disabled=true; btn.title="本輪已使用過職業技能，下輪才能再使用"; }
     else if(p.prof==="gambler" && idx===0 && p.flags.roomActsUsedThisRound>0){
