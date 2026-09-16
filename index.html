@@ -2474,15 +2474,23 @@ function useRocket(p){
 // Shared by the 循環回收裝置 item card (random pick) and 工程師's 內建回收裝置 (same effect
 // without needing to hold the card) — 精密回收 upgrades EITHER trigger to a chosen pick instead
 // of random, so both paths funnel through here rather than duplicating the validation/resolve logic.
+// 垃圾 still lands in the shared discard pile (farmer's 綠手指/gourmet's 大快朵頤 etc. push their
+// spent items there), but it's excluded from what recycling can pull back out — recycleableIndices
+// is the single filter both the random pick and the 精密回收 picker list read from, so trash never
+// surfaces as a recycle result either way.
+function recycleableIndices(){
+  return STATE.discardPile.map((it,idx)=>idx).filter(idx=>STATE.discardPile[idx]!=="trash");
+}
 function recycleChecks(p){
   if(!p.flags.roomCommitted){ flashMsg("請先移動並確定停留在房間後，才能使用道具。"); return false; }
   if(p.flags.recycleUsedThisRound){ flashMsg("循環回收裝置每回合限用1次"); return false; }
-  if(STATE.discardPile.length===0){ flashMsg("棄牌堆是空的"); return false; }
+  if(recycleableIndices().length===0){ flashMsg("棄牌堆內沒有可回收的道具"); return false; }
   if(carryRoom(p)<=0){ flashMsg("負重已滿"); return false; }
   return true;
 }
 function doRecycle(p, discardIdx){
-  const idx = discardIdx!==undefined ? discardIdx : Math.floor(Math.random()*STATE.discardPile.length);
+  const candidates=recycleableIndices();
+  const idx = discardIdx!==undefined ? discardIdx : candidates[Math.floor(Math.random()*candidates.length)];
   const item=STATE.discardPile.splice(idx,1)[0];
   p.inv.push(item);
   p.flags.recycleUsedThisRound=true;
@@ -2499,7 +2507,7 @@ function useEngineerRecycle(p){
   openEngineerRecycleModal(p);
 }
 function openEngineerRecycleModal(p){
-  const opts=STATE.discardPile.map((item,idx)=>`<option value="${idx}">${ITEMS[item].name}</option>`).join("");
+  const opts=recycleableIndices().map(idx=>`<option value="${idx}">${ITEMS[STATE.discardPile[idx]].name}</option>`).join("");
   openModal(`<h3>精密回收：選擇要取得的道具</h3><select id="engRecycleSel">${opts}</select><br><br>
     <button class="btn small" id="engRecycleOk">取得</button> <button class="btn small ghost" id="engRecycleCancel">取消</button>`);
   document.getElementById("engRecycleOk").onclick=()=>{
@@ -3201,11 +3209,16 @@ function resolveAITurn(p){
   // 工程師's 內建回收裝置 — same AI-blindness gap 火箭筒 had above (the base game never gave AI
   // any use of the physical item either); pick the discard pile's best item by the same priority
   // resolveAIDraw already uses, same as a human engineer's 精密回收 choosing instead of random.
-  if(p.prof==="engineer" && !p.flags.recycleUsedThisRound && STATE.discardPile.length>0 && carryRoom(p)>0){
-    const priority=(it)=>(ITEMS[it].weapon?0:(it==="pill"||it==="adrenaline")?1:(it==="water"||it==="food")?2:3);
-    let bestIdx=0;
-    STATE.discardPile.forEach((it,i)=>{ if(priority(it)<priority(STATE.discardPile[bestIdx])) bestIdx=i; });
-    doRecycle(p,bestIdx);
+  // 垃圾 is excluded from candidates same as the human picker (see recycleableIndices) — an AI
+  // engineer shouldn't "choose" to fish trash back out any more than a human would.
+  if(p.prof==="engineer" && !p.flags.recycleUsedThisRound && carryRoom(p)>0){
+    const candidates=recycleableIndices();
+    if(candidates.length){
+      const priority=(it)=>(ITEMS[it].weapon?0:(it==="pill"||it==="adrenaline")?1:(it==="water"||it==="food")?2:3);
+      let bestIdx=candidates[0];
+      candidates.forEach(i=>{ if(priority(STATE.discardPile[i])<priority(STATE.discardPile[bestIdx])) bestIdx=i; });
+      doRecycle(p,bestIdx);
+    }
   }
   // 護理師的悉心照料 — not gated by skillUsedThisRound (see useCaregiverPill), so it lives here
   // rather than in aiConsiderSkillAfterMove, same reasoning as 工程師's recycle check above.
