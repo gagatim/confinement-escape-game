@@ -424,8 +424,16 @@ const ITEMS = {
 
 /* ===================== DATA: ROOMS ===================== */
 // floor: display row (0=top/201·202 ... 8=B701). order/span: left-right column position and
-// width within that row, measured directly off 禁閉逃殺地圖1 (a 730px-wide reference photo,
-// sampled every 20px) so the rendered floor plan reproduces the real staggered building outline
+// width within that row, computed from map.json's exact per-room pixel boxes (x/width measured
+// off 詳細地圖.jpg) rather than eyeballed off the photo: order=round((x-362)/25), span=the
+// DIFFERENCE of two such rounded boundaries (not width rounded independently), so two rooms whose
+// pixel boxes actually touch always land on touching columns with no off-by-one gap between them.
+// 362px/25px-per-column are themselves derived from the image — 362 is the shared left edge every
+// leftmost room in a row starts at, 25 is (rightmost edge 1213 − 362) / 34 columns. B2 (B201-B206)
+// is the one floor left as before: map.json's boxes for B203 onward were corrupted (B204 merged
+// into an oversized "B203" box, B205 missing entirely, B206 mislabeled "B204") wherever detected,
+// so recomputing it would trade already-verified numbers for worse ones — B201/B202 alone already
+// matched the existing data exactly, which is why the rest of that floor was left untouched.
 // (gaps where there's no room, wide rooms actually wider) instead of an evenly-packed grid.
 function R(id,name,floor,order,opts){ return Object.assign({id,name,floor,order,neighbors:[],draw:0,stock:{},span:1},opts||{}); }
 const ROOMS = {
@@ -436,9 +444,9 @@ const ROOMS = {
   "103":R("103","",1,25,{span:3}),
   "104":R("104","",1,28,{span:6}),
   "B101":R("B101","控制室",2,0,{special:"control",span:3}),
-  "B102":R("B102","",2,3,{span:1}),
-  "B103":R("B103","",2,4,{span:2}),
-  "B104":R("B104","",2,6,{span:9}),
+  "B102":R("B102","",2,3,{span:3}),
+  "B103":R("B103","",2,6,{span:2}),
+  "B104":R("B104","",2,8,{span:7}),
   "B105":R("B105","回收站",2,15,{special:"slide",span:5}),
   "B106":R("B106","",2,27,{span:2}),
   "B107":R("B107","武器庫",2,29,{draw:2,stock:{knife:5,pistol:2,shotgun:1},span:5}),
@@ -449,10 +457,10 @@ const ROOMS = {
   "B205":R("B205","",3,15,{span:3}),
   "B206":R("B206","金庫",3,25,{draw:2,stock:{gold:4},span:9}),
   "B301":R("B301","藥房",4,0,{draw:2,stock:{pill:3,adrenaline:3},span:3}),
-  "B302":R("B302","",4,4,{span:2}),
+  "B302":R("B302","",4,3,{span:3}),
   "B303":R("B303","",4,6,{span:3}),
   "B304":R("B304","操作室",4,9,{special:"respec",span:3}),
-  "B305":R("B305","",4,12,{span:6}),
+  "B305":R("B305","",4,12,{span:7}),
   "B306":R("B306","",4,25,{span:2}),
   "B307":R("B307","",4,27,{span:4}),
   "B308":R("B308","",4,31,{span:3}),
@@ -460,13 +468,13 @@ const ROOMS = {
   "B401":R("B401","",5,9,{span:6}),
   "B402":R("B402","",5,15,{span:3}),
   "B403":R("B403","傳送室",5,25,{special:"teleport",span:3}),
-  "B404":R("B404","",5,28,{span:1}),
-  "B405":R("B405","",5,29,{span:5}),
+  "B404":R("B404","",5,28,{span:3}),
+  "B405":R("B405","",5,31,{span:3}),
   "B502":R("B502","",6,9,{span:5}),
   "B503":R("B503","垃圾場",6,14,{draw:5,stock:{trash:20,rope:1,gasmask:1,rocket:1,dimpocket:1,recycledevice:1},noGold:true,dumpCap:2,span:6}),
   "B504":R("B504","",6,25,{span:4}),
   "B505":R("B505","糧倉",6,29,{draw:4,stock:{food:10},span:5}),
-  "B601":R("B601","酒窖",7,9,{draw:2,stock:{wine:6},span:6}),
+  "B601":R("B601","酒窖",7,8,{draw:2,stock:{wine:6},span:7}),
   "B602":R("B602","",7,15,{span:5}),
   "B603":R("B603","",7,20,{span:5}),
   "B604":R("B604","",7,25,{span:4}),
