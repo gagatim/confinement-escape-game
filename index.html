@@ -1889,6 +1889,10 @@ function drawItemsFromStock(p,roomId,maxDraw){
   const successChance = room.drawSuccessChance===undefined ? 1 : room.drawSuccessChance;
   let nonTrashGained=0;
   const drawnItems=[];
+  // 拾荒嗅覺 rolls once per item actually drawn this search — tallied here and reported as one
+  // summary line after the loop instead of one log line per roll, which would spam up to maxDraw
+  // messages for a single search.
+  let scavengerRolls=0, scavengerHits=0;
   for(let i=0;i<maxDraw;i++){
     if(Math.random()>=successChance) continue;
     const stockKeys=Object.keys(room.stock).filter(k=>room.stock[k]>0 && !(isDump && k==="gold"));
@@ -1900,22 +1904,29 @@ function drawItemsFromStock(p,roomId,maxDraw){
     if(pick!=="trash") nonTrashGained++;
     // 拾荒嗅覺: 50% chance extra trash from junkyard stock (deducted from B503), doesn't cost
     // carry — always kept immediately, it's never part of the keep/return choice below.
-    if(p.prof==="scavenger" && Math.random()<0.5 && ROOMS["B503"].stock.trash>0){
-      ROOMS["B503"].stock.trash--; p.inv.push("trash");
-      log(p.name+"（拾荒嗅覺）額外獲得1個垃圾。");
+    if(p.prof==="scavenger" && ROOMS["B503"].stock.trash>0){
+      scavengerRolls++;
+      if(Math.random()<0.5){ ROOMS["B503"].stock.trash--; p.inv.push("trash"); scavengerHits++; }
     }
+  }
+  if(scavengerRolls>0){
+    log(p.name+"（拾荒嗅覺）"+(scavengerHits>0?"額外獲得"+scavengerHits+"個垃圾":"本次搜索未觸發")+"。");
   }
   // 走私客的熟悉門路: at 金庫/武器庫/藥房, 40% chance to pull one extra item from the same
   // room's stock, once per round — unlike 拾荒嗅覺 above this isn't a free weightless bonus, it
   // just adds another drawn item that goes through the same carry-limit/keep-choice handling as
   // everything else resolveHumanDraw/resolveAIDraw sees from this call.
-  if(p.prof==="smuggler" && !p.flags.smugglerBonusUsedThisRound && SMUGGLER_BONUS_ROOMS.has(roomId) && Math.random()<0.4){
-    const stockKeys=Object.keys(room.stock).filter(k=>room.stock[k]>0);
-    if(stockKeys.length){
-      const pick=stockKeys[Math.floor(Math.random()*stockKeys.length)];
-      room.stock[pick]--; drawnItems.push(pick);
-      p.flags.smugglerBonusUsedThisRound=true;
-      log(p.name+"（熟悉門路）額外多抽到1張道具。");
+  if(p.prof==="smuggler" && !p.flags.smugglerBonusUsedThisRound && SMUGGLER_BONUS_ROOMS.has(roomId)){
+    if(Math.random()<0.4){
+      const stockKeys=Object.keys(room.stock).filter(k=>room.stock[k]>0);
+      if(stockKeys.length){
+        const pick=stockKeys[Math.floor(Math.random()*stockKeys.length)];
+        room.stock[pick]--; drawnItems.push(pick);
+        p.flags.smugglerBonusUsedThisRound=true;
+        log(p.name+"（熟悉門路）額外多抽到1張道具。");
+      }
+    } else {
+      log(p.name+"（熟悉門路）本次未觸發。");
     }
   }
   // 礦工的挖礦本能: at 金庫 specifically, reveal the remaining gold stock and a flat 70% chance
@@ -1925,6 +1936,8 @@ function drawItemsFromStock(p,roomId,maxDraw){
     if(Math.random()<0.7 && room.stock.gold>0){
       room.stock.gold--; p.inv.push("gold");
       log(p.name+"（挖礦本能）額外挖到1根金條（不佔負重）。");
+    } else {
+      log(p.name+"（挖礦本能）本次未觸發額外金條。");
     }
     log(p.name+"（挖礦本能）金庫目前剩餘金條："+(room.stock.gold||0)+"根。");
   }
@@ -1932,9 +1945,13 @@ function drawItemsFromStock(p,roomId,maxDraw){
   // sitting in the junk stock (i.e. none of the maxDraw picks above happened to land on it), 40%
   // chance to grab it directly — same "free extra pull, still subject to carry space" shape as
   // 拾荒嗅覺/挖礦本能 above, just gated on carryRoom so it can't silently push someone over cap.
-  if(p.prof==="demolitions" && isDump && room.stock.rocket>0 && Math.random()<0.4 && carryRoom(p)>0){
-    room.stock.rocket--; p.inv.push("rocket");
-    log(p.name+"（廢墟搜索）在垃圾堆中額外翻到1把火箭筒！");
+  if(p.prof==="demolitions" && isDump && room.stock.rocket>0){
+    if(Math.random()<0.4 && carryRoom(p)>0){
+      room.stock.rocket--; p.inv.push("rocket");
+      log(p.name+"（廢墟搜索）在垃圾堆中額外翻到1把火箭筒！");
+    } else {
+      log(p.name+"（廢墟搜索）本次未觸發。");
+    }
   }
   return drawnItems;
 }
@@ -2497,9 +2514,13 @@ function resolvePendingItemUses(p){
         if(item==="food" && p.prof==="chef") p.flags.consumed_water=true; // 廚師的一餐抵兩餐
         log(p.name+" 結算：使用了"+ITEMS[item].name+"。");
         // 老饕的美食鑑賞: a coin-flip bonus HP riding on the food declare itself.
-        if(item==="food" && p.prof==="gourmet" && Math.random()<0.5){
-          p.hp=Math.min(p.maxhp,p.hp+1);
-          log(p.name+"（美食鑑賞）額外恢復1點生命。","heal");
+        if(item==="food" && p.prof==="gourmet"){
+          if(Math.random()<0.5){
+            p.hp=Math.min(p.maxhp,p.hp+1);
+            log(p.name+"（美食鑑賞）額外恢復1點生命。","heal");
+          } else {
+            log(p.name+"（美食鑑賞）本次未觸發。");
+          }
         }
         break;
       // 水糧包 (第3輪停機坪空投): one card, one carry slot, counts as using 1水+1糧 at once —
@@ -2508,9 +2529,13 @@ function resolvePendingItemUses(p){
       case "waterfood":
         p.flags.consumed_water=true; p.flags.consumed_food=true;
         log(p.name+" 結算：使用了"+ITEMS[item].name+"（同時視為1水+1糧）。");
-        if(p.prof==="gourmet" && Math.random()<0.5){
-          p.hp=Math.min(p.maxhp,p.hp+1);
-          log(p.name+"（美食鑑賞）額外恢復1點生命。","heal");
+        if(p.prof==="gourmet"){
+          if(Math.random()<0.5){
+            p.hp=Math.min(p.maxhp,p.hp+1);
+            log(p.name+"（美食鑑賞）額外恢復1點生命。","heal");
+          } else {
+            log(p.name+"（美食鑑賞）本次未觸發。");
+          }
         }
         break;
       case "adrenaline":
@@ -3578,9 +3603,13 @@ function settleRound(){
         if(p.prof==="climber"){ missing=Math.max(0,missing-1); note="〔剛硬意志 -1〕"; }
         damagePlayer(p,missing,"飢餓"); log(p.name+" 缺水/糧，受到 "+missing+" 點傷害"+note+"。","dmg"); STATE.__report.hunger.push(p.name+" -"+missing);
         // 農夫的自給自足: a small consolation chance out of hunger, exempt from carry (pushed directly).
-        if(p.alive && p.prof==="farmer" && Math.random()<0.3){
-          p.inv.push("food");
-          log(p.name+"（自給自足）意外採集到1份糧食（不佔負重），下輪可用。","heal");
+        if(p.alive && p.prof==="farmer"){
+          if(Math.random()<0.3){
+            p.inv.push("food");
+            log(p.name+"（自給自足）意外採集到1份糧食（不佔負重），下輪可用。","heal");
+          } else {
+            log(p.name+"（自給自足）本次未觸發。");
+          }
         }
       }
     });
