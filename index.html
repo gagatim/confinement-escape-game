@@ -242,6 +242,11 @@
   <!-- ============ SETUP ============ -->
   <div id="setup">
     <div class="card">
+      <h2 style="font-size:16px;color:var(--cyan-bright)">0. 地圖版本</h2>
+      <label class="muted" style="display:block;font-size:13px">
+        <input type="checkbox" id="map2Toggle"> 啟用地圖2（B104／B405／B302 變為樂透房：使用時隨機獲得屬性加成、回血、本輪躲避毒氣或永久免疫毒氣其中一種）</label>
+    </div>
+    <div class="card" style="margin-top:12px">
       <h2 style="font-size:16px;color:var(--cyan-bright)">1. 選擇職業</h2>
       <div class="muted mono" id="profCountInfo" style="font-size:12px;margin-bottom:6px"></div>
       <label class="muted" style="display:block;margin-bottom:10px;font-size:13px">
@@ -1136,6 +1141,19 @@ let selectedProf=null;
 // 擴充模式: off by default (unchecked) — matches a fresh game to the original 16-profession
 // roster until the player explicitly opts into the extra 19. Read by startGame()'s AI pool too.
 let expansionMode=false;
+// 地圖2: off by default — turns 3 plain rooms into 樂透房 (see applyMap2Mode/doLottery). Applied
+// once, at startGame(), by mutating those rooms' name/special directly rather than branching every
+// piece of room-rendering/lookup code on a mode flag — the rest of the game never needs to know
+// map2Mode exists, it only ever reads room.special like any other special room.
+let map2Mode=false;
+const LOTTERY_ROOMS=["B104","B405","B302"];
+function applyMap2Mode(){
+  LOTTERY_ROOMS.forEach(id=>{
+    const r=ROOMS[id];
+    if(map2Mode){ r.special="lottery"; r.name="樂透房"; }
+    else { delete r.special; r.name=""; }
+  });
+}
 // Counted straight off PROFESSIONS/EXPANSION_PROFS rather than hardcoded numbers, so this line
 // can never drift out of sync the way the old "新增7個職業" checkbox label once did after the
 // roster grew past 7 without the copy being updated.
@@ -1161,6 +1179,7 @@ Object.entries(PROFESSIONS).forEach(([id,p])=>{
   });
   profGrid.appendChild(div);
 });
+document.getElementById("map2Toggle").addEventListener("change",(e)=>{ map2Mode=e.target.checked; });
 document.getElementById("expansionToggle").addEventListener("change",(e)=>{
   expansionMode=e.target.checked;
   document.querySelectorAll(".prof-card.expansion-prof").forEach(c=>c.classList.toggle("hidden",!expansionMode));
@@ -1303,6 +1322,7 @@ function makePlayer(id,isAI,profId,stats,name){
       diverHoldBreathUses:0, diverHoldBreathActive:false, courierUses:0,
       gourmetUses:0, gourmetBuffActive:false, farmerUses:0, caregiverUses:0, minerUses:0,
       hunterSprintUses:0, hunterUses:0, hunterAmbushActive:false,
+      poisonImmune:false, lotteryDodgeActive:false,
       pendingItemUses:[], wineExcludedQueue:[], roomCommitted:false},
     pendingActions:{targetRoom:null, movementDone:false, roomActed:false},
     weaponWeightless: profId==="merc",
@@ -1365,6 +1385,7 @@ function combatPower(p){
 
 /* ===================== GAME SETUP ===================== */
 function startGame(){
+  applyMap2Mode();
   const n=+document.getElementById("playerCount").value;
   const stats={power:+document.getElementById("allocPower").value, speed:+document.getElementById("allocSpeed").value, carry:+document.getElementById("allocCarry").value};
   const you=makePlayer(0,false,selectedProf,stats,"你");
@@ -1619,6 +1640,7 @@ function beginRound(){
     p.flags.smugglerBonusUsedThisRound=false; // 走私客的熟悉門路: once per round
     p.flags.diverHoldBreathActive=false; // 潛水員的憋氣術: declared fresh each round it's used
     p.flags.hunterAmbushActive=false; // 獵人的埋伏: the must-move waiver only covers the round it's used
+    p.flags.lotteryDodgeActive=false; // 樂透房's "本輪躲避毒氣" outcome: re-armed fresh each round it's rolled
     p.flags.runnerEnduranceReady=false; // 馬拉松跑者的耐力訓練: re-armed fresh each round, see checkRunnerEndurance
     p.flags.dietThisRound=false;
     // 郵差的超載快遞: the +1 carry slot only lasts through the round it was filled — if you're
@@ -2060,8 +2082,33 @@ function doRoomAction(){
   p.flags.roomCommitted=true;
   renderAll();
 }
+// 樂透房 (地圖2 opt-in special, see applyMap2Mode/LOTTERY_ROOMS): one of 4 equally-likely
+// outcomes, shared by the human path (doSpecialRoom's "lottery" case) and the AI path
+// (resolveAITurn) so the odds/effects can't drift between them. "躲避毒氣" is a one-round dodge
+// (same shape as 潛水員's 憋氣術, reset in beginRound) — "免疫毒氣" is permanent, checked the same
+// way 防毒面具 is in the poison-damage pass.
+function doLottery(p){
+  const roll=Math.floor(Math.random()*4);
+  if(roll===0){
+    const stats=["power","speed","carry"];
+    const stat=stats[Math.floor(Math.random()*stats.length)];
+    p[stat]++;
+    const label={power:"武力值",speed:"移動步數",carry:"背包空間"}[stat];
+    log(p.name+" 於樂透房：抽中「"+label+"永久+1」！");
+  } else if(roll===1){
+    p.hp=Math.min(p.maxhp,p.hp+1);
+    log(p.name+" 於樂透房：抽中「回血+1」！","heal");
+  } else if(roll===2){
+    p.flags.lotteryDodgeActive=true;
+    log(p.name+" 於樂透房：抽中「本輪躲避毒氣」！");
+  } else {
+    p.flags.poisonImmune=true;
+    log(p.name+" 於樂透房：抽中「永久免疫毒氣」！");
+  }
+}
 function doSpecialRoom(p,room){
   switch(room.special){
+    case "lottery": doLottery(p); break;
     case "gene":
       p.power++; p.speed++; p.carry++;
       log(p.name+" 於基因庫：三項屬性各永久 +1。");
@@ -3165,6 +3212,7 @@ function resolveAITurn(p){
   if(room.draw>0){ resolveAIDraw(p,p.room,room.draw); }
   if(room.special==="gene"){ p.power++; p.speed++; p.carry++; }
   if(room.special==="respec"){ /* AI keeps stats */ }
+  if(room.special==="lottery"){ doLottery(p); }
   // 醫官's 醫者仁心 (solo surgery-room heal) — the AI doesn't otherwise run doSpecialRoom's
   // general special-room switch, so this needs the same inline treatment as gene/respec/helipad
   // above for an AI medic to ever get any value out of its own signature ability. Must still only
@@ -3427,6 +3475,8 @@ function settleRound(){
       if(p.prof==="chemist" && dmg>0){ dmg=Math.max(0,dmg-1); note+="〔抗毒 -1〕"; }
       if(p.prof==="diver" && p.flags.diverHoldBreathActive){ dmg=0; note+="〔憋氣術〕"; }
       if(p.inv.includes("gasmask")){ dmg=0; note+="〔防毒面具〕"; }
+      if(p.flags.lotteryDodgeActive){ dmg=0; note+="〔樂透：躲避毒氣〕"; }
+      if(p.flags.poisonImmune){ dmg=0; note+="〔樂透：永久免疫毒氣〕"; }
       if(p.room==="202") dmg=0;
       damagePlayer(p,dmg,"毒氣");
       if(dmg>0) log(p.name+" 在毒氣區受到 "+dmg+" 點傷害"+note+"。","dmg");
@@ -3662,7 +3712,7 @@ function renderEndScreen(){
 
 /* ===================== RENDER ===================== */
 function roomActionLabel(room,p){
-  return room.special==="gene"?"使用基因庫" : room.special==="respec"?"重新分配點數" :
+  return room.special==="gene"?"使用基因庫" : room.special==="lottery"?"抽樂透" : room.special==="respec"?"重新分配點數" :
     room.special==="slide"?"滑向垃圾場(1步)" : room.special==="teleport"?"傳送" : room.special==="control"?"控制室功能" :
     room.special==="helipad"?(canBoardHeliNow(p)?"領取空投／搭乘直升機":"領取空投（本輪需停留，下輪才能搭機）") :
     room.draw>0?"搜索房間 (最多"+room.draw+"張)" : "使用房間功能";
