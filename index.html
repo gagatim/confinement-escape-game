@@ -146,6 +146,7 @@
   .room-chip.vlink{border-style:dashed}
   .room-chip .vmark{position:absolute;bottom:-6px;left:50%;transform:translateX(-50%);font-size:8px;
     color:var(--muted);background:var(--bg);padding:0 3px}
+  .room-chip .vmark.vmark-up{bottom:auto;top:-6px}
   .room-chip .hbridge{position:absolute;top:50%;font-size:9px;z-index:1;
     color:var(--cyan-bright);background:var(--bg);padding:0 2px;line-height:1.4;white-space:nowrap}
   /* sit fully outside the chip's own border (translate by 100% of the marker's own width,
@@ -244,7 +245,7 @@
     <div class="card">
       <h2 style="font-size:16px;color:var(--cyan-bright)">0. 地圖版本</h2>
       <label class="muted" style="display:block;font-size:13px">
-        <input type="checkbox" id="map2Toggle"> 啟用地圖2（B104／B405／B302 變為樂透房：使用時隨機獲得屬性加成、回血、本輪躲避毒氣或永久免疫毒氣其中一種）</label>
+        <input type="checkbox" id="map2Toggle"> 啟用地圖2（B104／B405／B302 變為樂透房：使用時隨機獲得屬性加成、回血、本輪躲避毒氣或永久免疫毒氣其中一種；B102／B602 變為配給站：各有5份水+5份糧，可搜索3次、每次70%機率取得1份，第6輪起各補給1份）</label>
     </div>
     <div class="card" style="margin-top:12px">
       <h2 style="font-size:16px;color:var(--cyan-bright)">1. 選擇職業</h2>
@@ -412,6 +413,7 @@ const ITEMS = {
   gold:{name:"金條",weapon:false,gun:false},
   knife:{name:"刀",weapon:true,gun:false,power:2},
   knifeX2:{name:"雙刀",weapon:true,gun:false,power:4}, // 第1輪停機坪空投的特殊道具：單張卡、武力+4、僅佔1格負重（不是兩把普通刀）
+  waterfood:{name:"水糧包",weapon:false,gun:false}, // 第3輪停機坪空投的特殊道具：單張卡僅佔1格負重，使用時同時視為用了1水+1糧
   pistol:{name:"手槍",weapon:true,gun:true,power:2},
   shotgun:{name:"霰彈槍",weapon:true,gun:true,power:4},
   rope:{name:"繩索",weapon:false,gun:false},
@@ -518,7 +520,7 @@ const ADJ = {
 const MEETING_ROOM = "B204"; // 會議室 hub: treated as the assembly room players return to between rounds
 const HELI_TARGETS = ["B101","101","B103","201","B105"];
 const SPAWN_ROOMS = ["103","B103","B303","B307","B402","B603"]; // 紅色出生點 marked on img1.jpg
-const AIRDROP_SCHEDULE = [null,["knifeX2"],["wine","wine"],["water","food"],["pistol"],["adrenaline"],["pill"]];
+const AIRDROP_SCHEDULE = [null,["knifeX2"],["wine","wine"],["waterfood"],["pistol"],["adrenaline"],["pill"]];
 
 function bfsPath(from,to,maxSteps){
   if(from===to) return [from];
@@ -708,7 +710,7 @@ const PROFESSIONS = {
   ]},
   gourmet:{name:"老饕", skills:[
     {name:"美食鑑賞", desc:"（被動）使用糧食時有50%機率額外恢復1點生命。", passive:true},
-    {name:"大快朵頤", desc:"整局限用2次：立即繳交2份水，本輪生命上限暫時+2（回合結束後失效）。", uses:2}
+    {name:"多多益善", desc:"（被動）水與糧食永久不佔負重。", passive:true}
   ]},
   farmer:{name:"農夫", skills:[
     {name:"自給自足", desc:"（被動）本輪若飢餓扣血，30%機率額外獲得1份糧食（下輪可用，不佔負重）。", passive:true},
@@ -1010,7 +1012,6 @@ const SKILL_QUOTES={
   "pickpocket:0":"你不會發現東西什麼時候不見的。",
   "diver:1":"閉氣，我很拿手。",
   "courier:1":"貨已經在路上了。",
-  "gourmet:1":"吃這麼多，力氣都回來了。",
   "farmer:1":"一點垃圾，也能長出東西來。",
   "caregiver:0":"忍一下，馬上就不痛了。",
   "caregiver:1":"我來了，撐住！",
@@ -1156,11 +1157,20 @@ let expansionMode=false;
 // map2Mode exists, it only ever reads room.special like any other special room.
 let map2Mode=false;
 const LOTTERY_ROOMS=["B104","B405","B302"];
+// 配給站 (B102/B602): stocked with 5 water + 5 food, 3 draw attempts per visit at a 70% per-
+// attempt success chance (see drawItemsFromStock's drawSuccessChance check) — a plain, higher-
+// variance alternative to 101水塔/B505糧倉's guaranteed-per-draw resource rooms.
+const RATION_ROOMS=["B102","B602"];
 function applyMap2Mode(){
   LOTTERY_ROOMS.forEach(id=>{
     const r=ROOMS[id];
     if(map2Mode){ r.special="lottery"; r.name="樂透房"; }
     else { delete r.special; r.name=""; }
+  });
+  RATION_ROOMS.forEach(id=>{
+    const r=ROOMS[id];
+    if(map2Mode){ r.special="ration"; r.name="配給站"; r.draw=3; r.drawSuccessChance=0.7; r.stock={water:5,food:5}; }
+    else { delete r.special; delete r.drawSuccessChance; r.name=""; r.draw=0; r.stock={}; }
   });
 }
 // Counted straight off PROFESSIONS/EXPANSION_PROFS rather than hardcoded numbers, so this line
@@ -1329,7 +1339,7 @@ function makePlayer(id,isAI,profId,stats,name){
       survivorFirstAidUsed:false, shopperJumpUses:0, shopperSpeedPenaltyApplied:false,
       runnerSprintUses:0, runnerEnduranceReady:false, pickpocketUses:0,
       diverHoldBreathUses:0, diverHoldBreathActive:false, courierUses:0,
-      gourmetUses:0, gourmetBuffActive:false, farmerUses:0, caregiverUses:0, minerUses:0,
+      farmerUses:0, caregiverUses:0, minerUses:0,
       hunterSprintUses:0, hunterUses:0, hunterAmbushActive:false,
       poisonImmune:false, lotteryDodgeActive:false,
       pendingItemUses:[], wineExcludedQueue:[], roomCommitted:false},
@@ -1339,7 +1349,7 @@ function makePlayer(id,isAI,profId,stats,name){
     weightlessTrash: profId==="scavenger",
     weightlessWine: profId==="bartender",
     weightlessMedical: profId==="medic", // 醫官的隨身醫療包: 藥片/腎上腺素不佔負重
-    weightlessRation: profId==="chef", // 廚師的儲糧有道: 水/糧不佔負重
+    weightlessRation: profId==="chef" || profId==="gourmet", // 廚師的儲糧有道／老饕的多多益善: 水/糧不佔負重
     weightlessPill: profId==="herbalist" // 草藥師的藥草袋: 藥片不佔負重
   };
   return p;
@@ -1362,7 +1372,7 @@ function usedCarry(p,invOverride){
     if(it==="wine" && p.weightlessWine) continue;
     if(ITEMS[it].weapon && p.weaponWeightless) continue;
     if((it==="pill"||it==="adrenaline") && p.weightlessMedical) continue;
-    if((it==="water"||it==="food") && p.weightlessRation) continue;
+    if((it==="water"||it==="food"||it==="waterfood") && p.weightlessRation) continue;
     if(it==="pill" && p.weightlessPill) continue;
     n++;
   }
@@ -1535,8 +1545,17 @@ const FLOOR_CONNECTORS_BY_ROOM=(()=>{
 })();
 function roomMarkersHtml(r){
   let html="";
+  // The marker's vertical position must match the link's real direction — an UP-only link (e.g.
+  // 104→202) rendered at the chip's bottom edge sits right above whatever room happens to be
+  // drawn below it (B107, in 104's case) with no real connection, which reads as a false "these
+  // two rooms connect" cue. Split by direction and place each group at its own edge instead of
+  // always defaulting to the bottom regardless of which way the link actually goes.
   const vlinks=verticalLinkTargets(r);
-  if(vlinks.length) html+=`<span class="vmark" title="樓梯／梯子可通往：${vlinks.map(id=>id+(ROOMS[id].name?" "+ROOMS[id].name:"")).join("、")}">${iconsOff()?"[上下]":"🪜"}</span>`;
+  const upLinks=vlinks.filter(id=>ROOMS[id].floor<r.floor);
+  const downLinks=vlinks.filter(id=>ROOMS[id].floor>r.floor);
+  const vmark=(links,cls)=>`<span class="vmark${cls?" "+cls:""}" title="樓梯／梯子可通往：${links.map(id=>id+(ROOMS[id].name?" "+ROOMS[id].name:"")).join("、")}">${iconsOff()?"[上下]":"🪜"}</span>`;
+  if(downLinks.length) html+=vmark(downLinks,"");
+  if(upLinks.length) html+=vmark(upLinks,"vmark-up");
   if(BRIDGE_SIDE[r.id]) html+=`<span class="hbridge ${BRIDGE_SIDE[r.id]}" title="天橋，花1步可跨越天井">${iconsOff()?"[橋]":"🌉"}</span>`;
   (FLOOR_CONNECTORS_BY_ROOM[r.id]||[]).forEach(c=>{
     html+=c.connected?
@@ -1677,6 +1696,18 @@ function beginRound(){
     p.actedThisRound=false; // turn-order bookkeeping (順序牌) — set true once this player's turn resolves
     p.pendingActions={targetRoom:null, movementDone:false, roomActed:false};
   });
+  // 配給站 (地圖2, B102/B602) 補給: a one-time restock exactly at the start of round 6 — adds 1
+  // item (water or food, picked at random) to that room's own stock. Guarded on room.special
+  // rather than map2Mode directly so it's a no-op if map2 was somehow off when round 6 started.
+  if(STATE.round===6){
+    RATION_ROOMS.forEach(id=>{
+      const r=ROOMS[id];
+      if(r.special!=="ration") return;
+      const t=Math.random()<0.5?"water":"food";
+      r.stock[t]=(r.stock[t]||0)+1;
+      log((r.name||id)+"（"+id+"）獲得補給：庫存"+ITEMS[t].name+"+1。");
+    });
+  }
   // Stock this round's airdrop schedule into the shared bag exactly once — collectAirdrop()
   // only draws from it, so several pickups this round don't each re-add the whole schedule.
   const airdropSched=AIRDROP_SCHEDULE[STATE.round];
@@ -1842,9 +1873,14 @@ const SMUGGLER_BONUS_ROOMS=new Set(["B206","B107","B301"]);
 function drawItemsFromStock(p,roomId,maxDraw){
   const room=ROOMS[roomId];
   const isDump=roomId==="B503";
+  // 配給站 (地圖2): each of the maxDraw attempts only yields something at drawSuccessChance odds
+  // (default 1 for every other room, i.e. always succeeds like before) — a miss still consumes
+  // one of the maxDraw attempts, it just adds nothing to drawnItems this iteration.
+  const successChance = room.drawSuccessChance===undefined ? 1 : room.drawSuccessChance;
   let nonTrashGained=0;
   const drawnItems=[];
   for(let i=0;i<maxDraw;i++){
+    if(Math.random()>=successChance) continue;
     const stockKeys=Object.keys(room.stock).filter(k=>room.stock[k]>0 && !(isDump && k==="gold"));
     if(stockKeys.length===0) break;
     if(isDump && nonTrashGained>=room.dumpCap && stockKeys.some(k=>k!=="trash") && stockKeys.length===1 && stockKeys[0]!=="trash") break;
@@ -1903,7 +1939,7 @@ function itemCostsCarry(p,item){
   if(item==="wine" && p.weightlessWine) return false;
   if(ITEMS[item].weapon && p.weaponWeightless) return false;
   if((item==="pill"||item==="adrenaline") && p.weightlessMedical) return false;
-  if((item==="water"||item==="food") && p.weightlessRation) return false;
+  if((item==="water"||item==="food"||item==="waterfood") && p.weightlessRation) return false;
   if(item==="pill" && p.weightlessPill) return false;
   return true;
 }
@@ -1926,7 +1962,7 @@ function isFlatWeightless(p,item){
   if(item==="wine" && p.weightlessWine) return true;
   if(ITEMS[item].weapon && p.weaponWeightless) return true;
   if((item==="pill"||item==="adrenaline") && p.weightlessMedical) return true;
-  if((item==="water"||item==="food") && p.weightlessRation) return true;
+  if((item==="water"||item==="food"||item==="waterfood") && p.weightlessRation) return true;
   if(item==="pill" && p.weightlessPill) return true;
   return false;
 }
@@ -2126,6 +2162,7 @@ function doLottery(p){
 function doSpecialRoom(p,room){
   switch(room.special){
     case "lottery": doLottery(p); break;
+    case "ration": break; // 配給站: entirely handled by the room.draw>0 branch above, nothing extra here
     case "gene":
       p.power++; p.speed++; p.carry++;
       log(p.name+" 於基因庫：三項屬性各永久 +1。");
@@ -2367,7 +2404,7 @@ function openHackerMonitorModal(p){
 // 附錄二: 水/糧/藥片/腎上腺素/酒 are all "結算階段公開使用" — clicking them during the action
 // phase only DECLARES intent; the actual effect is resolved publicly during settlement
 // (resolvePendingItemUses), same pattern as the rocket launcher's queued targeting.
-const SETTLEMENT_TIMED_ITEMS=["water","food","pill","adrenaline","wine"];
+const SETTLEMENT_TIMED_ITEMS=["water","food","waterfood","pill","adrenaline","wine"];
 function useItem(p,item){
   if(!SETTLEMENT_TIMED_ITEMS.includes(item)) return; // passive-hold items are never "used" via click
   if(!p.flags.roomCommitted){ flashMsg("請先移動並確定停留在房間後，才能使用道具。"); return; }
@@ -2376,7 +2413,7 @@ function useItem(p,item){
   if(item==="wine" && p.prof==="bartender"){ openBartenderWineModal(p); return; }
   // 水/糧/腎上腺素 each just flip a one-time flag at settlement (免飢餓 / 保底1血) — they don't
   // stack, so declaring a second one this round would just silently discard it for nothing.
-  if((item==="water"||item==="food"||item==="adrenaline") && p.flags.pendingItemUses.includes(item)){
+  if((item==="water"||item==="food"||item==="waterfood"||item==="adrenaline") && p.flags.pendingItemUses.includes(item)){
     flashMsg(ITEMS[item].name+"本輪已宣告使用過，效果不會疊加，不需要（也請不要）重複使用。");
     return;
   }
@@ -2440,6 +2477,17 @@ function resolvePendingItemUses(p){
         log(p.name+" 結算：使用了"+ITEMS[item].name+"。");
         // 老饕的美食鑑賞: a coin-flip bonus HP riding on the food declare itself.
         if(item==="food" && p.prof==="gourmet" && Math.random()<0.5){
+          p.hp=Math.min(p.maxhp,p.hp+1);
+          log(p.name+"（美食鑑賞）額外恢復1點生命。","heal");
+        }
+        break;
+      // 水糧包 (第3輪停機坪空投): one card, one carry slot, counts as using 1水+1糧 at once —
+      // sets both flags directly rather than routing through the "water"/"food" case twice, so it
+      // still only ever consumes the single card that was declared.
+      case "waterfood":
+        p.flags.consumed_water=true; p.flags.consumed_food=true;
+        log(p.name+" 結算：使用了"+ITEMS[item].name+"（同時視為1水+1糧）。");
+        if(p.prof==="gourmet" && Math.random()<0.5){
           p.hp=Math.min(p.maxhp,p.hp+1);
           log(p.name+"（美食鑑賞）額外恢復1點生命。","heal");
         }
@@ -2538,8 +2586,8 @@ function useRocket(p){
 // Shared by the 循環回收裝置 item card (random pick) and 工程師's 內建回收裝置 (same effect
 // without needing to hold the card) — 精密回收 upgrades EITHER trigger to a chosen pick instead
 // of random, so both paths funnel through here rather than duplicating the validation/resolve logic.
-// 垃圾 still lands in the shared discard pile (farmer's 綠手指/gourmet's 大快朵頤 etc. push their
-// spent items there), but it's excluded from what recycling can pull back out — recycleableIndices
+// 垃圾 still lands in the shared discard pile (farmer's 綠手指 etc. push their spent items there),
+// but it's excluded from what recycling can pull back out — recycleableIndices
 // is the single filter both the random pick and the 精密回收 picker list read from, so trash never
 // surfaces as a recycle result either way.
 function recycleableIndices(){
@@ -2603,7 +2651,6 @@ const SKILL_USE_LIMITS={
   "pickpocket:0":{flag:"pickpocketUses",max:3},
   "diver:1":{flag:"diverHoldBreathUses",max:2},
   "courier:1":{flag:"courierUses",max:3},
-  "gourmet:1":{flag:"gourmetUses",max:2},
   "farmer:1":{flag:"farmerUses",max:2},
   "caregiver:1":{flag:"caregiverUses",max:2},
   "hunter:0":{flag:"hunterSprintUses",max:2},
@@ -2752,14 +2799,6 @@ function useProfSkill(p,idx){
   } else if(p.prof==="courier" && idx===1){
     if(skillUseCapReached(p,"courier:1")){ flashMsg("已用完3次"); return; }
     openCourierDeliverModal(p);
-  } else if(p.prof==="gourmet" && idx===1){
-    if(skillUseCapReached(p,"gourmet:1")){ flashMsg("已用完2次"); return; }
-    if(countItem(p,"water")<2){ flashMsg("需要2份水才能發動"); return; }
-    removeItem(p,"water"); removeItem(p,"water");
-    STATE.discardPile.push("water"); STATE.discardPile.push("water");
-    p.flags.gourmetUses++; p.flags.skillUsedThisRound=true;
-    p.maxhp+=2; p.hp+=2; p.flags.gourmetBuffActive=true;
-    log(p.name+" 使用大快朵頤：繳交2份水，本輪生命上限暫時+2。"); speakSkill(p,"gourmet:1");
   } else if(p.prof==="farmer" && idx===1){
     if(skillUseCapReached(p,"farmer:1")){ flashMsg("已用完2次"); return; }
     if(countItem(p,"trash")<1){ flashMsg("背包內沒有垃圾可轉換"); return; }
@@ -3150,16 +3189,6 @@ function aiConsiderSkillAfterMove(p){
     }
     return;
   }
-  if(p.prof==="gourmet"){
-    if(!skillUseCapReached(p,"gourmet:1") && p.hp<=6 && countItem(p,"water")>=2){
-      removeItem(p,"water"); removeItem(p,"water");
-      STATE.discardPile.push("water"); STATE.discardPile.push("water");
-      p.flags.gourmetUses++; p.flags.skillUsedThisRound=true;
-      p.maxhp+=2; p.hp+=2; p.flags.gourmetBuffActive=true;
-      log(p.name+" 使用大快朵頤：繳交2份水，本輪生命上限暫時+2。");
-    }
-    return;
-  }
   if(p.prof==="caregiver"){
     // 隨傳隨到: rush to whichever ≤3-HP ally is available — bypasses the human-only room-picker
     // modal, same pattern as chemist/hacker above.
@@ -3300,7 +3329,10 @@ function resolveAITurn(p){
   // 節食 (either from 餐廳 or 攀岩者's skill) exempts this round's hunger payment entirely — queuing
   // water/food anyway would just waste the item for no benefit.
   if(STATE.round>=2 && !p.flags.dietThisRound){
-    if(p.prof==="chef" && countItem(p,"food")>0){
+    if(countItem(p,"waterfood")>0){
+      // 水糧包: covers both needs off a single card, so prefer it over burning 2 separate items.
+      removeItem(p,"waterfood"); p.flags.pendingItemUses.push("waterfood");
+    } else if(p.prof==="chef" && countItem(p,"food")>0){
       // 一餐抵兩餐: food alone covers both, so don't also burn a water item for nothing.
       removeItem(p,"food"); p.flags.pendingItemUses.push("food");
     } else {
@@ -3563,13 +3595,6 @@ function settleRound(){
     p.flags.roomLocked=false; p.flags.voteWeight=1;
     p.flags.__embalmerGotThisRound=false;
     p.flags.climberVertical=false;
-    // 老饕的大快朵頤: the +2 生命上限 only lasts through the round it was taken.
-    if(p.flags.gourmetBuffActive){
-      p.maxhp=Math.max(1,p.maxhp-2);
-      if(p.hp>p.maxhp) p.hp=p.maxhp;
-      p.flags.gourmetBuffActive=false;
-      log(p.name+"（大快朵頤）暫時生命上限效果結束。");
-    }
   });
 
   // Public settlement broadcast: always print the full fixed set of category lines, every
@@ -3729,7 +3754,8 @@ function renderEndScreen(){
 
 /* ===================== RENDER ===================== */
 function roomActionLabel(room,p){
-  return room.special==="gene"?"使用基因庫" : room.special==="lottery"?"抽樂透" : room.special==="respec"?"重新分配點數" :
+  return room.special==="gene"?"使用基因庫" : room.special==="lottery"?"抽樂透" :
+    room.special==="ration"?"領取配給 (最多"+room.draw+"次，每次成功率70%)" : room.special==="respec"?"重新分配點數" :
     room.special==="slide"?"滑向垃圾場(1步)" : room.special==="teleport"?"傳送" : room.special==="control"?"控制室功能" :
     room.special==="helipad"?(canBoardHeliNow(p)?"領取空投／搭乘直升機":"領取空投（本輪需停留，下輪才能搭機）") :
     room.draw>0?"搜索房間 (最多"+room.draw+"張)" : "使用房間功能";
@@ -3785,7 +3811,7 @@ function renderAll(){
     const div=document.createElement("div"); div.className="inv-item";
     let actions="";
     const dis = id==="rope" ? "" : (needsCommit ? " disabled title=\"請先移動並確定停留在房間後，才能使用道具\"" : "");
-    if(["water","food","pill","adrenaline","wine"].includes(id)) actions+=`<button class="btn small" data-use="${id}"${dis}>使用</button>`;
+    if(["water","food","waterfood","pill","adrenaline","wine"].includes(id)) actions+=`<button class="btn small" data-use="${id}"${dis}>使用</button>`;
     if(id==="gold") actions+=`<button class="btn small gold" data-gold="1"${dis}>用於本房</button>`;
     if(id==="rocket"){
       const rocketDisabled=needsCommit||p.flags.rocketShotsThisRound>=rocketShotCap(p);
