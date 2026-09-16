@@ -719,7 +719,7 @@ const PROFESSIONS = {
     {name:"隨傳隨到", desc:"整局限用2次：可立即移動到目前生命值≤3的玩家所在房間，不消耗步數。", uses:2}
   ]},
   miner:{name:"礦工", skills:[
-    {name:"挖礦本能", desc:"（被動）在金庫搜索時可得知剩餘金條數量，且每次搜索有20%機率額外獲得1根金條（不佔負重）。", passive:true},
+    {name:"挖礦本能", desc:"（被動）在金庫搜索時可得知剩餘金條數量，且每次搜索有70%機率額外獲得1根金條（不佔負重）。", passive:true},
     {name:"精煉技術", desc:"可將背包中1根金條轉換為1份水+1份糧。（無使用限制）", uses:99},
     {name:"秤金術", desc:"（被動）金條負重視為0.5（每2根金條共佔1格背包空間）。", passive:true}
   ]},
@@ -1872,11 +1872,11 @@ function drawItemsFromStock(p,roomId,maxDraw){
       log(p.name+"（熟悉門路）額外多抽到1張道具。");
     }
   }
-  // 礦工的挖礦本能: at 金庫 specifically, reveal the remaining gold stock and a flat 20% chance
+  // 礦工的挖礦本能: at 金庫 specifically, reveal the remaining gold stock and a flat 70% chance
   // per search of 1 completely free (weightless) extra gold coin — unlike 熟悉門路 above this
   // never costs carry and has no once-per-round cap, since it's a small side bonus, not a real draw.
   if(p.prof==="miner" && roomId==="B206"){
-    if(Math.random()<0.2 && room.stock.gold>0){
+    if(Math.random()<0.7 && room.stock.gold>0){
       room.stock.gold--; p.inv.push("gold");
       log(p.name+"（挖礦本能）額外挖到1根金條（不佔負重）。");
     }
