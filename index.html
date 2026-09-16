@@ -263,7 +263,7 @@
     </div>
     <div class="card" style="margin-top:12px">
       <h2 style="font-size:16px;color:var(--cyan-bright)">3. 玩家人數</h2>
-      <div class="row"><input type="range" id="playerCount" min="4" max="8" value="6"><span class="mono" id="valPlayers">6</span> 人（你 + AI）</div>
+      <div class="row"><input type="range" id="playerCount" min="4" max="8" value="8"><span class="mono" id="valPlayers">8</span> 人（你 + AI）</div>
     </div>
     <div style="margin-top:16px"><button class="btn" id="startBtn" disabled>下一步：選擇出生點</button>
       <span class="muted" id="startHint" style="margin-left:10px">請先選擇職業</span></div>
@@ -650,7 +650,8 @@ const PROFESSIONS = {
   ]},
   climber:{name:"攀岩者", skills:[
     {name:"垂直攀爬", desc:"發動技能後，該回合可直接上下移動樓層，移動仍需消耗步數。", uses:99},
-    {name:"節食", desc:"整局限用1次，該回合不需支付水/糧。", uses:1}
+    {name:"節食", desc:"整局限用1次，該回合不需支付水/糧。", uses:1},
+    {name:"剛硬意志", desc:"（被動）任何傷害（含毒氣、飢餓、戰鬥等所有來源）最終減少1點（最低0）。", passive:true}
   ]},
   engineer:{name:"工程師", skills:[
     {name:"內建回收裝置", desc:"（被動）不需持有循環回收裝置道具卡，每輪可直接使用一次回收功能，從棄牌堆中取得1張道具（與持有該道具卡共用每輪1次的限制）。", passive:true},
@@ -1777,6 +1778,15 @@ function resolveGhostAITurn(p){
 document.getElementById("endTurnBtn").addEventListener("click",()=>{
   if(!isMyTurn()){ flashMsg("尚未輪到你的回合。"); return; }
   const p=you();
+  // 每輪強制移動: commitToRoom()/doRoomAction() already enforce this when a player explicitly
+  // stays put or uses a room's function — but ending the turn directly was a separate path that
+  // skipped the check entirely, letting a human player camp in their starting room for free.
+  // Skip the check if they're already roomCommitted (a legitimate exception, e.g. 獵人's 埋伏 or
+  // 停機坪 boarding, already ran its own validation to get them there).
+  if(!p.flags.roomCommitted && p.room===p.roundStartRoom && mustMoveThisRound(p)){
+    flashMsg("每輪必須先移動到不同的房間，才能結束回合（不能原地不動）。");
+    return;
+  }
   checkRunnerEndurance(p);
   p.actedThisRound=true;
   STATE.turnIndex++;
@@ -2306,10 +2316,19 @@ function openHelipadModal(p){
   };
   bindModalClose("hpCancel");
 }
+// A room counts as directly above/below another when their column ranges (order..order+span)
+// actually overlap — shared by 繩索 and 攀岩者's 垂直攀爬 (see their comment below) so both only
+// ever reach a room truly stacked over the current one, not just anywhere on the adjacent floor.
+function verticalNeighborRooms(room){
+  return Object.values(ROOMS).filter(r=>
+    (r.floor===room.floor-1||r.floor===room.floor+1) &&
+    r.order<room.order+room.span && room.order<r.order+r.span
+  );
+}
 function openRopeModal(p){
   const room=ROOMS[p.room];
-  const dests=Object.values(ROOMS).filter(r=>r.floor===room.floor-1||r.floor===room.floor+1);
-  if(!dests.length){ flashMsg("此樓層沒有可直接上下樓的目標。"); return; }
+  const dests=verticalNeighborRooms(room);
+  if(!dests.length){ flashMsg("此房間正上/下方沒有可直接前往的目標。"); return; }
   const opts=dests.map(r=>`<option value="${r.id}">${FLOOR_LABEL[r.floor]} ${r.id} ${r.name||""}</option>`).join("");
   openModal(`<h3>繩索：直接上下樓（無需梯子/電梯）</h3><select id="ropeSel">${opts}</select><br><br>
     <button class="btn small" id="ropeOk">使用(消耗1步，永久道具不會用完)</button> <button class="btn small ghost" id="ropeCancel">取消</button>`);
@@ -2321,12 +2340,14 @@ function openRopeModal(p){
   };
   bindModalClose("ropeCancel");
 }
-// 攀岩者's 垂直攀爬: once activated (free — see useProfSkill), the same "jump straight to any
-// room on floor±1" ability as 繩索, but from a skill instead of a consumed item.
+// 攀岩者's 垂直攀爬: once activated (free — see useProfSkill), the same "jump straight to
+// whatever room is directly above/below" ability as 繩索, but from a skill instead of a consumed
+// item — kept in sync with 繩索's own reach (verticalNeighborRooms) so the skill isn't strictly
+// stronger than the item it's explicitly meant to mirror.
 function openClimberVerticalModal(p){
   const room=ROOMS[p.room];
-  const dests=Object.values(ROOMS).filter(r=>r.floor===room.floor-1||r.floor===room.floor+1);
-  if(!dests.length){ flashMsg("此樓層沒有可直接上下樓的目標。"); return; }
+  const dests=verticalNeighborRooms(room);
+  if(!dests.length){ flashMsg("此房間正上/下方沒有可直接前往的目標。"); return; }
   const opts=dests.map(r=>`<option value="${r.id}">${FLOOR_LABEL[r.floor]} ${r.id} ${r.name||""}</option>`).join("");
   openModal(`<h3>垂直攀爬：直接上下樓</h3><select id="climbSel">${opts}</select><br><br>
     <button class="btn small" id="climbOk">攀爬(消耗1步)</button> <button class="btn small ghost" id="climbCancel">取消</button>`);
@@ -2831,8 +2852,10 @@ function useProfSkill(p,idx){
     p.flags.hunterAmbushActive=true;
     p.power++;
     const ambushTargets=playersInRoom(p.room,true).filter(x=>x.id!==p.id);
-    ambushTargets.forEach(t=>damagePlayer(t,2,"獵人埋伏"));
-    log(p.name+" 使用埋伏：武力永久+1"+(ambushTargets.length?"，"+ambushTargets.map(t=>t.name).join("、")+" 各受到2點傷害":"（房內無其他玩家）")+"。","dmg");
+    // 攀岩者的剛硬意志 knocks their own share of this down to 1 — computed per-target since the
+    // room may hold a mix of climbers and non-climbers.
+    ambushTargets.forEach(t=>damagePlayer(t, t.prof==="climber"?1:2, "獵人埋伏"));
+    log(p.name+" 使用埋伏：武力永久+1"+(ambushTargets.length?"，"+ambushTargets.map(t=>t.name+(t.prof==="climber"?"(剛硬意志-1)":"")).join("、")+" 各受到傷害":"（房內無其他玩家）")+"。","dmg");
     speakSkill(p,"hunter:1");
   }
   renderAll();
@@ -3213,8 +3236,8 @@ function aiConsiderSkillAfterMove(p){
         p.flags.hunterUses++; p.flags.skillUsedThisRound=true;
         p.flags.hunterAmbushActive=true;
         p.power++;
-        targets.forEach(t=>damagePlayer(t,2,"獵人埋伏"));
-        log(p.name+" 使用埋伏：武力永久+1，"+targets.map(t=>t.name).join("、")+" 各受到2點傷害。");
+        targets.forEach(t=>damagePlayer(t, t.prof==="climber"?1:2, "獵人埋伏"));
+        log(p.name+" 使用埋伏：武力永久+1，"+targets.map(t=>t.name+(t.prof==="climber"?"(剛硬意志-1)":"")).join("、")+" 各受到傷害。");
       }
     }
     return;
@@ -3498,6 +3521,7 @@ function settleRound(){
     hit.forEach(p=>{
       let dmg=4, note="";
       if(p.prof==="bomb"){ dmg=Math.max(0,dmg-1); note="〔爆破緩衝 -1〕"; }
+      if(p.prof==="climber" && dmg>0){ dmg=Math.max(0,dmg-1); note+="〔剛硬意志 -1〕"; }
       damagePlayer(p,dmg,"火箭筒");
       log(p.name+" 被火箭筒轟炸於「"+r+"」，受到 "+dmg+" 點傷害"+note+"。","dmg");
     });
@@ -3507,8 +3531,14 @@ function settleRound(){
   // trucker ram (declared during action phase via 卸載加速, resolves here too)
   STATE.players.forEach(p=>{
     if(p.flags.truckerJustUsed){
-      playersInRoom(p.room,true).filter(x=>x.id!==p.id).forEach(x=>{ damagePlayer(x,1,"貨車司機猛烈衝撞"); });
-      log(p.name+" 觸發猛烈衝撞：房內其他玩家各受到1點傷害，房間強制公開。");
+      // 攀岩者的剛硬意志 can zero this out for them specifically, so each target's own actual
+      // damage is computed individually rather than assuming the flat 1 the aggregate log states.
+      playersInRoom(p.room,true).filter(x=>x.id!==p.id).forEach(x=>{
+        const dmg=x.prof==="climber"?0:1;
+        damagePlayer(x,dmg,"貨車司機猛烈衝撞");
+        if(dmg===0) log(x.name+"（剛硬意志）抵銷了猛烈衝撞的傷害。");
+      });
+      log(p.name+" 觸發猛烈衝撞：房內其他玩家各受到1點傷害（剛硬意志者除外），房間強制公開。");
       p.flags.truckerJustUsed=false; p.flags.truckerDoubled=false;
     }
   });
@@ -3526,6 +3556,7 @@ function settleRound(){
       if(p.inv.includes("gasmask")){ dmg=0; note+="〔防毒面具〕"; }
       if(p.flags.lotteryDodgeActive){ dmg=0; note+="〔樂透：躲避毒氣〕"; }
       if(p.flags.poisonImmune){ dmg=0; note+="〔樂透：永久免疫毒氣〕"; }
+      if(p.prof==="climber" && dmg>0){ dmg=Math.max(0,dmg-1); note+="〔剛硬意志 -1〕"; }
       if(p.room==="202") dmg=0;
       damagePlayer(p,dmg,"毒氣");
       if(dmg>0) log(p.name+" 在毒氣區受到 "+dmg+" 點傷害"+note+"。","dmg");
@@ -3543,7 +3574,9 @@ function settleRound(){
       if(!p.flags.consumed_water) missing++;
       if(!p.flags.consumed_food) missing++;
       if(missing>0){
-        damagePlayer(p,missing,"飢餓"); log(p.name+" 缺水/糧，受到 "+missing+" 點傷害。","dmg"); STATE.__report.hunger.push(p.name+" -"+missing);
+        let note="";
+        if(p.prof==="climber"){ missing=Math.max(0,missing-1); note="〔剛硬意志 -1〕"; }
+        damagePlayer(p,missing,"飢餓"); log(p.name+" 缺水/糧，受到 "+missing+" 點傷害"+note+"。","dmg"); STATE.__report.hunger.push(p.name+" -"+missing);
         // 農夫的自給自足: a small consolation chance out of hunger, exempt from carry (pushed directly).
         if(p.alive && p.prof==="farmer" && Math.random()<0.3){
           p.inv.push("food");
@@ -3555,7 +3588,11 @@ function settleRound(){
 
   // 5) laser room
   STATE.players.forEach(p=>{
-    if(p.alive && p.pendingLaser){ damagePlayer(p,1,"激光室"); p.pendingLaser=false; }
+    if(p.alive && p.pendingLaser){
+      damagePlayer(p, p.prof==="climber"?0:1, "激光室");
+      if(p.prof==="climber") log(p.name+"（剛硬意志）抵銷了激光室的傷害。");
+      p.pendingLaser=false;
+    }
   });
 
   // 6) ghost drains
@@ -3567,10 +3604,13 @@ function settleRound(){
         log(v.name+"（暗影使者）免疫暗影吸血。"); return;
       }
       const drainRoom=g.room; // capture before damagePlayer can move a killed victim to the mortuary
-      damagePlayer(v,1,"暗影吸血");
+      // 攀岩者的剛硬意志: the drain itself still counts toward the ghost's revival total (it's
+      // still a successful drain attempt), it just costs the climber victim 0 HP instead of 1.
+      const drainDmg=v.prof==="climber"?0:1;
+      damagePlayer(v,drainDmg,"暗影吸血");
       g.ghostDrainTotal++;
-      log(g.name+"（暗影）吸取了 "+v.name+" 1點生命。","dmg");
-      STATE.__report.drain.push(g.name+"（暗影）@"+drainRoom+"：吸取 "+v.name+" 1點生命（"+v.name+" HP→"+v.hp+(v.alive?"":" 💀")+"）");
+      log(g.name+"（暗影）吸取了 "+v.name+" "+drainDmg+"點生命"+(v.prof==="climber"?"（剛硬意志抵銷）":"")+"。","dmg");
+      STATE.__report.drain.push(g.name+"（暗影）@"+drainRoom+"：吸取 "+v.name+" "+drainDmg+"點生命（"+v.name+" HP→"+v.hp+(v.alive?"":" 💀")+"）");
       STATE.players.forEach(sh=>{ if(sh.prof==="shade" && sh.alive && !sh.ghost){ sh.hp=Math.min(sh.maxhp,sh.hp+1); log(sh.name+"（暗影共鳴）恢復1點生命。","heal"); } });
     });
     if(g.ghostDrainTotal>=2){
@@ -3643,6 +3683,7 @@ function resolveCombat(a,b,roomId,frozenA){
     if(p.prof==="fatty" && d>0){ const before=d; d=Math.max(0,d-2); note+="〔肥肉坦克 -"+(before-d)+"〕"; }
     if(p.prof==="bomb" && attackerHasGun && d>0){ const before=d; d=Math.max(0,d-3); note+="〔防爆盾牌 -"+(before-d)+"〕"; }
     if(p.prof==="veteran" && p.hp<=3 && d>0){ const before=d; d=Math.max(0,d-4); note+="〔破釜沉舟 -"+(before-d)+"〕"; }
+    if(p.prof==="climber" && d>0){ const before=d; d=Math.max(0,d-1); note+="〔剛硬意志 -"+(before-d)+"〕"; }
     return {d,note};
   };
   const ra=reduce(a,dmgToA,bGun), rb=reduce(b,dmgToB,aGun);
