@@ -657,7 +657,8 @@ const PROFESSIONS = {
   ]},
   demolitions:{name:"拆彈教官", skills:[
     {name:"軍火專精", desc:"（被動）火箭筒每輪可瞄準2個不同房間（一般玩家每輪限1次）。", passive:true},
-    {name:"防爆演練", desc:"（被動）你發射的火箭筒，對你發射當下所在的房間無效。", passive:true}
+    {name:"防爆演練", desc:"（被動）你發射的火箭筒，對你發射當下所在的房間無效。", passive:true},
+    {name:"廢墟搜索", desc:"（被動）在垃圾場執行搜索後，若火箭筒仍在庫存中，有40%機率額外直接獲得1把（不佔用本次抽取次數）。", passive:true}
   ]},
   chef:{name:"廚師", skills:[
     {name:"一餐抵兩餐", desc:"（被動）每輪只需繳交1份糧食，就能同時免除水與糧的飢餓懲罰。", passive:true},
@@ -1872,6 +1873,14 @@ function drawItemsFromStock(p,roomId,maxDraw){
       log(p.name+"（挖礦本能）額外挖到1根金條（不佔負重）。");
     }
     log(p.name+"（挖礦本能）金庫目前剩餘金條："+(room.stock.gold||0)+"根。");
+  }
+  // 拆彈教官的廢墟搜索: after the normal 垃圾場 search resolves, if the rocket launcher is still
+  // sitting in the junk stock (i.e. none of the maxDraw picks above happened to land on it), 40%
+  // chance to grab it directly — same "free extra pull, still subject to carry space" shape as
+  // 拾荒嗅覺/挖礦本能 above, just gated on carryRoom so it can't silently push someone over cap.
+  if(p.prof==="demolitions" && isDump && room.stock.rocket>0 && Math.random()<0.4 && carryRoom(p)>0){
+    room.stock.rocket--; p.inv.push("rocket");
+    log(p.name+"（廢墟搜索）在垃圾堆中額外翻到1把火箭筒！");
   }
   return drawnItems;
 }
