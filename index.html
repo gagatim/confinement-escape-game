@@ -171,6 +171,8 @@
     border-radius:6px;padding:4px 10px}
   .rank-row{display:flex;justify-content:space-between;padding:8px 10px;border-bottom:1px solid var(--line);font-size:14px}
   .rank-row:first-child{color:var(--gold);font-weight:900}
+  #routeList div{padding:6px 10px;border-bottom:1px dashed var(--line)}
+  #routeList div:last-child{border-bottom:none}
   #modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px;
     animation:modalFade .15s ease}
   #modal{max-width:520px;width:100%;max-height:80vh;overflow-y:auto;animation:modalPop .18s cubic-bezier(.2,.9,.3,1.2)}
@@ -243,7 +245,7 @@
       <h2 style="font-size:16px;color:var(--cyan-bright)">1. 選擇職業</h2>
       <div class="muted mono" id="profCountInfo" style="font-size:12px;margin-bottom:6px"></div>
       <label class="muted" style="display:block;margin-bottom:10px;font-size:13px">
-        <input type="checkbox" id="expansionToggle"> 啟用擴充模式（新增18個職業，AI也可能隨機選到）</label>
+        <input type="checkbox" id="expansionToggle"> 啟用擴充模式（新增19個職業，AI也可能隨機選到）</label>
       <div class="prof-grid" id="profGrid"></div>
     </div>
     <div class="card" style="margin-top:12px">
@@ -354,6 +356,8 @@
   <div id="endScreen" class="hidden card" style="margin-top:14px">
     <h2 style="color:var(--gold);font-family:Orbitron">六輪結束 － 最終排名</h2>
     <div id="rankList"></div>
+    <h2 style="color:var(--gold);font-family:Orbitron;font-size:15px;margin-top:20px">大家的移動路線</h2>
+    <div id="routeList" class="mono" style="font-size:12.5px;line-height:1.9"></div>
     <button class="btn" id="replayBtn" style="margin-top:12px">重新開始</button>
   </div>
 </div>
@@ -420,75 +424,83 @@ const ITEMS = {
 // (gaps where there's no room, wide rooms actually wider) instead of an evenly-packed grid.
 function R(id,name,floor,order,opts){ return Object.assign({id,name,floor,order,neighbors:[],draw:0,stock:{},span:1},opts||{}); }
 const ROOMS = {
-  "201":R("201","基因庫",0,10,{special:"gene",span:7}),
-  "202":R("202","停機坪",0,24,{special:"helipad",span:7}),
-  "101":R("101","水塔",1,5,{draw:4,stock:{water:10},span:5}),
-  "102":R("102","激光室",1,10,{special:"laser",span:6}),
-  "103":R("103","",1,24,{span:3}),
-  "104":R("104","",1,27,{span:6}),
-  "B101":R("B101","控制室",2,3,{special:"control",span:2}),
-  "B102":R("B102","",2,5,{span:2}),
-  "B103":R("B103","",2,7,{span:2}),
-  "B104":R("B104","",2,9,{span:7}),
-  "B105":R("B105","回收站",2,17,{special:"slide",span:3}),
+  "201":R("201","基因庫",0,8,{special:"gene",span:7}),
+  "202":R("202","停機坪",0,25,{special:"helipad",span:9}),
+  "101":R("101","水塔",1,3,{draw:4,stock:{water:10},span:3}),
+  "102":R("102","激光室",1,8,{special:"laser",span:7}),
+  "103":R("103","",1,25,{span:3}),
+  "104":R("104","",1,28,{span:6}),
+  "B101":R("B101","控制室",2,0,{special:"control",span:3}),
+  "B102":R("B102","",2,3,{span:1}),
+  "B103":R("B103","",2,4,{span:2}),
+  "B104":R("B104","",2,6,{span:9}),
+  "B105":R("B105","回收站",2,15,{special:"slide",span:5}),
   "B106":R("B106","",2,27,{span:2}),
-  "B107":R("B107","武器庫",2,29,{draw:2,stock:{knife:5,pistol:2,shotgun:1},span:4}),
-  "B201":R("B201","",3,3,{span:3}),
-  "B202":R("B202","手術室",3,6,{special:"surgery",span:3}),
-  "B203":R("B203","",3,9,{span:5}),
-  "B204":R("B204","餐廳",3,14,{special:"canteen",span:3}),
-  "B205":R("B205","",3,17,{span:3}),
-  "B206":R("B206","金庫",3,25,{draw:2,stock:{gold:4},span:8}),
-  "B301":R("B301","藥房",4,3,{draw:2,stock:{pill:3,adrenaline:3},span:4}),
-  "B302":R("B302","",4,7,{span:1}),
-  "B303":R("B303","",4,8,{span:3}),
-  "B304":R("B304","操作室",4,11,{special:"respec",span:8}),
-  "B305":R("B305","",4,20,{span:5}),
+  "B107":R("B107","武器庫",2,29,{draw:2,stock:{knife:5,pistol:2,shotgun:1},span:5}),
+  "B201":R("B201","",3,0,{span:5}),
+  "B202":R("B202","手術室",3,5,{special:"surgery",span:3}),
+  "B203":R("B203","",3,8,{span:3}),
+  "B204":R("B204","餐廳",3,11,{special:"canteen",span:4}),
+  "B205":R("B205","",3,15,{span:3}),
+  "B206":R("B206","金庫",3,25,{draw:2,stock:{gold:4},span:9}),
+  "B301":R("B301","藥房",4,0,{draw:2,stock:{pill:3,adrenaline:3},span:3}),
+  "B302":R("B302","",4,4,{span:2}),
+  "B303":R("B303","",4,6,{span:3}),
+  "B304":R("B304","操作室",4,9,{special:"respec",span:3}),
+  "B305":R("B305","",4,12,{span:6}),
   "B306":R("B306","",4,25,{span:2}),
-  "B307":R("B307","",4,27,{span:2}),
-  "B308":R("B308","",4,31,{span:2}),
-  "B501":R("B501","大倉庫",5,3,{draw:3,stock:{water:5,food:5,knife:3,wine:2,pill:2,adrenaline:2,pistol:1,gold:1,shotgun:1},poisonRequires:[5,6],span:9}),
-  "B401":R("B401","",5,12,{span:5}),
-  "B402":R("B402","",5,17,{span:3}),
-  "B403":R("B403","傳送室",5,25,{special:"teleport",span:4}),
-  "B404":R("B404","",5,29,{span:1}),
-  "B405":R("B405","",5,31,{span:2}),
-  "B502":R("B502","",6,12,{span:4}),
-  "B503":R("B503","垃圾場",6,16,{draw:5,stock:{trash:20,rope:1,gasmask:1,rocket:1,dimpocket:1,recycledevice:1},noGold:true,dumpCap:2,span:9}),
+  "B307":R("B307","",4,27,{span:4}),
+  "B308":R("B308","",4,31,{span:3}),
+  "B501":R("B501","大倉庫",5,0,{draw:3,stock:{water:5,food:5,knife:3,wine:2,pill:2,adrenaline:2,pistol:1,gold:1,shotgun:1},poisonRequires:[5,6],span:9}),
+  "B401":R("B401","",5,9,{span:6}),
+  "B402":R("B402","",5,15,{span:3}),
+  "B403":R("B403","傳送室",5,25,{special:"teleport",span:3}),
+  "B404":R("B404","",5,28,{span:1}),
+  "B405":R("B405","",5,29,{span:5}),
+  "B502":R("B502","",6,9,{span:5}),
+  "B503":R("B503","垃圾場",6,14,{draw:5,stock:{trash:20,rope:1,gasmask:1,rocket:1,dimpocket:1,recycledevice:1},noGold:true,dumpCap:2,span:6}),
   "B504":R("B504","",6,25,{span:4}),
-  "B505":R("B505","糧倉",6,30,{draw:4,stock:{food:10},span:3}),
-  "B601":R("B601","酒窖",7,10,{draw:2,stock:{wine:6},span:6}),
-  "B602":R("B602","",7,16,{span:4}),
+  "B505":R("B505","糧倉",6,29,{draw:4,stock:{food:10},span:5}),
+  "B601":R("B601","酒窖",7,9,{draw:2,stock:{wine:6},span:6}),
+  "B602":R("B602","",7,15,{span:5}),
   "B603":R("B603","",7,20,{span:5}),
-  "B604":R("B604","",7,25,{span:3}),
-  "B701":R("B701","停屍間",8,16,{special:"mortuary",draw:3,stock:{},span:4})
+  "B604":R("B604","",7,25,{span:4}),
+  "B701":R("B701","停屍間",8,15,{special:"mortuary",draw:3,stock:{},span:5})
 };
 const FLOOR_LABEL = {0:"2F",1:"1F",2:"B1",3:"B2",4:"B3",5:"B4",6:"B5",7:"B6",8:"B7"};
-// Re-derived room-by-room directly off the 禁閉逃殺地圖 reference photos (not assumed from a
-// uniform column grid — every vertical edge below corresponds to an actual ladder drawn in the
-// photo, e.g. B304<->B401 and B402<->B305 are two separate ladders one column apart, not the
-// single B304<->B402 link earlier versions of this file guessed). The atrium/chasm blocks
-// left-cluster <-> right-cluster adjacency on every floor EXCEPT the two floors with a visible
-// footbridge: B1 (B105<->B106) and B3 (B305<->B306). Wide rooms (spanning multiple columns, e.g.
-// B206/B501/B503) connect to every room whose column they overlap, above and below.
+// Re-derived room-by-room directly off 詳細地圖.jpg (the annotated reference map, which marks every
+// connector by type — see its own legend): a blue rung (梯子/雙向無條件) is a free, unconditional
+// two-way ladder and goes straight into ADJ below; a red dashed mark (需繩索或暗影) needs the 繩索
+// item or being a 暗影 to cross and is deliberately left OUT of ADJ (that movement is already
+// handled by the separate rope/shade mechanics, not ordinary 1-step adjacency); a purple arrow
+// (單向無條件) is free but one-way, encoded as a neighbor listed on only the source room's side —
+// e.g. B205→B503 is a direct shaft that skips B305 and B402 entirely, so B503 must NOT list B205
+// back. Same-floor lateral moves follow the map's own room boundaries: touching boxes are open,
+// a visible gap (the atrium) blocks passage on every floor except the two floors with a drawn
+// footbridge — B1 (B105<->B106) and B3 (B305<->B306). Two same-floor pairs are exceptions to
+// "touching boxes are open": 101<->102 (1F) have a real gap between them despite looking close, and
+// B401<->B501 (B4) touch with no gap drawn but are confirmed NOT to connect (per user correction) —
+// both are intentionally left out below even though nothing else in this file would predict it.
+// B501 is a two-storey room (drawn spanning the B4 and B5 rows) so it also opens directly onto
+// B502 below it with no ladder/rope needed, same as any other shared wall.
 const ADJ = {
-  "201":["102"], "202":["104","103"],
-  "101":["102","B102"], "102":["101","201","B104"], "103":["104","B106","202"], "104":["103","202","B107"],
-  "B101":["B102","B201"], "B102":["B101","B103","101","B202"], "B103":["B102","B104","B203"],
-  "B104":["B103","B105","102","B204"], "B105":["B104","B106","B205"], "B106":["B105","B107","103","B206"],
-  "B107":["B106","104","B206"],
-  "B201":["B101","B202","B301"], "B202":["B201","B203","B102","B302"], "B203":["B202","B204","B103","B303"],
-  "B204":["B203","B205","B104","B304"], "B205":["B204","B105","B305"], "B206":["B106","B107","B306","B307","B308"],
-  "B301":["B302","B201"], "B302":["B301","B303","B202"], "B303":["B302","B304","B203"],
-  "B304":["B303","B305","B204","B401"], "B305":["B304","B205","B402","B306"],
-  "B306":["B307","B206","B403","B305"], "B307":["B306","B308","B206","B404"], "B308":["B307","B206","B405"],
-  "B501":["B401","B502","B601"], "B401":["B501","B402","B304","B502"],
-  "B402":["B401","B305","B503"], "B403":["B404","B306","B504"],
-  "B404":["B403","B405","B307","B504","B505"], "B405":["B404","B308","B505"],
-  "B502":["B501","B503","B401","B601"], "B503":["B502","B402","B602"],
-  "B504":["B505","B403","B404","B604"], "B505":["B504","B405","B604","B404"],
-  "B601":["B502","B602","B501"], "B602":["B601","B603","B503","B701"], "B603":["B602","B604"],
-  "B604":["B603","B505","B504"], "B701":["B602"]
+  "201":["102"], "202":["104"],
+  "101":["B102"], "102":["201","B104"], "103":["104","B106"], "104":["103","202"],
+  "B101":["B102"], "B102":["B101","B103","101","B201"], "B103":["B102","B104"],
+  "B104":["B103","B105"], "B105":["B104","B106","B205"], "B106":["B105","B107","103","B206"],
+  "B107":["B106"],
+  "B201":["B202","B102"], "B202":["B201","B203"], "B203":["B202","B204"],
+  "B204":["B203","B205","B305"], "B205":["B204","B105","B503"], "B206":["B106","B308"],
+  "B301":["B302"], "B302":["B301","B303"], "B303":["B302","B304"],
+  "B304":["B303","B305","B401"], "B305":["B304","B306","B204"],
+  "B306":["B305","B307"], "B307":["B306","B308","B404"], "B308":["B307","B206"],
+  "B501":["B502","B601"], "B401":["B402","B304"],
+  "B402":["B401","B503"], "B403":["B404"],
+  "B404":["B403","B405","B307"], "B405":["B404","B505"],
+  "B502":["B501","B503"], "B503":["B502","B402"],
+  "B504":["B505","B604"], "B505":["B504","B405"],
+  "B601":["B602","B501"], "B602":["B601","B603","B701"], "B603":["B602","B604"],
+  "B604":["B603","B504"], "B701":["B602"]
 };
 const MEETING_ROOM = "B204"; // 會議室 hub: treated as the assembly room players return to between rounds
 const HELI_TARGETS = ["B101","101","B103","201","B105"];
@@ -694,14 +706,19 @@ const PROFESSIONS = {
   ]},
   miner:{name:"礦工", skills:[
     {name:"挖礦本能", desc:"（被動）在金庫搜索時可得知剩餘金條數量，且每次搜索有20%機率額外獲得1根金條（不佔負重）。", passive:true},
-    {name:"精煉技術", desc:"整局限用2次：可將背包中2根金條轉換為1份水+1份糧。", uses:2}
+    {name:"精煉技術", desc:"可將背包中1根金條轉換為1份水+1份糧。（無使用限制）", uses:99},
+    {name:"秤金術", desc:"（被動）金條負重視為0.5（每2根金條共佔1格背包空間）。", passive:true}
+  ]},
+  hunter:{name:"獵人", skills:[
+    {name:"奔跑", desc:"整局限用2次：該回合移動速度+2。", uses:2},
+    {name:"埋伏", desc:"整局限用2次：可不移動直接使用房間功能；武力永久+1，同房間其他玩家強制各扣2點生命。", uses:2}
   ]}
 };
-// 擴充模式: these 18 professions are hidden from the setup screen (and never randomly given to
+// 擴充模式: these 19 professions are hidden from the setup screen (and never randomly given to
 // AI) unless the player opts into 擴充模式 — keeps a first game to the original 16, same as
-// before this expansion was added, while letting anyone who wants the extra 18-profession roster
+// before this expansion was added, while letting anyone who wants the extra 19-profession roster
 // turn it on.
-const EXPANSION_PROFS=new Set(["medic","pilot","demolitions","chef","engineer","smuggler","survivor","shopper","runner","herbalist","veteran","pickpocket","diver","courier","gourmet","farmer","caregiver","miner"]);
+const EXPANSION_PROFS=new Set(["medic","pilot","demolitions","chef","engineer","smuggler","survivor","shopper","runner","herbalist","veteran","pickpocket","diver","courier","gourmet","farmer","caregiver","miner","hunter"]);
 // One small emoji "portrait" per profession — shown on the selection card and anywhere a player's
 // profession is listed in-game, so each of the 16 is visually distinct at a glance, not just by name.
 const PROF_ICON={
@@ -710,7 +727,7 @@ const PROF_ICON={
   merc:"🔪", geneFreak:"🧬", outsider:"🚪", climber:"🧗", engineer:"🔧",
   medic:"🩺", pilot:"✈️", demolitions:"🧨", chef:"🍳", smuggler:"🧳", survivor:"🎒",
   shopper:"🛍️", runner:"🏃", herbalist:"🌿", veteran:"🎖️", pickpocket:"🥷",
-  diver:"🤿", courier:"📦", gourmet:"🍽️", farmer:"🌾", caregiver:"💕", miner:"⛏️"
+  diver:"🤿", courier:"📦", gourmet:"🍽️", farmer:"🌾", caregiver:"💕", miner:"⛏️", hunter:"🏹"
 };
 // 去圖示模式 (低調模式 companion toggle): when on, every emoji "picture" in the UI is swapped
 // for a plain bracketed-text stand-in instead — unlike 低調模式 (the boss key), this is meant to
@@ -983,7 +1000,9 @@ const SKILL_QUOTES={
   "farmer:1":"一點垃圾，也能長出東西來。",
   "caregiver:0":"忍一下，馬上就不痛了。",
   "caregiver:1":"我來了，撐住！",
-  "miner:1":"金子雖好，命更重要。"
+  "miner:1":"金子雖好，命更重要。",
+  "hunter:0":"獵物跑不掉的。",
+  "hunter:1":"你已經在我的射程內了。"
 };
 const VOICE=(()=>{
   const supported="speechSynthesis" in window;
@@ -1084,7 +1103,8 @@ const SELECT_QUOTES={
   gourmet:"沒吃飽，我可不逃命。",
   farmer:"地不會虧待認真的人。",
   caregiver:"別怕，有我在。",
-  miner:"哪裡有礦，我一挖就知道。"
+  miner:"哪裡有礦，我一挖就知道。",
+  hunter:"躲得再好，也逃不過我的眼睛。"
 };
 (()=>{
   const voiceBtn=document.getElementById("voiceMuteBtn");
@@ -1114,7 +1134,7 @@ function logRound(n){ log(`<span class="r">── 第 ${n} 輪 ──</span>`); 
 const profGrid=document.getElementById("profGrid");
 let selectedProf=null;
 // 擴充模式: off by default (unchecked) — matches a fresh game to the original 16-profession
-// roster until the player explicitly opts into the extra 18. Read by startGame()'s AI pool too.
+// roster until the player explicitly opts into the extra 19. Read by startGame()'s AI pool too.
 let expansionMode=false;
 // Counted straight off PROFESSIONS/EXPANSION_PROFS rather than hardcoded numbers, so this line
 // can never drift out of sync the way the old "新增7個職業" checkbox label once did after the
@@ -1269,6 +1289,7 @@ function makePlayer(id,isAI,profId,stats,name){
     carry:stats.carry + (profId==="smuggler"?3:0) + (profId==="courier"?1:0), // 走私客的暗格夾層/郵差的超載快遞
     hp:startHp, maxhp:startHp, alive:true, ghost:false, ghostDrainTotal:0,
     hpLog:[], // per-round {round,hp,delta} snapshots, filled in at settlement — drives the 每輪血量變化 table
+    roomLog:[], // per-round room-id snapshot, filled in alongside hpLog — drives the 移動路線 list on the end screen
     roundEvents:[], // this round's {cause,amount} damage events — read by showRoundSummary, reset each beginRound
     room: MEETING_ROOM, spawnRoom:null, stepsLeft:0,
     inv:[], // array of item ids
@@ -1278,9 +1299,10 @@ function makePlayer(id,isAI,profId,stats,name){
       tamerUses:0, geneUses:0, climberDietUsed:false, dietThisRound:false,
       goldUsedThisRound:false, visited102:false, remoteRoomOverride:null,
       survivorFirstAidUsed:false, shopperJumpUses:0, shopperSpeedPenaltyApplied:false,
-      runnerSprintUses:0, pickpocketUses:0,
+      runnerSprintUses:0, runnerEnduranceReady:false, pickpocketUses:0,
       diverHoldBreathUses:0, diverHoldBreathActive:false, courierUses:0,
       gourmetUses:0, gourmetBuffActive:false, farmerUses:0, caregiverUses:0, minerUses:0,
+      hunterSprintUses:0, hunterUses:0, hunterAmbushActive:false,
       pendingItemUses:[], wineExcludedQueue:[], roomCommitted:false},
     pendingActions:{targetRoom:null, movementDone:false, roomActed:false},
     weaponWeightless: profId==="merc",
@@ -1296,11 +1318,18 @@ function makePlayer(id,isAI,profId,stats,name){
 function effectiveCarryCap(p){
   return p.carry + (p.inv.includes("dimpocket") ? 9999 : 0);
 }
-function usedCarry(p){
-  let n=0;
-  for(const it of p.inv){
+// `invOverride` lets callers ask "what would usedCarry be for THIS hypothetical inventory" without
+// actually mutating p.inv — needed anywhere multiple items (e.g. 2+ gold drawn in the same batch)
+// have to be costed together, since 礦工's paired gold weight can't be decided one item at a time.
+function usedCarry(p,invOverride){
+  const inv=invOverride||p.inv;
+  let n=0, minerGold=0;
+  for(const it of inv){
     if(it==="trash" && p.weightlessTrash) continue;
     if(it==="gold" && p.weightlessGold) continue;
+    // 礦工的秤金術: gold weighs 0.5 each, tallied separately since it's a shared per-pair cost,
+    // not a flat per-item one — see itemCostsCarry for the matching per-draw marginal check.
+    if(it==="gold" && p.prof==="miner"){ minerGold++; continue; }
     if(it==="wine" && p.weightlessWine) continue;
     if(ITEMS[it].weapon && p.weaponWeightless) continue;
     if((it==="pill"||it==="adrenaline") && p.weightlessMedical) continue;
@@ -1308,6 +1337,7 @@ function usedCarry(p){
     if(it==="pill" && p.weightlessPill) continue;
     n++;
   }
+  if(minerGold>0) n+=Math.ceil(minerGold/2);
   return n;
 }
 function carryRoom(p){ return effectiveCarryCap(p)-usedCarry(p); }
@@ -1588,6 +1618,8 @@ function beginRound(){
     p.flags.recycleUsedThisRound=false; // 循環回收裝置 is a durable item too — limited to once per round
     p.flags.smugglerBonusUsedThisRound=false; // 走私客的熟悉門路: once per round
     p.flags.diverHoldBreathActive=false; // 潛水員的憋氣術: declared fresh each round it's used
+    p.flags.hunterAmbushActive=false; // 獵人的埋伏: the must-move waiver only covers the round it's used
+    p.flags.runnerEnduranceReady=false; // 馬拉松跑者的耐力訓練: re-armed fresh each round, see checkRunnerEndurance
     p.flags.dietThisRound=false;
     // 郵差的超載快遞: the +1 carry slot only lasts through the round it was filled — if you're
     // still over your NORMAL (non-courier) cap when the next round starts, the overflow item is
@@ -1640,6 +1672,16 @@ function isMyTurn(){
   return STATE.phase==="positioning" && !STATE.gameOver && STATE.turnOrder &&
     STATE.turnIndex<STATE.turnOrder.length && STATE.turnOrder[STATE.turnIndex]===you().id;
 }
+// 馬拉松跑者的耐力訓練: captured the moment this player's own turn ends (not re-derived later at
+// settlement), so a stray post-commit skill click that nudges stepsLeft back up (nothing currently
+// does this, but nothing guards against it either) can't retroactively cost them a heal they
+// already earned by spending every step. The settlement pass just reads this flag instead of
+// re-checking p.stepsLeft===0 itself.
+function checkRunnerEndurance(p){
+  if(p.prof==="runner" && p.alive && !p.ghost && p.roundStartSteps>0 && p.stepsLeft===0){
+    p.flags.runnerEnduranceReady=true;
+  }
+}
 function advanceTurn(){
   while(STATE.turnIndex < STATE.turnOrder.length){
     const pid=STATE.turnOrder[STATE.turnIndex];
@@ -1647,6 +1689,7 @@ function advanceTurn(){
     if(!p || (!p.alive && !p.ghost)){ STATE.turnIndex++; continue; }
     if(p.isAI){
       if(p.ghost) resolveGhostAITurn(p); else resolveAITurn(p);
+      checkRunnerEndurance(p);
       p.actedThisRound=true;
       STATE.turnIndex++;
       continue;
@@ -1672,6 +1715,7 @@ function resolveGhostAITurn(p){
 document.getElementById("endTurnBtn").addEventListener("click",()=>{
   if(!isMyTurn()){ flashMsg("尚未輪到你的回合。"); return; }
   const p=you();
+  checkRunnerEndurance(p);
   p.actedThisRound=true;
   STATE.turnIndex++;
   advanceTurn();
@@ -1701,9 +1745,9 @@ function tryMove(p,target){
 }
 // 每輪強制移動: a player may not end their turn back in the room they started the round in —
 // unless they physically can't move at all this round (e.g. 0 speed), in which case forcing it
-// would just soft-lock them.
+// would just soft-lock them. 獵人's 埋伏 is a deliberate exception (can act without moving at all).
 function mustMoveThisRound(p){
-  if(p.ghost) return false;
+  if(p.ghost || p.flags.hunterAmbushActive) return false;
   const reach=reachableRooms(p.roundStartRoom, p.roundStartSteps);
   return Object.keys(reach).some(r=>r!==p.roundStartRoom);
 }
@@ -1812,12 +1856,40 @@ function drawItemsFromStock(p,roomId,maxDraw){
 function itemCostsCarry(p,item){
   if(item==="trash" && p.weightlessTrash) return false;
   if(item==="gold" && p.weightlessGold) return false;
+  // 礦工的秤金術: 0.5 負重/根 — every 2nd gold is free. This is the marginal cost of adding ONE
+  // MORE gold on top of however many are already in p.inv, so callers that check this right
+  // before pushing a new gold (one at a time, in draw/keep order) reproduce usedCarry's
+  // ceil(count/2) total exactly: the 1st gold costs, the 2nd is free, the 3rd costs, and so on.
+  if(item==="gold" && p.prof==="miner") return countItem(p,"gold")%2===0;
   if(item==="wine" && p.weightlessWine) return false;
   if(ITEMS[item].weapon && p.weaponWeightless) return false;
   if((item==="pill"||item==="adrenaline") && p.weightlessMedical) return false;
   if((item==="water"||item==="food") && p.weightlessRation) return false;
   if(item==="pill" && p.weightlessPill) return false;
   return true;
+}
+// Inverse of itemCostsCarry, needed only because 礦工's paired gold weight makes "does adding one
+// more cost a slot" and "does removing one free a slot" genuinely different questions: a lone
+// unpaired gold (odd count) is the one occupying its own slot, so removing IT frees a slot, but
+// removing one half of a complete pair (even count) leaves the other half still needing that same
+// slot, freeing nothing. Every other item/profession's cost is flat, so the two always agree.
+function itemRemovalFrees(p,item){
+  if(item==="gold" && p.prof==="miner") return countItem(p,"gold")%2===1;
+  return itemCostsCarry(p,item);
+}
+// Quantity-independent "this item type never costs carry for this player" check — true/false
+// regardless of how many you already hold. Used only to decide which rows the draw-selection
+// picker can auto-keep and disable; 礦工's paired gold weight is deliberately excluded since it
+// genuinely depends on quantity, so gold always shows as a normal selectable row for a miner.
+function isFlatWeightless(p,item){
+  if(item==="trash" && p.weightlessTrash) return true;
+  if(item==="gold" && p.weightlessGold) return true;
+  if(item==="wine" && p.weightlessWine) return true;
+  if(ITEMS[item].weapon && p.weaponWeightless) return true;
+  if((item==="pill"||item==="adrenaline") && p.weightlessMedical) return true;
+  if((item==="water"||item==="food") && p.weightlessRation) return true;
+  if(item==="pill" && p.weightlessPill) return true;
+  return false;
 }
 // Human draw: reveal everything, auto-keep it all if it fits, otherwise let the player choose
 // which to keep up to remaining carry space (weightless items are always kept for free).
@@ -1837,7 +1909,10 @@ function resolveHumanDraw(p,roomId,maxDraw){
 function resolveHumanKeep(p,drawnItems,roomId){
   const room=ROOMS[roomId];
   const names=drawnItems.map(g=>ITEMS[g].name).join("、");
-  const costingCount=drawnItems.filter(it=>itemCostsCarry(p,it)).length;
+  // Costed as one combined batch (usedCarry diff) rather than filtering each item's standalone
+  // itemCostsCarry — a plain per-item filter would double-count 2+ gold drawn in the same batch
+  // for a 礦工, since itemCostsCarry's marginal check only updates once an item is actually pushed.
+  const costingCount=usedCarry(p,p.inv.concat(drawnItems))-usedCarry(p);
   const cap=carryRoom(p);
   if(costingCount<=cap){
     drawnItems.forEach(it=>p.inv.push(it));
@@ -1875,8 +1950,8 @@ function openDrawSelectionModal(p,drawnItems,roomId){
   const cap=effectiveCarryCap(p);
   const oldItems=p.inv.slice();
   const rowMeta=[];
-  oldItems.forEach((item,i)=>rowMeta.push({key:"old:"+i, item, free:!itemCostsCarry(p,item), defaultChecked:true, tag:"背包中"}));
-  drawnItems.forEach((item,i)=>rowMeta.push({key:"new:"+i, item, free:!itemCostsCarry(p,item), defaultChecked:false, tag:"新抽到"}));
+  oldItems.forEach((item,i)=>rowMeta.push({key:"old:"+i, item, free:isFlatWeightless(p,item), defaultChecked:true, tag:"背包中"}));
+  drawnItems.forEach((item,i)=>rowMeta.push({key:"new:"+i, item, free:isFlatWeightless(p,item), defaultChecked:false, tag:"新抽到"}));
   const rows=rowMeta.map(r=>{
     if(r.free) return `<label style="display:block;margin:4px 0"><input type="checkbox" checked disabled> ${ITEMS[r.item].name}（${r.tag}．不佔負重，自動保留）</label>`;
     return `<label style="display:block;margin:4px 0"><input type="checkbox" class="drawChk" data-key="${r.key}"${r.defaultChecked?" checked":""}> ${ITEMS[r.item].name}（${r.tag}）</label>`;
@@ -1886,9 +1961,13 @@ function openDrawSelectionModal(p,drawnItems,roomId){
     <div class="mono muted" id="drawCount" style="margin:8px 0"></div>
     <button class="btn small" id="drawConfirm">確認</button>`);
   const boxes=[...document.querySelectorAll(".drawChk")];
-  const updateCount=()=>{ document.getElementById("drawCount").textContent="已選 "+boxes.filter(b=>b.checked).length+" / 可帶 "+(cap===9999?"∞":cap); };
+  // Tallied via usedCarry(p, ...) on the whole proposed selection, not a flat checked-box count —
+  // a plain count would double-charge a 礦工 for 2+ gold picked in the same pass, since the paired
+  // discount is only visible when they're counted together.
+  const currentSelection=()=>rowMeta.filter(r=>r.free || document.querySelector('.drawChk[data-key="'+r.key+'"]:checked')).map(r=>r.item);
+  const updateCount=()=>{ document.getElementById("drawCount").textContent="已選 "+usedCarry(p,currentSelection())+" / 可帶 "+(cap===9999?"∞":cap); };
   boxes.forEach(cb=>cb.addEventListener("change",()=>{
-    if(boxes.filter(b=>b.checked).length>cap){ cb.checked=false; flashMsg("已達可攜帶上限，請先取消勾選其他道具"); }
+    if(usedCarry(p,currentSelection())>cap){ cb.checked=false; flashMsg("已達可攜帶上限，請先取消勾選其他道具"); }
     updateCount();
   }));
   updateCount();
@@ -2455,7 +2534,8 @@ const SKILL_USE_LIMITS={
   "gourmet:1":{flag:"gourmetUses",max:2},
   "farmer:1":{flag:"farmerUses",max:2},
   "caregiver:1":{flag:"caregiverUses",max:2},
-  "miner:1":{flag:"minerUses",max:2},
+  "hunter:0":{flag:"hunterSprintUses",max:2},
+  "hunter:1":{flag:"hunterUses",max:2},
 };
 function skillUsedCount(p,key){
   const lim=SKILL_USE_LIMITS[key];
@@ -2621,15 +2701,28 @@ function useProfSkill(p,idx){
     if(skillUseCapReached(p,"caregiver:1")){ flashMsg("已用完2次"); return; }
     openCaregiverRushModal(p);
   } else if(p.prof==="miner" && idx===1){
-    if(skillUseCapReached(p,"miner:1")){ flashMsg("已用完2次"); return; }
-    if(countItem(p,"gold")<2){ flashMsg("需要2根金條才能發動"); return; }
-    const freedByGold=itemCostsCarry(p,"gold")?2:0;
+    if(countItem(p,"gold")<1){ flashMsg("需要1根金條才能發動"); return; }
+    const freedByGold=itemRemovalFrees(p,"gold")?1:0;
     if(carryRoom(p)+freedByGold<2){ flashMsg("背包空間不足，需要至少可再容納2份新道具"); return; }
-    removeItem(p,"gold"); removeItem(p,"gold");
-    STATE.discardPile.push("gold"); STATE.discardPile.push("gold");
+    removeItem(p,"gold");
+    STATE.discardPile.push("gold");
     p.flags.minerUses++; p.flags.skillUsedThisRound=true;
     addItem(p,"water"); addItem(p,"food");
-    log(p.name+" 使用精煉技術：2根金條轉換為1份水+1份糧。"); speakSkill(p,"miner:1");
+    log(p.name+" 使用精煉技術：1根金條轉換為1份水+1份糧。"); speakSkill(p,"miner:1");
+  } else if(p.prof==="hunter" && idx===0){
+    if(skillUseCapReached(p,"hunter:0")){ flashMsg("已用完2次"); return; }
+    p.flags.hunterSprintUses++; p.flags.skillUsedThisRound=true;
+    p.stepsLeft+=2;
+    log(p.name+" 使用奔跑：本輪速度+2。"); speakSkill(p,"hunter:0");
+  } else if(p.prof==="hunter" && idx===1){
+    if(skillUseCapReached(p,"hunter:1")){ flashMsg("已用完2次"); return; }
+    p.flags.hunterUses++; p.flags.skillUsedThisRound=true;
+    p.flags.hunterAmbushActive=true;
+    p.power++;
+    const ambushTargets=playersInRoom(p.room,true).filter(x=>x.id!==p.id);
+    ambushTargets.forEach(t=>damagePlayer(t,2,"獵人埋伏"));
+    log(p.name+" 使用埋伏：武力永久+1"+(ambushTargets.length?"，"+ambushTargets.map(t=>t.name).join("、")+" 各受到2點傷害":"（房內無其他玩家）")+"。","dmg");
+    speakSkill(p,"hunter:1");
   }
   renderAll();
 }
@@ -2853,6 +2946,20 @@ function aiConsiderRunnerSprint(p){
   });
   if(worthIt) useProfSkill(p,1);
 }
+// 獵人's 奔跑 — same "only worth it if it opens up somewhere new" heuristic as 長跑 above,
+// just a different profession/flag/cap (2 charges instead of 3).
+function aiConsiderHunterSprint(p){
+  if(p.prof!=="hunter" || p.flags.skillUsedThisRound || skillUseCapReached(p,"hunter:0")) return;
+  const reachNow=reachableRooms(p.room,p.stepsLeft);
+  const reachBoosted=reachableRooms(p.room,p.stepsLeft+2);
+  const newlyReachable=Object.keys(reachBoosted).filter(r=>reachNow[r]===undefined);
+  if(!newlyReachable.length) return;
+  const worthIt=newlyReachable.some(r=>{
+    const room=ROOMS[r];
+    return (p.hp<=5 && (room.stock.pill||room.stock.adrenaline)) || room.draw>0 || (!hasGun(p)&&(room.stock.pistol||room.stock.shotgun||room.stock.knife));
+  });
+  if(worthIt) useProfSkill(p,0);
+}
 // Everything else is decided AFTER movement/room-resolution, since it either depends on where
 // the AI ended up (chemist/climber-escape) or doesn't care about position
 // at all (tamer/scavenger/embalmer). chemist and hacker bypass useProfSkill for the branches that
@@ -2959,14 +3066,14 @@ function aiConsiderSkillAfterMove(p){
     return;
   }
   if(p.prof==="miner"){
-    if(!skillUseCapReached(p,"miner:1") && countItem(p,"gold")>=2 && STATE.round>=2 && countItem(p,"water")===0 && countItem(p,"food")===0){
-      const freedByGold=itemCostsCarry(p,"gold")?2:0;
+    if(countItem(p,"gold")>=1 && STATE.round>=2 && countItem(p,"water")===0 && countItem(p,"food")===0){
+      const freedByGold=itemRemovalFrees(p,"gold")?1:0;
       if(carryRoom(p)+freedByGold>=2){
-        removeItem(p,"gold"); removeItem(p,"gold");
-        STATE.discardPile.push("gold"); STATE.discardPile.push("gold");
+        removeItem(p,"gold");
+        STATE.discardPile.push("gold");
         p.flags.minerUses++; p.flags.skillUsedThisRound=true;
         addItem(p,"water"); addItem(p,"food");
-        log(p.name+" 使用精煉技術：2根金條轉換為1份水+1份糧。");
+        log(p.name+" 使用精煉技術：1根金條轉換為1份水+1份糧。");
       }
     }
     return;
@@ -2991,6 +3098,22 @@ function aiConsiderSkillAfterMove(p){
         p.flags.caregiverUses++; p.flags.skillUsedThisRound=true;
         p.room=target.room;
         log(p.name+" 使用隨傳隨到，前往「"+p.room+"」照顧 "+target.name+"（HP "+target.hp+"）。");
+      }
+    }
+    return;
+  }
+  if(p.prof==="hunter"){
+    // 埋伏: by the time this runs the AI has already moved for the round (see resolveAITurn),
+    // so the "可以不移動" waiver is moot for AI — this just takes the free permanent power
+    // and AOE damage whenever there's at least one other player in the final room.
+    if(!skillUseCapReached(p,"hunter:1")){
+      const targets=playersInRoom(p.room,true).filter(x=>x.id!==p.id);
+      if(targets.length){
+        p.flags.hunterUses++; p.flags.skillUsedThisRound=true;
+        p.flags.hunterAmbushActive=true;
+        p.power++;
+        targets.forEach(t=>damagePlayer(t,2,"獵人埋伏"));
+        log(p.name+" 使用埋伏：武力永久+1，"+targets.map(t=>t.name).join("、")+" 各受到2點傷害。");
       }
     }
     return;
@@ -3026,6 +3149,7 @@ function aiConsiderSkillAfterMove(p){
 function resolveAITurn(p){
   aiConsiderTruckerBoost(p);
   aiConsiderRunnerSprint(p);
+  aiConsiderHunterSprint(p);
   const target=aiChooseTarget(p);
   tryMove(p,target);
   if(p.room==="102") applyLaser(p);
@@ -3210,10 +3334,11 @@ function settleRound(){
     if(p.flags.__surgeryHeal){ p.hp=Math.min(p.maxhp,p.hp+4); p.flags.__surgeryHeal=false; log(p.name+" 於手術室恢復4點生命。","heal"); }
   });
 
-  // 馬拉松跑者的耐力訓練: healed if they spent every step they had this round (0 speed doesn't
-  // count — there must have been steps to actually use up).
+  // 馬拉松跑者的耐力訓練: whether they earned this is decided by checkRunnerEndurance the moment
+  // their own turn ended, not re-derived here — this runs BEFORE combat/poison/hunger below, so
+  // the heal still has a chance to cushion this same round's incoming damage.
   STATE.players.forEach(p=>{
-    if(p.alive && !p.ghost && p.prof==="runner" && p.roundStartSteps>0 && p.stepsLeft===0){
+    if(p.alive && !p.ghost && p.flags.runnerEnduranceReady){
       p.hp=Math.min(p.maxhp,p.hp+2);
       log(p.name+"（耐力訓練）本輪步數用盡，恢復2點生命。","heal");
     }
@@ -3388,6 +3513,7 @@ function settleRound(){
   STATE.players.forEach(p=>{
     const prev=p.hpLog.length? p.hpLog[p.hpLog.length-1].hp : p.maxhp;
     p.hpLog.push({round:STATE.round, hp:p.hp, delta:p.hp-prev});
+    p.roomLog.push(p.room); // this round's final room, for the end screen's 移動路線 list
   });
 
   renderAll();
@@ -3487,14 +3613,36 @@ function endGame(){
   renderEndScreen();
   saveGame();
 }
+// Dying always forces hp to exactly 0 (see killPlayer), so a tie on hp at game end is really a
+// tie among several dead players — plain hp-descending sort then just falls back to array order
+// (whoever happened to be created first), which isn't a real ranking. Break ties by power (their
+// stat going into death — power is never reduced by dying), and if THAT'S also tied, they share
+// the same rank number (standard competition ranking: 1,2,2,4 — not 1,2,2,3).
 function renderEndScreen(){
-  const ranked=[...STATE.players].sort((a,b)=>b.hp-a.hp);
+  const ranked=[...STATE.players].sort((a,b)=>(b.hp-a.hp)||(b.power-a.power));
   const list=document.getElementById("rankList");
   list.innerHTML="";
+  let rank=1;
   ranked.forEach((p,i)=>{
+    if(i>0){
+      const prev=ranked[i-1];
+      if(!(p.hp===prev.hp && p.power===prev.power)) rank=i+1;
+    }
     const div=document.createElement("div"); div.className="rank-row";
-    div.innerHTML="<span>#"+(i+1)+" "+p.name+" ("+profIcon(p.prof)+" "+PROFESSIONS[p.prof].name+")"+(p.alive?"":" 💀")+"</span><span class='mono'>HP "+p.hp+"</span>";
+    const powerNote=p.alive?"":"（武力 "+p.power+"）";
+    div.innerHTML="<span>#"+rank+" "+p.name+" ("+profIcon(p.prof)+" "+PROFESSIONS[p.prof].name+")"+(p.alive?"":" 💀")+"</span><span class='mono'>HP "+p.hp+" "+powerNote+"</span>";
     list.appendChild(div);
+  });
+  // 大家的移動路線: 出生點 (spawnRoom) followed by each round's final room, in original
+  // (unsorted) player order — reusing the same roomLog snapshot the settlement loop already
+  // fills in alongside hpLog, rather than a separate live-tracking pass.
+  const routeEl=document.getElementById("routeList");
+  routeEl.innerHTML="";
+  STATE.players.forEach(p=>{
+    const path=[p.spawnRoom, ...p.roomLog].filter(Boolean).join(" → ");
+    const div=document.createElement("div");
+    div.innerHTML="<b>"+p.name+"（"+profIcon(p.prof)+" "+PROFESSIONS[p.prof].name+"）</b>："+path;
+    routeEl.appendChild(div);
   });
   document.getElementById("endScreen").classList.remove("hidden");
 }
