@@ -158,8 +158,8 @@
     border-radius:8px;padding:10px}
   #log div{border-bottom:1px dashed #1f2942;padding:4px 0}
   #log .r{color:var(--violet);font-weight:700}
-  #log ul.loglist{margin:4px 0 0;padding-left:18px}
-  #log ul.loglist li{margin:3px 0}
+  #log ul.loglist, .roundHistEntry ul.loglist{margin:4px 0 0;padding-left:18px}
+  #log ul.loglist li, .roundHistEntry ul.loglist li{margin:3px 0}
   #log .dmg{color:var(--ember-bright)}
   #log .heal{color:var(--toxic-bright)}
   .skillbtn{width:100%;text-align:left;margin:4px 0;padding:8px 10px;border-radius:8px;border:1px solid var(--line);
@@ -174,6 +174,9 @@
   .rank-row:first-child{color:var(--gold);font-weight:900}
   #routeList div{padding:6px 10px;border-bottom:1px dashed var(--line)}
   #routeList div:last-child{border-bottom:none}
+  .roundHistEntry{padding:8px 10px;border-bottom:1px dashed var(--line)}
+  .roundHistEntry:last-child{border-bottom:none}
+  .roundHistEntry .rhRound{color:var(--cyan-bright);font-weight:700;margin-bottom:4px}
   #modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px;
     animation:modalFade .15s ease}
   #modal{max-width:520px;width:100%;max-height:80vh;overflow-y:auto;animation:modalPop .18s cubic-bezier(.2,.9,.3,1.2)}
@@ -251,7 +254,7 @@
       <h2 style="font-size:16px;color:var(--cyan-bright)">1. 選擇職業</h2>
       <div class="muted mono" id="profCountInfo" style="font-size:12px;margin-bottom:6px"></div>
       <label class="muted" style="display:block;margin-bottom:10px;font-size:13px">
-        <input type="checkbox" id="expansionToggle"> 啟用擴充模式（新增19個職業，AI也可能隨機選到）</label>
+        <input type="checkbox" id="expansionToggle"> 啟用擴充模式（新增16個職業，AI也可能隨機選到）</label>
       <div class="prof-grid" id="profGrid"></div>
     </div>
     <div class="card" style="margin-top:12px">
@@ -364,6 +367,8 @@
     <div id="rankList"></div>
     <h2 style="color:var(--gold);font-family:Orbitron;font-size:15px;margin-top:20px">大家的移動路線</h2>
     <div id="routeList" class="mono" style="font-size:12.5px;line-height:1.9"></div>
+    <h2 style="color:var(--gold);font-family:Orbitron;font-size:15px;margin-top:20px">每輪回顧</h2>
+    <div id="roundHistoryList" class="mono" style="font-size:12.5px;line-height:1.7"></div>
     <button class="btn" id="replayBtn" style="margin-top:12px">重新開始</button>
   </div>
 </div>
@@ -657,7 +662,6 @@ const PROFESSIONS = {
     {name:"內建回收裝置", desc:"（被動）不需持有循環回收裝置道具卡，每輪可直接使用一次回收功能，從棄牌堆中取得1張道具（與持有該道具卡共用每輪1次的限制）。", passive:true},
     {name:"精密回收", desc:"（被動）使用循環回收裝置（不論是內建還是持有道具卡）時，可自行選擇想要的道具，而非隨機抽取。", passive:true}
   ]},
-  // ---- 擴充模式職業 (見 EXPANSION_PROFS) ----
   medic:{name:"醫官", skills:[
     {name:"醫者仁心", desc:"（被動）手術室的治療原本需要恰好2人在場才會觸發；你1人在場時就能觸發，結算時恢復4點生命。", passive:true},
     {name:"隨身醫療包", desc:"（被動）藥片與腎上腺素永久不佔負重。", passive:true}
@@ -731,11 +735,10 @@ const PROFESSIONS = {
     {name:"埋伏", desc:"整局限用2次：可不移動直接使用房間功能；武力永久+1，同房間其他玩家強制各扣2點生命。", uses:2}
   ]}
 };
-// 擴充模式: these 19 professions are hidden from the setup screen (and never randomly given to
-// AI) unless the player opts into 擴充模式 — keeps a first game to the original 16, same as
-// before this expansion was added, while letting anyone who wants the extra 19-profession roster
-// turn it on.
-const EXPANSION_PROFS=new Set(["medic","pilot","demolitions","chef","engineer","smuggler","survivor","shopper","runner","herbalist","veteran","pickpocket","diver","courier","gourmet","farmer","caregiver","miner","hunter"]);
+// 擴充模式: these 16 professions are hidden from the setup screen (and never randomly given to
+// AI) unless the player opts into 擴充模式 — keeps a first game to the 19-profession base roster,
+// while letting anyone who wants the extra 16-profession roster turn it on.
+const EXPANSION_PROFS=new Set(["fatty","trucker","bartender","chemist","hacker","shade","merc","outsider","climber","pilot","chef","diver","courier","gourmet","farmer","caregiver"]);
 // One small emoji "portrait" per profession — shown on the selection card and anywhere a player's
 // profession is listed in-game, so each of the 16 is visually distinct at a glance, not just by name.
 const PROF_ICON={
@@ -840,6 +843,8 @@ function restoreGame(){
   try{
     st.poisoned=new Set(st.poisoned||[]);
     st.detoxedRooms=new Set(st.detoxedRooms||[]);
+    // saves made before the end screen's 每輪回顧 existed won't have this — default to no history yet.
+    if(!st.roundHistory) st.roundHistory=[];
     st.players.forEach(p=>{
       p.flags=p.flags||{};
       p.flags.__onceKeys=new Set(p.flags.__onceKeys||[]);
@@ -1149,8 +1154,8 @@ function logRound(n){ log(`<span class="r">── 第 ${n} 輪 ──</span>`); 
 /* ---------- setup screen wiring ---------- */
 const profGrid=document.getElementById("profGrid");
 let selectedProf=null;
-// 擴充模式: off by default (unchecked) — matches a fresh game to the original 16-profession
-// roster until the player explicitly opts into the extra 19. Read by startGame()'s AI pool too.
+// 擴充模式: off by default (unchecked) — matches a fresh game to the 19-profession base
+// roster until the player explicitly opts into the extra 16. Read by startGame()'s AI pool too.
 let expansionMode=false;
 // 地圖2: off by default — turns 3 plain rooms into 樂透房 (see applyMap2Mode/doLottery). Applied
 // once, at startGame(), by mutating those rooms' name/special directly rather than branching every
@@ -1326,6 +1331,11 @@ function makePlayer(id,isAI,profId,stats,name){
     isAI, prof:profId,
     power:stats.power, speed:stats.speed,
     carry:stats.carry + (profId==="smuggler"?3:0) + (profId==="courier"?1:0), // 走私客的暗格夾層/郵差的超載快遞
+    // 郵差的超載快遞 grants exactly +1 carry, permanently, on top of whatever p.carry does later
+    // (基因庫's own permanent +1, a lucky 特調精釀 roll, ...) — stored as its own fixed constant
+    // so beginRound's overflow check can subtract JUST this bonus back out, not a hardcoded "-1"
+    // that would silently also swallow up any of those other, unrelated permanent gains.
+    courierBonusCarry: profId==="courier" ? 1 : 0,
     hp:startHp, maxhp:startHp, alive:true, ghost:false, ghostDrainTotal:0,
     hpLog:[], // per-round {round,hp,delta} snapshots, filled in at settlement — drives the 每輪血量變化 table
     roomLog:[], // per-round room-id snapshot, filled in alongside hpLog — drives the 移動路線 list on the end screen
@@ -1426,7 +1436,7 @@ function startGame(){
     if(power+speed+carry>cap){ carry=Math.max(1,cap-power-speed); }
     players.push(makePlayer(i,true,pid,{power,speed,carry}));
   }
-  STATE={round:1, phase:"positioning", players, poisoned:new Set(), detoxedRooms:new Set(), voteCounts:{}, voteLog:[], voteBallot:[], discardPile:[], gameOver:false};
+  STATE={round:1, phase:"positioning", players, poisoned:new Set(), detoxedRooms:new Set(), voteCounts:{}, voteLog:[], voteBallot:[], discardPile:[], gameOver:false, roundHistory:[]};
   // profession init effects
   players.forEach(p=>{
     if(p.prof==="tamer"){ p.power+=1; p.carry+=1; }
@@ -1676,7 +1686,7 @@ function beginRound(){
     // still over your NORMAL (non-courier) cap when the next round starts, the overflow item is
     // forcibly dropped instead of letting the +1 become a silent permanent extra slot.
     if(p.prof==="courier"){
-      const baseCap=p.carry-1;
+      const baseCap=p.carry-p.courierBonusCarry;
       if(usedCarry(p)>baseCap){
         const priority=(it)=>(ITEMS[it].weapon?0:(it==="pill"||it==="adrenaline")?1:(it==="water"||it==="food")?2:3);
         let worstIdx=-1, worstP=-1;
@@ -3683,6 +3693,22 @@ function settleRound(){
   logList("飢餓扣血", rep.hunger, "無");
   logList("暗影吸血", rep.drain, "無");
 
+  // Persistent copy of this round's report — STATE.__report itself gets reassigned fresh at the
+  // top of next round's settleRound(), so without this snapshot the end screen's 每輪回顧 would
+  // only ever be able to show the LAST round. voteLog is likewise about to be reset in the next
+  // beginRound(), so it has to be copied (.slice()) now too, not just referenced.
+  STATE.roundHistory.push({
+    round: STATE.round,
+    voteLog: STATE.voteLog.slice(),
+    poison: rep.poison,
+    poisonedFloors: [...STATE.poisoned],
+    poisonDamage: rep.poisonDamage.slice(),
+    rocket: rep.rocket.slice(),
+    combat: rep.combat.slice(),
+    hunger: rep.hunger.slice(),
+    drain: rep.drain.slice()
+  });
+
   // snapshot each player's HP change this round, for the 每輪血量變化 table
   STATE.players.forEach(p=>{
     const prev=p.hpLog.length? p.hpLog[p.hpLog.length-1].hp : p.maxhp;
@@ -3818,6 +3844,27 @@ function renderEndScreen(){
     const div=document.createElement("div");
     div.innerHTML="<b>"+p.name+"（"+profIcon(p.prof)+" "+PROFESSIONS[p.prof].name+"）</b>："+path;
     routeEl.appendChild(div);
+  });
+  // 每輪回顧: replays each round's settlement broadcast (same categories showRoundSummary already
+  // prints live during play) from the persistent STATE.roundHistory snapshots, so the full game's
+  // round-by-round events are still readable in one place after the scrolling log has moved on.
+  const histEl=document.getElementById("roundHistoryList");
+  histEl.innerHTML="";
+  const bulletList=(label,items,emptyText)=>
+    label+": "+(items.length? "<ul class='loglist'>"+items.map(x=>"<li>"+x+"</li>").join("")+"</ul>" : emptyText);
+  STATE.roundHistory.forEach(rh=>{
+    const div=document.createElement("div"); div.className="roundHistEntry";
+    const lines=[];
+    lines.push(bulletList("投票明細", rh.voteLog.map(v=>v.name+" → "+FLOOR_LABEL[v.floor]+"（權重"+v.weight+"）"), "無人投票"));
+    lines.push("毒氣: "+(rh.poison||"無投票結果"));
+    lines.push("已中毒樓層: "+(rh.poisonedFloors.map(f=>FLOOR_LABEL[f]).join("、")||"無"));
+    lines.push(bulletList("毒氣扣血", rh.poisonDamage, "無人在毒氣區"));
+    lines.push(bulletList("火箭筒", rh.rocket, "無人使用"));
+    lines.push(bulletList("戰鬥", rh.combat, "無"));
+    lines.push(bulletList("飢餓扣血", rh.hunger, "無"));
+    lines.push(bulletList("暗影吸血", rh.drain, "無"));
+    div.innerHTML=`<div class="rhRound">第 ${rh.round} 輪</div>`+lines.join("<br>");
+    histEl.appendChild(div);
   });
   document.getElementById("endScreen").classList.remove("hidden");
 }
