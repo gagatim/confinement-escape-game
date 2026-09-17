@@ -726,7 +726,7 @@ const PROFESSIONS = {
     {name:"隨傳隨到", desc:"整局限用2次：可立即移動到目前生命值≤3的玩家所在房間，不消耗步數。", uses:2}
   ]},
   miner:{name:"礦工", skills:[
-    {name:"挖礦本能", desc:"（被動）在金庫搜索時可得知剩餘金條數量，且每次搜索有70%機率額外獲得1根金條（不佔負重）。", passive:true},
+    {name:"挖礦本能", desc:"（被動）在任何房間搜索道具時，每次都有70%機率憑空額外獲得1根金條（不佔負重、不消耗該房間庫存）；若搜索的房間是金庫，還能額外得知金庫剩餘金條數量。", passive:true},
     {name:"精煉技術", desc:"可將背包中1根金條轉換為1份水+1份糧。（無使用限制）", uses:99},
     {name:"秤金術", desc:"（被動）金條負重視為0.5（每2根金條共佔1格背包空間）。", passive:true}
   ]},
@@ -1939,17 +1939,21 @@ function drawItemsFromStock(p,roomId,maxDraw){
       log(p.name+"（熟悉門路）本次未觸發。");
     }
   }
-  // 礦工的挖礦本能: at 金庫 specifically, reveal the remaining gold stock and a flat 70% chance
-  // per search of 1 completely free (weightless) extra gold coin — unlike 熟悉門路 above this
-  // never costs carry and has no once-per-round cap, since it's a small side bonus, not a real draw.
-  if(p.prof==="miner" && roomId==="B206"){
-    if(Math.random()<0.7 && room.stock.gold>0){
-      room.stock.gold--; p.inv.push("gold");
+  // 礦工的挖礦本能: every room search has a flat 70% chance of 1 completely free (weightless)
+  // extra gold coin, conjured out of thin air rather than drawn from that room's own stock — so
+  // it still fires in rooms that stock no gold at all. At 金庫 specifically it also reveals the
+  // vault's own remaining gold stock. Unlike 熟悉門路 above this never costs carry and has no
+  // once-per-round cap, since it's a small side bonus, not a real draw.
+  if(p.prof==="miner"){
+    if(Math.random()<0.7){
+      p.inv.push("gold");
       log(p.name+"（挖礦本能）額外挖到1根金條（不佔負重）。");
     } else {
       log(p.name+"（挖礦本能）本次未觸發額外金條。");
     }
-    log(p.name+"（挖礦本能）金庫目前剩餘金條："+(room.stock.gold||0)+"根。");
+    if(roomId==="B206"){
+      log(p.name+"（挖礦本能）金庫目前剩餘金條："+(room.stock.gold||0)+"根。");
+    }
   }
   // 拆彈教官的廢墟搜索: after the normal 垃圾場 search resolves, if the rocket launcher is still
   // sitting in the junk stock (i.e. none of the maxDraw picks above happened to land on it), 40%
