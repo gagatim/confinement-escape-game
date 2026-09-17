@@ -726,7 +726,7 @@ const PROFESSIONS = {
     {name:"隨傳隨到", desc:"整局限用2次：可立即移動到目前生命值≤3的玩家所在房間，不消耗步數。", uses:2}
   ]},
   miner:{name:"礦工", skills:[
-    {name:"挖礦本能", desc:"（被動）在任何房間搜索道具時，每次都有70%機率憑空額外獲得1根金條（不佔負重、不消耗該房間庫存）；若搜索的房間是金庫，還能額外得知金庫剩餘金條數量。", passive:true},
+    {name:"挖礦本能", desc:"（被動）不限房間，只要完成一次搜索道具，就有70%機率額外判定發動一次，憑空獲得1根金條（不佔負重、不消耗該房間庫存）；若搜索的房間是金庫，還能額外得知金庫剩餘金條數量。", passive:true},
     {name:"精煉技術", desc:"可將背包中1根金條轉換為1份水+1份糧。（無使用限制）", uses:99},
     {name:"秤金術", desc:"（被動）金條負重視為0.5（每2根金條共佔1格背包空間）。", passive:true}
   ]},
@@ -1504,10 +1504,12 @@ function renderSpawnGrid(){
 // its tooltip, so the icon never just claims "a ladder exists here" without saying where it goes.
 // Trusts ADJ directly rather than re-deriving from column position: an earlier version required
 // the two rooms' rendered column ranges to strictly overlap, which silently hid the marker for any
-// pair whose columns only touch at the boundary (e.g. B205<->B305, B402<->B305, B103<->B203) even
-// though ADJ — the actual data bfsDist/movement already trust — connects them. A marker that's
-// wrong about what's reachable is worse than no marker, so this must match ADJ exactly, not a
-// secondary geometric guess that can drift from it.
+// pair whose columns only touch at the boundary even though ADJ — the actual data bfsDist/movement
+// already trust — connects them. A marker that's wrong about what's reachable is worse than no
+// marker, so this must match ADJ exactly, not a secondary geometric guess that can drift from it.
+// (The map's later full rebuild — see ADJ's own comment above — re-derived every edge from scratch,
+// so any specific pair cited by an older version of this comment may no longer hold; ADJ itself is
+// the only source of truth, this function and comment included.)
 function verticalLinkTargets(r){
   return (ADJ[r.id]||[]).filter(nid=>{
     const n=ROOMS[nid];
@@ -1561,7 +1563,13 @@ function roomMarkersHtml(r){
   // drawn below it (B107, in 104's case) with no real connection, which reads as a false "these
   // two rooms connect" cue. Split by direction and place each group at its own edge instead of
   // always defaulting to the bottom regardless of which way the link actually goes.
-  const vlinks=verticalLinkTargets(r);
+  // Same false-cue problem shows up even on the correct edge when the link is a multi-floor shaft
+  // (e.g. B205's real link skips straight down to B503, but the room drawn immediately below it
+  // is B305) — the icon sitting right above the wrong room reads as "these connect" just as badly.
+  // Only show the marker for links to the immediately adjacent floor; a skip-floor shaft is still
+  // fully usable via reachableRooms/ADJ, it just doesn't get a permanent map icon that would
+  // misidentify its target.
+  const vlinks=verticalLinkTargets(r).filter(id=>Math.abs(ROOMS[id].floor-r.floor)===1);
   const upLinks=vlinks.filter(id=>ROOMS[id].floor<r.floor);
   const downLinks=vlinks.filter(id=>ROOMS[id].floor>r.floor);
   const vmark=(links,cls)=>`<span class="vmark${cls?" "+cls:""}" title="樓梯／梯子可通往：${links.map(id=>id+(ROOMS[id].name?" "+ROOMS[id].name:"")).join("、")}">${iconsOff()?"[上下]":"🪜"}</span>`;
