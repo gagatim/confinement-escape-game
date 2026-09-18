@@ -3725,12 +3725,16 @@ function resolveAITurn(p){
   }
   // 火箭筒 is a durable item (never consumed) the base AI otherwise never fires — an AI holding
   // one now takes its free shot(s) at whichever other occupied room has the most people in it;
-  // 拆彈教官 gets a 2nd shot at a second room instead of just the one.
+  // 拆彈教官 gets a 2nd shot at a second room instead of just the one. 80% of the time it favors
+  // an occupied, non-poisoned 功能房間 (players cluster there to use room functions); the other
+  // 20% — or whenever no such room is occupied — it falls back to the plain most-populated pick.
   if(countItem(p,"rocket")>0){
     const shotsAllowed=p.prof==="demolitions"?2:1;
     const chosen=[];
     for(let i=0;i<shotsAllowed;i++){
-      const targets=Object.keys(ROOMS).filter(r=>r!==p.room && !chosen.includes(r) && playersInRoom(r,true).length>0);
+      const anyTargets=Object.keys(ROOMS).filter(r=>r!==p.room && !chosen.includes(r) && playersInRoom(r,true).length>0);
+      const funcTargets=anyTargets.filter(r=>ROOMS[r].special && !roomIsPoisoned(ROOMS[r]));
+      const targets=(funcTargets.length && Math.random()<0.8) ? funcTargets : anyTargets;
       if(!targets.length) break;
       targets.sort((a,b)=>playersInRoom(b,true).length-playersInRoom(a,true).length);
       chosen.push(targets[0]);
