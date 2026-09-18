@@ -248,7 +248,7 @@
     <div class="card">
       <h2 style="font-size:16px;color:var(--cyan-bright)">0. 地圖版本</h2>
       <label class="muted" style="display:block;font-size:13px">
-        <input type="checkbox" id="map2Toggle"> 啟用地圖2（B104／B405／B302 變為樂透房：使用時隨機獲得屬性加成、回血、本輪躲避毒氣或永久免疫毒氣其中一種；B102／B602 變為配給站：各有5份水+5份糧，可搜索3次、每次70%機率取得1份，第6輪起各補給1份）</label>
+        <input type="checkbox" id="map2Toggle"> 啟用地圖2（B104／B405／B302 變為樂透房：使用時隨機獲得屬性加成、回血、本輪躲避毒氣或永久免疫毒氣其中一種；B102／B602 變為配給站：各有5份水+5份糧，可搜索3次、每次70%機率取得1份，第6輪起各補給1份；B305／B308 變為神秘商店：共用同一份庫存（地雷/麻醉鏢/煙霧彈/神秘骰子/幸運銅板/氧氣瓶/傳送符/急救噴霧各2份），可搜索2次、每次1/3機率取得道具，未取得時改拿1份垃圾）</label>
     </div>
     <div class="card" style="margin-top:12px">
       <h2 style="font-size:16px;color:var(--cyan-bright)">1. 選擇職業</h2>
@@ -426,7 +426,16 @@ const ITEMS = {
   rocket:{name:"火箭筒",weapon:false,gun:false},
   dimpocket:{name:"次元口袋",weapon:false,gun:false},
   recycledevice:{name:"循環回收裝置",weapon:false,gun:false},
-  trash:{name:"垃圾",weapon:false,gun:false}
+  trash:{name:"垃圾",weapon:false,gun:false},
+  // ---- 地圖2 神秘商店專賣道具 (見 MYSTERY_SHOP_ROOMS) ----
+  mine:{name:"地雷",weapon:false,gun:false},
+  dart:{name:"麻醉鏢",weapon:false,gun:false},
+  smoke:{name:"煙霧彈",weapon:false,gun:false},
+  mysterydice:{name:"神秘骰子",weapon:false,gun:false},
+  coin:{name:"幸運銅板",weapon:false,gun:false},
+  oxygen:{name:"氧氣瓶",weapon:false,gun:false},
+  teleportcharm:{name:"傳送符",weapon:false,gun:false},
+  medspray:{name:"急救噴霧",weapon:false,gun:false}
 };
 
 /* ===================== DATA: ROOMS ===================== */
@@ -692,7 +701,7 @@ const PROFESSIONS = {
     {name:"跳樓大拍賣", desc:"可直接跳到下一層樓（只能往下），消耗1步，整局限用3次；3次用完後速度永久-2。", uses:3}
   ]},
   runner:{name:"馬拉松跑者", skills:[
-    {name:"耐力訓練", desc:"（被動）若本輪步數用到剛好歸零，結算時恢復2點生命。", passive:true},
+    {name:"耐力訓練", desc:"（被動）若本輪步數用到剛好歸零，且回合結束時身處功能房間，結算時恢復3點生命。", passive:true},
     {name:"長跑", desc:"本回合速度+2。整局限用3次。", uses:3}
   ]},
   herbalist:{name:"草藥師", skills:[
@@ -733,12 +742,17 @@ const PROFESSIONS = {
   hunter:{name:"獵人", skills:[
     {name:"奔跑", desc:"整局限用2次：該回合移動速度+2。", uses:2},
     {name:"埋伏", desc:"整局限用2次：可不移動直接使用房間功能；武力永久+1，同房間其他玩家強制各扣2點生命。", uses:2}
+  ]},
+  mediocre:{name:"庸才", skills:[
+    {name:"脆弱體質", desc:"（被動）被火箭筒擊中時，最終傷害+1。", passive:true},
+    {name:"斷尾求生", desc:"整局限用3次：丟棄背包中1張道具，生命+2。", uses:3},
+    {name:"以命換命", desc:"行動階段可使用：花費1點生命，二擇一換取「本輪負重+1」或「本輪多1次抽卡機會」，效果僅限本輪有效。", uses:99}
   ]}
 };
-// 擴充模式: these 16 professions are hidden from the setup screen (and never randomly given to
-// AI) unless the player opts into 擴充模式 — keeps a first game to the 19-profession base roster,
-// while letting anyone who wants the extra 16-profession roster turn it on.
-const EXPANSION_PROFS=new Set(["fatty","trucker","bartender","chemist","hacker","shade","merc","outsider","climber","pilot","chef","diver","courier","gourmet","farmer","caregiver"]);
+// 擴充模式: these professions are hidden from the setup screen (and never randomly given to
+// AI) unless the player opts into 擴充模式 — keeps a first game to the base roster, while letting
+// anyone who wants the larger expansion roster turn it on.
+const EXPANSION_PROFS=new Set(["fatty","trucker","bartender","chemist","hacker","shade","merc","outsider","climber","pilot","chef","diver","courier","gourmet","farmer","caregiver","mediocre"]);
 // One small emoji "portrait" per profession — shown on the selection card and anywhere a player's
 // profession is listed in-game, so each of the 16 is visually distinct at a glance, not just by name.
 const PROF_ICON={
@@ -747,7 +761,8 @@ const PROF_ICON={
   merc:"🔪", geneFreak:"🧬", outsider:"🚪", climber:"🧗", engineer:"🔧",
   medic:"🩺", pilot:"✈️", demolitions:"🧨", chef:"🍳", smuggler:"🧳", survivor:"🎒",
   shopper:"🛍️", runner:"🏃", herbalist:"🌿", veteran:"🎖️", pickpocket:"🥷",
-  diver:"🤿", courier:"📦", gourmet:"🍽️", farmer:"🌾", caregiver:"💕", miner:"⛏️", hunter:"🏹"
+  diver:"🤿", courier:"📦", gourmet:"🍽️", farmer:"🌾", caregiver:"💕", miner:"⛏️", hunter:"🏹",
+  mediocre:"🤷"
 };
 // 去圖示模式 (低調模式 companion toggle): when on, every emoji "picture" in the UI is swapped
 // for a plain bracketed-text stand-in instead — unlike 低調模式 (the boss key), this is meant to
@@ -1023,7 +1038,9 @@ const SKILL_QUOTES={
   "caregiver:1":"我來了，撐住！",
   "miner:1":"金子雖好，命更重要。",
   "hunter:0":"獵物跑不掉的。",
-  "hunter:1":"你已經在我的射程內了。"
+  "hunter:1":"你已經在我的射程內了。",
+  "mediocre:1":"東西不重要，命才重要。",
+  "mediocre:2":"少一口氣，換一條路。"
 };
 const VOICE=(()=>{
   const supported="speechSynthesis" in window;
@@ -1125,7 +1142,8 @@ const SELECT_QUOTES={
   farmer:"地不會虧待認真的人。",
   caregiver:"別怕，有我在。",
   miner:"哪裡有礦，我一挖就知道。",
-  hunter:"躲得再好，也逃不過我的眼睛。"
+  hunter:"躲得再好，也逃不過我的眼睛。",
+  mediocre:"我沒什麼本事，但命是自己的，我會想辦法保住。"
 };
 (()=>{
   const voiceBtn=document.getElementById("voiceMuteBtn");
@@ -1167,6 +1185,14 @@ const LOTTERY_ROOMS=["B104","B405","B302"];
 // attempt success chance (see drawItemsFromStock's drawSuccessChance check) — a plain, higher-
 // variance alternative to 101水塔/B505糧倉's guaranteed-per-draw resource rooms.
 const RATION_ROOMS=["B102","B602"];
+// 神秘商店 (B305/B308): sells the 8 map2-exclusive risk/utility items (see the ITEMS block above).
+// The two rooms deliberately share ONE stock object (assigned by reference below, freshly created
+// each time applyMap2Mode() runs) rather than each getting its own copy — it's one shop with two
+// entrances, so an item bought out at B305 is also gone from B308, not independently restocked.
+// Each search attempt only has a 1/3 chance of yielding an actual shop item; the other 2/3 hand
+// back a piece of 垃圾 instead of nothing (see drawItemsFromStock's `missItem` handling), so a
+// visit is never a complete whiff even when the mystery goods don't come through.
+const MYSTERY_SHOP_ROOMS=["B305","B308"];
 function applyMap2Mode(){
   LOTTERY_ROOMS.forEach(id=>{
     const r=ROOMS[id];
@@ -1178,6 +1204,18 @@ function applyMap2Mode(){
     if(map2Mode){ r.special="ration"; r.name="配給站"; r.draw=3; r.drawSuccessChance=0.7; r.stock={water:5,food:5}; }
     else { delete r.special; delete r.drawSuccessChance; r.name=""; r.draw=0; r.stock={}; }
   });
+  if(map2Mode){
+    const shopStock={mine:2,dart:2,smoke:2,mysterydice:2,coin:2,oxygen:2,teleportcharm:2,medspray:2};
+    MYSTERY_SHOP_ROOMS.forEach(id=>{
+      const r=ROOMS[id];
+      r.special="mysteryshop"; r.name="神秘商店"; r.draw=2; r.drawSuccessChance=1/3; r.missItem="trash"; r.stock=shopStock;
+    });
+  } else {
+    MYSTERY_SHOP_ROOMS.forEach(id=>{
+      const r=ROOMS[id];
+      delete r.special; delete r.drawSuccessChance; delete r.missItem; r.name=""; r.draw=0; r.stock={};
+    });
+  }
 }
 // Counted straight off PROFESSIONS/EXPANSION_PROFS rather than hardcoded numbers, so this line
 // can never drift out of sync the way the old "新增7個職業" checkbox label once did after the
@@ -1366,7 +1404,9 @@ function makePlayer(id,isAI,profId,stats,name){
   return p;
 }
 function effectiveCarryCap(p){
-  return p.carry + (p.inv.includes("dimpocket") ? 9999 : 0);
+  // 庸才的以命換命 (負重選項): +1 for the round it's spent in, tracked in flags since it's not a
+  // permanent stat change like p.carry.
+  return p.carry + (p.inv.includes("dimpocket") ? 9999 : 0) + (p.flags.mediocreTempCarry||0);
 }
 // `invOverride` lets callers ask "what would usedCarry be for THIS hypothetical inventory" without
 // actually mutating p.inv — needed anywhere multiple items (e.g. 2+ gold drawn in the same batch)
@@ -1688,8 +1728,12 @@ function beginRound(){
     p.flags.diverHoldBreathActive=false; // 潛水員的憋氣術: declared fresh each round it's used
     p.flags.hunterAmbushActive=false; // 獵人的埋伏: the must-move waiver only covers the round it's used
     p.flags.lotteryDodgeActive=false; // 樂透房's "本輪躲避毒氣" outcome: re-armed fresh each round it's rolled
+    p.flags.smokeActive=false; // 煙霧彈: exempts this round's combat only, declared fresh each round it's used
+    p.flags.oxygenImmuneActive=false; // 氧氣瓶: poison immunity for this round only, declared fresh each round it's used
     p.flags.runnerEnduranceReady=false; // 馬拉松跑者的耐力訓練: re-armed fresh each round, see checkRunnerEndurance
     p.flags.dietThisRound=false;
+    p.flags.mediocreTempCarry=0; // 庸才的以命換命 (負重選項): only lasts the round it's spent in
+    p.flags.mediocreExtraDraw=false; // 庸才的以命換命 (抽卡選項): expires unused at round's end
     // 郵差的超載快遞: the +1 carry slot only lasts through the round it was filled — if you're
     // still over your NORMAL (non-courier) cap when the next round starts, the overflow item is
     // forcibly dropped instead of letting the +1 become a silent permanent extra slot.
@@ -1757,9 +1801,9 @@ function isMyTurn(){
 // settlement), so a stray post-commit skill click that nudges stepsLeft back up (nothing currently
 // does this, but nothing guards against it either) can't retroactively cost them a heal they
 // already earned by spending every step. The settlement pass just reads this flag instead of
-// re-checking p.stepsLeft===0 itself.
+// re-checking p.stepsLeft===0/room itself. Also requires ending the turn in a 功能房間 (ROOMS[id].special).
 function checkRunnerEndurance(p){
-  if(p.prof==="runner" && p.alive && !p.ghost && p.roundStartSteps>0 && p.stepsLeft===0){
+  if(p.prof==="runner" && p.alive && !p.ghost && p.roundStartSteps>0 && p.stepsLeft===0 && ROOMS[p.room] && ROOMS[p.room].special){
     p.flags.runnerEnduranceReady=true;
   }
 }
@@ -1903,7 +1947,9 @@ function drawItemsFromStock(p,roomId,maxDraw){
   const isDump=roomId==="B503";
   // 配給站 (地圖2): each of the maxDraw attempts only yields something at drawSuccessChance odds
   // (default 1 for every other room, i.e. always succeeds like before) — a miss still consumes
-  // one of the maxDraw attempts, it just adds nothing to drawnItems this iteration.
+  // one of the maxDraw attempts, it just adds nothing to drawnItems this iteration. 神秘商店
+  // (地圖2) uses the same knob but also sets room.missItem so a miss hands back that item (垃圾)
+  // instead of nothing — a shop visit is never a total whiff even when the rare goods don't hit.
   const successChance = room.drawSuccessChance===undefined ? 1 : room.drawSuccessChance;
   let nonTrashGained=0;
   const drawnItems=[];
@@ -1912,7 +1958,10 @@ function drawItemsFromStock(p,roomId,maxDraw){
   // messages for a single search.
   let scavengerRolls=0, scavengerHits=0;
   for(let i=0;i<maxDraw;i++){
-    if(Math.random()>=successChance) continue;
+    if(Math.random()>=successChance){
+      if(room.missItem) drawnItems.push(room.missItem);
+      continue;
+    }
     const stockKeys=Object.keys(room.stock).filter(k=>room.stock[k]>0 && !(isDump && k==="gold"));
     if(stockKeys.length===0) break;
     if(isDump && nonTrashGained>=room.dumpCap && stockKeys.some(k=>k!=="trash") && stockKeys.length===1 && stockKeys[0]!=="trash") break;
@@ -2022,10 +2071,17 @@ function resolveHumanDraw(p,roomId,maxDraw){
   // 購物大媽的精挑細選: see 1 extra item, but must put exactly 1 of the reveal back — actual
   // kept amount stays maxDraw either way, so this only ever improves WHICH ones you keep.
   const extra = p.prof==="shopper" ? 1 : 0;
-  const drawnItems=drawItemsFromStock(p,roomId,maxDraw+extra);
+  // 庸才的以命換命 (抽卡選項): a genuine extra draw that's actually kept, not a see-then-return
+  // like 精挑細選 above — folded into keepCap instead of `extra` so it never triggers the
+  // shopper-only return-1 modal below. One-shot: consumed the instant a search happens.
+  const mediocreExtra = (p.prof==="mediocre" && p.flags.mediocreExtraDraw) ? 1 : 0;
+  if(mediocreExtra) p.flags.mediocreExtraDraw=false;
+  const keepCap=maxDraw+mediocreExtra;
+  const drawnItems=drawItemsFromStock(p,roomId,keepCap+extra);
   if(!drawnItems.length){ log("在「"+(room.name||roomId)+"」搜索到: （無收穫）"); return; }
-  if(extra && drawnItems.length>maxDraw){
-    openShopperReturnModal(p,drawnItems,roomId,maxDraw);
+  if(mediocreExtra) log(p.name+"（以命換命）本次搜索多抽了1張。");
+  if(extra && drawnItems.length>keepCap){
+    openShopperReturnModal(p,drawnItems,roomId,keepCap);
     return;
   }
   resolveHumanKeep(p,drawnItems,roomId);
@@ -2116,8 +2172,12 @@ function openDrawSelectionModal(p,drawnItems,roomId){
 function resolveAIDraw(p,roomId,maxDraw){
   const priority=(it)=>(ITEMS[it].weapon?0:(it==="pill"||it==="adrenaline")?1:(it==="water"||it==="food")?2:3);
   const extra = p.prof==="shopper" ? 1 : 0;
-  let drawnItems=drawItemsFromStock(p,roomId,maxDraw+extra);
-  if(extra && drawnItems.length>maxDraw){
+  // 庸才的以命換命 (抽卡選項): see resolveHumanDraw's matching comment.
+  const mediocreExtra = (p.prof==="mediocre" && p.flags.mediocreExtraDraw) ? 1 : 0;
+  if(mediocreExtra) p.flags.mediocreExtraDraw=false;
+  const keepCap=maxDraw+mediocreExtra;
+  let drawnItems=drawItemsFromStock(p,roomId,keepCap+extra);
+  if(extra && drawnItems.length>keepCap){
     // 精挑細選: keep the best maxDraw of what was revealed, put the single worst back.
     const ranked=drawnItems.map((it,i)=>({it,i})).sort((a,b)=>priority(a.it)-priority(b.it));
     const worst=ranked[ranked.length-1].it;
@@ -2212,6 +2272,7 @@ function doSpecialRoom(p,room){
   switch(room.special){
     case "lottery": doLottery(p); break;
     case "ration": break; // 配給站: entirely handled by the room.draw>0 branch above, nothing extra here
+    case "mysteryshop": break; // 神秘商店: also entirely handled by the room.draw>0 branch above
     case "gene":
       p.power++; p.speed++; p.carry++;
       log(p.name+" 於基因庫：三項屬性各永久 +1。");
@@ -2697,6 +2758,128 @@ function openEngineerRecycleModal(p){
   bindModalClose("engRecycleCancel");
 }
 
+/* ===================== 神秘商店道具 (地圖2) ===================== */
+// All 8 resolve immediately on click rather than through the settlement queue (SETTLEMENT_TIMED_
+// ITEMS) — none of them need to interleave with hunger/combat ordering the way water/food/wine do,
+// so there's no reason to make the player wait a phase to see the result.
+function useMine(p){
+  if(!p.flags.roomCommitted){ flashMsg("請先移動並確定停留在房間後，才能使用道具。"); return; }
+  if(!removeItem(p,"mine")) return;
+  STATE.discardPile.push("mine");
+  STATE.mineTraps=STATE.mineTraps||[];
+  STATE.mineTraps.push({room:p.room, ownerId:p.id});
+  log(p.name+" 在「"+p.room+" "+(ROOMS[p.room].name||"")+"」埋設了地雷。");
+  renderAll();
+}
+function openDartModal(p){
+  if(!p.flags.roomCommitted){ flashMsg("請先移動並確定停留在房間後，才能使用道具。"); return; }
+  if(countItem(p,"dart")<1){ flashMsg("背包內沒有麻醉鏢。"); return; }
+  const others=playersInRoom(p.room,true).filter(x=>x.id!==p.id);
+  if(!others.length){ flashMsg("這裡沒有其他玩家可以使用麻醉鏢。"); return; }
+  const opts=others.map(o=>`<option value="${o.id}">${o.name}</option>`).join("");
+  openModal(`<h3>麻醉鏢：癱瘓目標</h3><select id="dartSel">${opts}</select><br><br>
+    <button class="btn small warn" id="dartOk">發射（下輪移動速度歸零）</button> <button class="btn small ghost" id="dartCancel">取消</button>`);
+  document.getElementById("dartOk").onclick=()=>{
+    const targetId=+document.getElementById("dartSel").value;
+    const target=STATE.players.find(x=>x.id===targetId);
+    if(!removeItem(p,"dart")){ closeModal(); return; }
+    STATE.discardPile.push("dart");
+    target.flags.tranqPending=true;
+    log(p.name+" 對 "+target.name+" 使用麻醉鏢，"+target.name+" 下輪移動速度將歸零。");
+    closeModal(); renderAll();
+  };
+  bindModalClose("dartCancel");
+}
+function useSmoke(p){
+  if(!p.flags.roomCommitted){ flashMsg("請先移動並確定停留在房間後，才能使用道具。"); return; }
+  if(!removeItem(p,"smoke")) return;
+  STATE.discardPile.push("smoke");
+  p.flags.smokeActive=true;
+  log(p.name+" 使用煙霧彈，本輪脫離房間戰鬥結算。");
+  renderAll();
+}
+function useMysteryDice(p){
+  if(!p.flags.roomCommitted){ flashMsg("請先移動並確定停留在房間後，才能使用道具。"); return; }
+  if(!removeItem(p,"mysterydice")) return;
+  STATE.discardPile.push("mysterydice");
+  const roll=Math.floor(Math.random()*6)+1;
+  let msg="神秘骰子(擲骰"+roll+"): ";
+  if(roll===1){ p.power++; msg+="武力永久+1。"; }
+  else if(roll===2){ damagePlayer(p,2,"神秘骰子"); msg+="生命-2。"; }
+  else if(roll===3){ p.speed++; msg+="速度永久+1。"; }
+  else if(roll===4){
+    const pool=["water","food","pill","wine","knife"];
+    const gained=pool[Math.floor(Math.random()*pool.length)];
+    if(itemCostsCarry(p,gained) && carryRoom(p)<=0){ msg+="獲得道具，但背包已滿，道具遺失。"; }
+    else { p.inv.push(gained); msg+="獲得道具「"+ITEMS[gained].name+"」（憑空獲得）。"; }
+  }
+  else if(roll===5){ msg+="無事發生。"; }
+  else { p.inv.push("gold"); msg+="獲得金條x1（憑空獲得，不佔負重判定）。"; }
+  log(p.name+" "+msg,"heal");
+  renderAll();
+}
+function useCoin(p){
+  if(!p.flags.roomCommitted){ flashMsg("請先移動並確定停留在房間後，才能使用道具。"); return; }
+  if(!removeItem(p,"coin")) return;
+  STATE.discardPile.push("coin");
+  if(Math.random()<0.5){
+    const candidates=p.inv.filter(it=>it!=="trash");
+    if(!candidates.length){ log(p.name+" 使用幸運銅板（正面），但背包內沒有可複製的道具。"); }
+    else {
+      const pick=candidates[Math.floor(Math.random()*candidates.length)];
+      if(itemCostsCarry(p,pick) && carryRoom(p)<=0){ log(p.name+" 使用幸運銅板（正面），想複製「"+ITEMS[pick].name+"」但背包已滿。"); }
+      else { p.inv.push(pick); log(p.name+" 使用幸運銅板（正面），複製了1張「"+ITEMS[pick].name+"」（憑空獲得）。","heal"); }
+    }
+  } else {
+    if(!p.inv.length){ log(p.name+" 使用幸運銅板（反面），但背包是空的。"); }
+    else {
+      const idx=Math.floor(Math.random()*p.inv.length);
+      const lost=p.inv.splice(idx,1)[0];
+      STATE.discardPile.push(lost);
+      log(p.name+" 使用幸運銅板（反面），隨機丟棄了1張「"+ITEMS[lost].name+"」。","dmg");
+    }
+  }
+  renderAll();
+}
+function useOxygen(p){
+  if(!p.flags.roomCommitted){ flashMsg("請先移動並確定停留在房間後，才能使用道具。"); return; }
+  if(!removeItem(p,"oxygen")) return;
+  STATE.discardPile.push("oxygen");
+  p.flags.oxygenImmuneActive=true;
+  p.flags.oxygenSpeedPending=true;
+  log(p.name+" 使用氧氣瓶，本輪完全免疫毒氣傷害，下輪移動速度+1。");
+  renderAll();
+}
+function useMedSpray(p){
+  if(!p.flags.roomCommitted){ flashMsg("請先移動並確定停留在房間後，才能使用道具。"); return; }
+  if(!removeItem(p,"medspray")) return;
+  STATE.discardPile.push("medspray");
+  p.hp=Math.min(p.maxhp,p.hp+4);
+  p.flags.medsprayPending=true;
+  log(p.name+" 使用急救噴霧，立即恢復4點生命（HP→"+p.hp+"），下輪移動速度-2。","heal");
+  renderAll();
+}
+// 傳送符: unlike every other item card above, this is usable only BEFORE committing to a room this
+// round (it IS the movement, same free-repositioning shape as 護理師的隨傳隨到) — not after, like
+// the "please move first" items are gated.
+function openTeleportCharmModal(p){
+  if(p.flags.roomCommitted){ flashMsg("本輪已確定停留於此房間，無法再移動。"); return; }
+  if(countItem(p,"teleportcharm")<1){ flashMsg("背包內沒有傳送符。"); return; }
+  const roomIds=Object.keys(ROOMS).filter(id=>id!==p.room);
+  openModal(`<h3>傳送符：直接移動到任一房間</h3><select id="tcSel">${roomIds.map(id=>`<option value="${id}">${id} ${ROOMS[id].name||""}</option>`).join("")}</select>
+    <br><br><button class="btn small warn" id="tcOk">傳送（不消耗步數）</button> <button class="btn small ghost" id="tcCancel">取消</button>`);
+  document.getElementById("tcOk").onclick=()=>{
+    const dest=document.getElementById("tcSel").value;
+    if(!removeItem(p,"teleportcharm")){ closeModal(); return; }
+    STATE.discardPile.push("teleportcharm");
+    p.room=dest;
+    if(dest==="102") applyLaser(p);
+    log(p.name+" 使用傳送符，直接傳送到「"+dest+" "+(ROOMS[dest].name||"")+"」（不消耗步數）。");
+    closeModal(); renderAll();
+  };
+  bindModalClose("tcCancel");
+}
+
 /* ===================== PROFESSION SKILLS (human buttons) ===================== */
 // Per-round-cap active skills' {counter flag, max uses}, in ONE place — used to gate the skill
 // in useProfSkill(), mirror-check it in the AI's pre-checks, and render "x/N used" in the skill
@@ -2723,6 +2906,7 @@ const SKILL_USE_LIMITS={
   "caregiver:1":{flag:"caregiverUses",max:2},
   "hunter:0":{flag:"hunterSprintUses",max:2},
   "hunter:1":{flag:"hunterUses",max:2},
+  "mediocre:1":{flag:"mediocreSacrificeUses",max:3},
 };
 function skillUsedCount(p,key){
   const lim=SKILL_USE_LIMITS[key];
@@ -2904,6 +3088,12 @@ function useProfSkill(p,idx){
     ambushTargets.forEach(t=>damagePlayer(t, t.prof==="climber"?1:2, "獵人埋伏"));
     log(p.name+" 使用埋伏：武力永久+1"+(ambushTargets.length?"，"+ambushTargets.map(t=>t.name+(t.prof==="climber"?"(剛硬意志-1)":"")).join("、")+" 各受到傷害":"（房內無其他玩家）")+"。","dmg");
     speakSkill(p,"hunter:1");
+  } else if(p.prof==="mediocre" && idx===1){
+    if(skillUseCapReached(p,"mediocre:1")){ flashMsg("已用完3次"); return; }
+    openMediocreSacrificeModal(p);
+  } else if(p.prof==="mediocre" && idx===2){
+    if(p.hp<=1){ flashMsg("生命不足，無法發動"); return; }
+    openMediocreTradeModal(p);
   }
   renderAll();
 }
@@ -2913,7 +3103,7 @@ function useProfSkill(p,idx){
 // nothing. Every OTHER active skill executes immediately on click, which is risky for a
 // limited-use skill (a stray click permanently burns one of only 1-4 charges) — those get a
 // confirm prompt naming the skill and its effect before anything happens.
-const SKILL_OPENS_OWN_MODAL=new Set(["chemist:0","hacker:1","geneFreak:1","shopper:1","pickpocket:0","courier:1","caregiver:1"]);
+const SKILL_OPENS_OWN_MODAL=new Set(["chemist:0","hacker:1","geneFreak:1","shopper:1","pickpocket:0","courier:1","caregiver:1","mediocre:1","mediocre:2"]);
 function confirmAndUseSkill(p,idx){
   const s=PROFESSIONS[p.prof].skills[idx];
   openModal(`<h3>發動技能：${s.name}</h3><div style="margin-bottom:12px;font-size:13px;line-height:1.6">${s.desc}</div>
@@ -3015,6 +3205,45 @@ function openCourierDeliverModal(p){
     renderAll();
   };
   bindModalClose("courierCancel");
+}
+// 庸才的斷尾求生: discard any 1 held item to instantly heal 2 HP — whole-game capped at 3 via
+// SKILL_USE_LIMITS, same pattern as 專人配送's item picker above but with no target to choose.
+function openMediocreSacrificeModal(p){
+  if(!p.inv.length){ flashMsg("背包內沒有道具可丟棄。"); return; }
+  const itemOpts=p.inv.map((it,i)=>`<option value="${i}">${ITEMS[it].name}</option>`).join("");
+  openModal(`<h3>斷尾求生：丟棄1張道具，恢復2點生命</h3>
+    <select id="mediocreItemSel">${itemOpts}</select><br><br>
+    <button class="btn small warn" id="mediocreSacOk">丟棄並恢復</button> <button class="btn small ghost" id="mediocreSacCancel">取消</button>`);
+  document.getElementById("mediocreSacOk").onclick=()=>{
+    const itemIdx=+document.getElementById("mediocreItemSel").value;
+    const item=p.inv.splice(itemIdx,1)[0];
+    STATE.discardPile.push(item);
+    p.flags.mediocreSacrificeUses++; p.flags.skillUsedThisRound=true;
+    p.hp=Math.min(p.maxhp,p.hp+2);
+    log(p.name+" 使用斷尾求生：丟棄「"+ITEMS[item].name+"」，恢復2點生命（HP→"+p.hp+"）。","heal"); speakSkill(p,"mediocre:1");
+    closeModal(); renderAll();
+  };
+  bindModalClose("mediocreSacCancel");
+}
+// 庸才的以命換命: spend 1 HP for a round-scoped bonus (either +1 負重 or one extra draw next
+// search) — a straight either/or choice, no target/item to pick, so it's just two buttons.
+function openMediocreTradeModal(p){
+  openModal(`<h3>以命換命：花費1點生命（HP ${p.hp}→${p.hp-1}）</h3>
+    <div style="margin-bottom:8px">效果二擇一，僅限本輪有效：</div>
+    <button class="btn small warn" id="mediocreCarryBtn">本輪負重+1</button>
+    <button class="btn small warn" id="mediocreDrawBtn">本輪多1次抽卡機會</button><br><br>
+    <button class="btn small ghost" id="mediocreTradeCancel">取消</button>`);
+  document.getElementById("mediocreCarryBtn").onclick=()=>{
+    p.hp-=1; p.flags.mediocreTempCarry=(p.flags.mediocreTempCarry||0)+1; p.flags.skillUsedThisRound=true;
+    log(p.name+" 使用以命換命：花費1點生命，本輪負重+1（HP→"+p.hp+"）。"); speakSkill(p,"mediocre:2");
+    closeModal(); renderAll();
+  };
+  document.getElementById("mediocreDrawBtn").onclick=()=>{
+    p.hp-=1; p.flags.mediocreExtraDraw=true; p.flags.skillUsedThisRound=true;
+    log(p.name+" 使用以命換命：花費1點生命，本輪多1次抽卡機會（HP→"+p.hp+"）。"); speakSkill(p,"mediocre:2");
+    closeModal(); renderAll();
+  };
+  bindModalClose("mediocreTradeCancel");
 }
 
 /* ===================== VOTE / TRADE ===================== */
@@ -3312,6 +3541,22 @@ function aiConsiderSkillAfterMove(p){
     // a third candidate (B304 操作室) exists but is skipped for the same reason as 基因重組 above.
     return;
   }
+  if(p.prof==="mediocre"){
+    // 斷尾求生: only worth spending one of the 3 whole-game charges when actually hurt, and only
+    // if there's a spare non-empty item to give up (AI doesn't discriminate which one).
+    if(!skillUseCapReached(p,"mediocre:1") && p.hp<=p.maxhp-4 && p.inv.length>0){
+      const idx=Math.floor(Math.random()*p.inv.length);
+      const item=p.inv.splice(idx,1)[0];
+      STATE.discardPile.push(item);
+      p.flags.mediocreSacrificeUses++; p.flags.skillUsedThisRound=true;
+      p.hp=Math.min(p.maxhp,p.hp+2);
+      log(p.name+" 使用斷尾求生：丟棄「"+ITEMS[item].name+"」，恢復2點生命。");
+    }
+    // 以命換命 (負重/抽卡二擇一) is left unused by AI, same as 郵差's 專人配送 above — its payoff
+    // depends on judgment calls (is this search worth an HP, is this room worth more carry) the
+    // AI's heuristics elsewhere never model.
+    return;
+  }
 }
 // Resolves ONE AI player's turn slot (called from advanceTurn() at that player's position in
 // STATE.turnOrder — 順序牌). Ghosts are handled separately in beginRound() and never reach here.
@@ -3352,6 +3597,46 @@ function resolveAITurn(p){
   aiConsiderSkillAfterMove(p);
   // simple item usage: declare now, effect resolves at settlement (same as the human path)
   if(p.hp<=4 && countItem(p,"pill")>0){ removeItem(p,"pill"); p.flags.pendingItemUses.push("pill"); }
+  // 神秘商店道具 (地圖2): only the ones with a clear, cheap heuristic get AI usage — 地雷/神秘
+  // 骰子/幸運銅板/傳送符 are deliberately left unused by AI, same precedent as 賭徒/基因怪人/郵差
+  // above (no obvious "worth it now" signal for a random-outcome or arbitrary-target action).
+  // 急救噴霧: backup heal when hurt but out of plain pills (pill is checked/used first, above).
+  if(p.hp<=4 && countItem(p,"pill")===0 && countItem(p,"medspray")>0 && removeItem(p,"medspray")){
+    STATE.discardPile.push("medspray");
+    p.hp=Math.min(p.maxhp,p.hp+4);
+    p.flags.medsprayPending=true;
+    log(p.name+" 使用急救噴霧，立即恢復4點生命（HP→"+p.hp+"），下輪移動速度-2。","heal");
+  }
+  // 氧氣瓶: only spent when actually standing in a poisoned room with no cheaper immunity already
+  // covering it (gasmask/憋氣術/樂透永久免疫), so it doesn't get burned on a safe room by mistake.
+  if(roomIsPoisoned(room) && !p.inv.includes("gasmask") && !p.flags.poisonImmune &&
+     !(p.prof==="diver" && p.flags.diverHoldBreathActive) && countItem(p,"oxygen")>0 && removeItem(p,"oxygen")){
+    STATE.discardPile.push("oxygen");
+    p.flags.oxygenImmuneActive=true; p.flags.oxygenSpeedPending=true;
+    log(p.name+" 使用氧氣瓶，本輪完全免疫毒氣傷害，下輪移動速度+1。");
+  }
+  // 煙霧彈: duck out of a room that's about to be a fight the AI isn't well-armed for — 2+ other
+  // living players here and no gun of its own, same "outgunned" signal aiChooseTarget already
+  // treats as worth avoiding, just applied post-move since retreating isn't an option this late.
+  if(countItem(p,"smoke")>0 && !hasGun(p)){
+    const others=playersInRoom(p.room,true).filter(x=>x.id!==p.id);
+    if(others.length>=2 && removeItem(p,"smoke")){
+      STATE.discardPile.push("smoke");
+      p.flags.smokeActive=true;
+      log(p.name+" 使用煙霧彈，本輪脫離房間戰鬥結算。");
+    }
+  }
+  // 麻醉鏢: opportunistic offense against the strongest OTHER player sharing the room, so that
+  // player's steps are zeroed next round — cheap crowd control with no real downside to using it.
+  if(countItem(p,"dart")>0){
+    const rivals=playersInRoom(p.room,true).filter(x=>x.id!==p.id);
+    if(rivals.length && removeItem(p,"dart")){
+      STATE.discardPile.push("dart");
+      const target=rivals.reduce((best,x)=>combatPower(x)>combatPower(best)?x:best, rivals[0]);
+      target.flags.tranqPending=true;
+      log(p.name+" 對 "+target.name+" 使用麻醉鏢，"+target.name+" 下輪移動速度將歸零。");
+    }
+  }
   // 火箭筒 is a durable item (never consumed) the base AI otherwise never fires — an AI holding
   // one now takes its free shot(s) at whichever other occupied room has the most people in it;
   // 拆彈教官 gets a 2nd shot at a second room instead of just the one.
@@ -3519,8 +3804,8 @@ function settleRound(){
   // the heal still has a chance to cushion this same round's incoming damage.
   STATE.players.forEach(p=>{
     if(p.alive && !p.ghost && p.flags.runnerEnduranceReady){
-      p.hp=Math.min(p.maxhp,p.hp+2);
-      log(p.name+"（耐力訓練）本輪步數用盡，恢復2點生命。","heal");
+      p.hp=Math.min(p.maxhp,p.hp+3);
+      log(p.name+"（耐力訓練）本輪步數用盡且身處功能房間，恢復3點生命。","heal");
     }
   });
 
@@ -3533,7 +3818,11 @@ function settleRound(){
     // outsider: if room has 3+ alive, they sit out
     const outsiders=group.filter(p=>p.prof==="outsider" && group.length>=3);
     outsiders.forEach(p=>log(p.name+"（邊緣存在感）房內3人以上，不參與戰鬥結算。"));
-    const fighters=group.filter(p=>!(p.prof==="outsider" && group.length>=3));
+    // 煙霧彈: exempts its user from this room's combat regardless of headcount — unlike 邊緣人
+    // above there's no 3+ requirement and no consolation heal, it's a pure one-time escape.
+    const smoked=group.filter(p=>p.flags.smokeActive);
+    smoked.forEach(p=>log(p.name+"（煙霧彈）本輪不參與戰鬥結算。"));
+    const fighters=group.filter(p=>!(p.prof==="outsider" && group.length>=3) && !p.flags.smokeActive);
     if(fighters.length<2){
       outsiders.forEach(p=>{ p.hp=Math.min(p.maxhp,p.hp+1); log(p.name+"（邊緣存在感）自動恢復1點生命。","heal"); });
       return;
@@ -3568,12 +3857,28 @@ function settleRound(){
     hit.forEach(p=>{
       let dmg=4, note="";
       if(p.prof==="bomb"){ dmg=Math.max(0,dmg-1); note="〔爆破緩衝 -1〕"; }
+      if(p.prof==="mediocre"){ dmg+=1; note+="〔脆弱體質 +1〕"; }
       if(p.prof==="climber" && dmg>0){ dmg=Math.max(0,dmg-1); note+="〔剛硬意志 -1〕"; }
       damagePlayer(p,dmg,"火箭筒");
       log(p.name+" 被火箭筒轟炸於「"+r+"」，受到 "+dmg+" 點傷害"+note+"。","dmg");
     });
   });
   STATE.rocketTargets=[];
+
+  // 地雷 (神秘商店): armed the round it's planted and stays armed across future rounds until it
+  // finds a victim — the first OTHER living player (owner excluded) occupying the mined room at
+  // any settlement is the one who triggers it, once, then it's spent.
+  (STATE.mineTraps||[]).forEach(trap=>{
+    if(trap.triggered) return;
+    const victims=playersInRoom(trap.room,true).filter(x=>x.id!==trap.ownerId);
+    if(victims.length){
+      const v=victims[Math.floor(Math.random()*victims.length)];
+      damagePlayer(v,4,"地雷");
+      log(v.name+" 在「"+trap.room+" "+(ROOMS[trap.room].name||"")+"」誤觸地雷，受到 4 點傷害。","dmg");
+      trap.triggered=true;
+    }
+  });
+  STATE.mineTraps=(STATE.mineTraps||[]).filter(t=>!t.triggered);
 
   // trucker ram (declared during action phase via 卸載加速, resolves here too)
   STATE.players.forEach(p=>{
@@ -3601,6 +3906,7 @@ function settleRound(){
       if(p.prof==="chemist" && dmg>0){ dmg=Math.max(0,dmg-1); note+="〔抗毒 -1〕"; }
       if(p.prof==="diver" && p.flags.diverHoldBreathActive){ dmg=0; note+="〔憋氣術〕"; }
       if(p.inv.includes("gasmask")){ dmg=0; note+="〔防毒面具〕"; }
+      if(p.flags.oxygenImmuneActive){ dmg=0; note+="〔氧氣瓶〕"; }
       if(p.flags.lotteryDodgeActive){ dmg=0; note+="〔樂透：躲避毒氣〕"; }
       if(p.flags.poisonImmune){ dmg=0; note+="〔樂透：永久免疫毒氣〕"; }
       if(p.prof==="climber" && dmg>0){ dmg=Math.max(0,dmg-1); note+="〔剛硬意志 -1〕"; }
@@ -3806,6 +4112,42 @@ function showRoundSummary(){
           p.flags.__adrenalineRestoreNext=false;
           p.flags.adrenalineBoostDelta=0;
         }
+        // 麻醉鏢: forces speed to exactly 0 for one round, same delta-snapshot/restore shape as
+        // adrenaline above (so a mid-effect permanent speed gain still survives the restore).
+        if(p.flags.tranqPending){
+          if(!p.flags.__tranqRestoreNext){
+            p.flags.__tranqDelta=p.speed;
+            p.speed=0;
+          }
+          p.flags.__tranqRestoreNext=true;
+          p.flags.tranqPending=false;
+        } else if(p.flags.__tranqRestoreNext){
+          p.speed+=p.flags.__tranqDelta||0;
+          p.flags.__tranqRestoreNext=false;
+          p.flags.__tranqDelta=0;
+        }
+        // 氧氣瓶: flat +1 speed for one round.
+        if(p.flags.oxygenSpeedPending){
+          p.speed+=1;
+          p.flags.oxygenSpeedPending=false;
+          p.flags.__oxygenRestoreNext=true;
+        } else if(p.flags.__oxygenRestoreNext){
+          p.speed-=1;
+          p.flags.__oxygenRestoreNext=false;
+        }
+        // 急救噴霧: flat -2 speed for one round, clamped at 0 — the actual amount subtracted is
+        // stored so a speed already below 2 doesn't get over-restored back above its real value.
+        if(p.flags.medsprayPending){
+          const before=p.speed;
+          p.speed=Math.max(0,p.speed-2);
+          p.flags.__medsprayDelta=before-p.speed;
+          p.flags.medsprayPending=false;
+          p.flags.__medsprayRestoreNext=true;
+        } else if(p.flags.__medsprayRestoreNext){
+          p.speed+=p.flags.__medsprayDelta||0;
+          p.flags.__medsprayRestoreNext=false;
+          p.flags.__medsprayDelta=0;
+        }
       });
       logRound(STATE.round); beginRound(); }
   };
@@ -3953,6 +4295,19 @@ function renderAll(){
       actions+=`<button class="btn small" data-recycle="1"${recycleDisabled?` disabled title="${recycleTitle}"`:""}>回收抽取</button>`;
     }
     if(id==="rope") actions+=`<button class="btn small" data-rope="1">直接上下樓</button>`;
+    // 神秘商店道具 (地圖2): all "please move first" gated the same as water/food/pill above,
+    // EXCEPT 傳送符 which is the opposite — it IS the movement, so it's only usable BEFORE commit.
+    if(id==="mine") actions+=`<button class="btn small warn" data-mine="1"${dis}>埋設</button>`;
+    if(id==="dart") actions+=`<button class="btn small warn" data-dart="1"${dis}>使用</button>`;
+    if(id==="smoke") actions+=`<button class="btn small" data-smoke="1"${dis}>使用</button>`;
+    if(id==="mysterydice") actions+=`<button class="btn small" data-dice="1"${dis}>擲骰</button>`;
+    if(id==="coin") actions+=`<button class="btn small" data-coin="1"${dis}>擲硬幣</button>`;
+    if(id==="oxygen") actions+=`<button class="btn small" data-oxygen="1"${dis}>使用</button>`;
+    if(id==="medspray") actions+=`<button class="btn small warn" data-medspray="1"${dis}>使用</button>`;
+    if(id==="teleportcharm"){
+      const tcDis=p.flags.roomCommitted?' disabled title="本輪已確定停留於此房間，無法再移動"':"";
+      actions+=`<button class="btn small" data-teleport="1"${tcDis}>傳送</button>`;
+    }
     div.innerHTML=`<span>${ITEMS[id].name} x${n}</span><span class="actions">${actions}</span>`;
     invEl.appendChild(div);
   });
@@ -3961,6 +4316,14 @@ function renderAll(){
   invEl.querySelectorAll("[data-rocket]").forEach(b=>b.onclick=()=>useRocket(p));
   invEl.querySelectorAll("[data-recycle]").forEach(b=>b.onclick=()=>useRecycleDevice(p));
   invEl.querySelectorAll("[data-rope]").forEach(b=>b.onclick=()=>openRopeModal(p));
+  invEl.querySelectorAll("[data-mine]").forEach(b=>b.onclick=()=>useMine(p));
+  invEl.querySelectorAll("[data-dart]").forEach(b=>b.onclick=()=>openDartModal(p));
+  invEl.querySelectorAll("[data-smoke]").forEach(b=>b.onclick=()=>useSmoke(p));
+  invEl.querySelectorAll("[data-dice]").forEach(b=>b.onclick=()=>useMysteryDice(p));
+  invEl.querySelectorAll("[data-coin]").forEach(b=>b.onclick=()=>useCoin(p));
+  invEl.querySelectorAll("[data-oxygen]").forEach(b=>b.onclick=()=>useOxygen(p));
+  invEl.querySelectorAll("[data-medspray]").forEach(b=>b.onclick=()=>useMedSpray(p));
+  invEl.querySelectorAll("[data-teleport]").forEach(b=>b.onclick=()=>openTeleportCharmModal(p));
   if(needsCommit){
     const hint=document.createElement("div"); hint.className="muted"; hint.style.fontSize="11px"; hint.style.marginTop="6px";
     hint.textContent="（繩索、防毒面具除外，其餘道具須先移動並確定停留在房間後才能使用）";
