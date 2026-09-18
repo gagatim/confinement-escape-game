@@ -76,7 +76,7 @@
   .mono{font-family:"JetBrains Mono",monospace}
 
   /* ---- setup ---- */
-  #setup .prof-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px;margin:14px 0}
+  #setup .prof-grid, #spawnSelect .prof-grid, #bossSelect .prof-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px;margin:14px 0}
   .prof-card{border:2px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--panel-2);
     transition:border-color .15s ease,box-shadow .15s ease,transform .15s ease;cursor:pointer}
   .prof-card:hover{border-color:var(--cyan);transform:translateY(-2px)}
@@ -254,7 +254,7 @@
       <h2 style="font-size:16px;color:var(--cyan-bright)">1. 選擇職業</h2>
       <div class="muted mono" id="profCountInfo" style="font-size:12px;margin-bottom:6px"></div>
       <label class="muted" style="display:block;margin-bottom:10px;font-size:13px">
-        <input type="checkbox" id="expansionToggle"> 啟用擴充模式（新增16個職業，AI也可能隨機選到）</label>
+        <input type="checkbox" id="expansionToggle"> 啟用擴充模式（新增擴充職業，AI也可能隨機選到，實際數量見上方統計）</label>
       <div class="prof-grid" id="profGrid"></div>
     </div>
     <div class="card" style="margin-top:12px">
@@ -285,6 +285,16 @@
         <div class="map-scroll-hint">↔ 地圖較寬，可左右滑動查看</div>
         <div class="bridge-note" id="bridgeNoteSpawn"></div>
       </div>
+    </div>
+  </div>
+
+  <!-- ============ BOSS HENCHMEN SELECT (黑社會老大的一呼百應) ============ -->
+  <div id="bossSelect" class="hidden">
+    <div class="card">
+      <h2 style="font-size:16px;color:var(--cyan-bright)">一呼百應：指定3名小弟</h2>
+      <p class="muted" style="font-size:12.5px">依序點選3名其他玩家做為你的小弟（A／B／C），三人的武力值將各永久+1。之後每當你即將扣血，會強制隨機抽取一名尚未用過的小弟代你受傷（每人只會被抽中1次），該小弟受傷後武力永久-1。</p>
+      <div class="prof-grid" id="bossGrid"></div>
+      <div style="margin-top:14px"><button class="btn" id="confirmBossBtn" disabled>確認小弟名單，前往選擇出生點</button></div>
     </div>
   </div>
 
@@ -747,12 +757,16 @@ const PROFESSIONS = {
     {name:"脆弱體質", desc:"（被動）被火箭筒擊中時，最終傷害+1。", passive:true},
     {name:"斷尾求生", desc:"整局限用3次：丟棄背包中1張道具，生命+2。", uses:3},
     {name:"以命換命", desc:"行動階段可使用：花費1點生命，二擇一換取「本輪負重+1」或「本輪多1次抽卡機會」，效果僅限本輪有效。", uses:99}
+  ]},
+  boss:{name:"黑社會老大", skills:[
+    {name:"一呼百應", desc:"（被動）遊戲開始時指定3名其他玩家為小弟（A／B／C），三人的武力值各永久+1。", passive:true},
+    {name:"你們先上", desc:"（被動）你每次即將扣血時強制發動：隨機抽取尚未使用過的小弟其中一人（每人只會被抽中1次），改由該小弟代替你承受這次傷害，事後該小弟武力永久-1。三名小弟皆用完後，扣血才會恢復由你自己承受。", passive:true}
   ]}
 };
 // 擴充模式: these professions are hidden from the setup screen (and never randomly given to
 // AI) unless the player opts into 擴充模式 — keeps a first game to the base roster, while letting
 // anyone who wants the larger expansion roster turn it on.
-const EXPANSION_PROFS=new Set(["fatty","trucker","bartender","chemist","hacker","shade","merc","outsider","climber","pilot","chef","diver","courier","gourmet","farmer","caregiver","mediocre"]);
+const EXPANSION_PROFS=new Set(["fatty","trucker","bartender","chemist","hacker","shade","merc","outsider","climber","pilot","chef","diver","courier","gourmet","farmer","caregiver","mediocre","boss"]);
 // One small emoji "portrait" per profession — shown on the selection card and anywhere a player's
 // profession is listed in-game, so each of the 16 is visually distinct at a glance, not just by name.
 const PROF_ICON={
@@ -762,7 +776,7 @@ const PROF_ICON={
   medic:"🩺", pilot:"✈️", demolitions:"🧨", chef:"🍳", smuggler:"🧳", survivor:"🎒",
   shopper:"🛍️", runner:"🏃", herbalist:"🌿", veteran:"🎖️", pickpocket:"🥷",
   diver:"🤿", courier:"📦", gourmet:"🍽️", farmer:"🌾", caregiver:"💕", miner:"⛏️", hunter:"🏹",
-  mediocre:"🤷"
+  mediocre:"🤷", boss:"🕴️"
 };
 // 去圖示模式 (低調模式 companion toggle): when on, every emoji "picture" in the UI is swapped
 // for a plain bracketed-text stand-in instead — unlike 低調模式 (the boss key), this is meant to
@@ -783,6 +797,7 @@ function getCurrentScreen(){
   if(!document.getElementById("endScreen").classList.contains("hidden")) return "end";
   if(!document.getElementById("game").classList.contains("hidden")) return "game";
   if(!document.getElementById("spawnSelect").classList.contains("hidden")) return "spawnSelect";
+  if(!document.getElementById("bossSelect").classList.contains("hidden")) return "bossSelect";
   return "setup";
 }
 function saveGame(){
@@ -810,9 +825,12 @@ function setAbandonBtnVisible(v){
   document.getElementById("abandonBtn").classList.toggle("hidden", !v);
 }
 function showScreen(screen){
-  ["setup","spawnSelect","game","endScreen"].forEach(id=>document.getElementById(id).classList.add("hidden"));
-  setAbandonBtnVisible(screen==="spawnSelect" || screen==="game");
-  if(screen==="spawnSelect"){
+  ["setup","spawnSelect","bossSelect","game","endScreen"].forEach(id=>document.getElementById(id).classList.add("hidden"));
+  setAbandonBtnVisible(screen==="spawnSelect" || screen==="bossSelect" || screen==="game");
+  if(screen==="bossSelect"){
+    renderBossGrid();
+    document.getElementById("bossSelect").classList.remove("hidden");
+  } else if(screen==="spawnSelect"){
     renderSpawnGrid();
     document.getElementById("spawnSelect").classList.remove("hidden");
     const mine=you();
@@ -1040,7 +1058,8 @@ const SKILL_QUOTES={
   "hunter:0":"獵物跑不掉的。",
   "hunter:1":"你已經在我的射程內了。",
   "mediocre:1":"東西不重要，命才重要。",
-  "mediocre:2":"少一口氣，換一條路。"
+  "mediocre:2":"少一口氣，換一條路。",
+  "boss:1":"你們先上。"
 };
 const VOICE=(()=>{
   const supported="speechSynthesis" in window;
@@ -1143,7 +1162,8 @@ const SELECT_QUOTES={
   caregiver:"別怕，有我在。",
   miner:"哪裡有礦，我一挖就知道。",
   hunter:"躲得再好，也逃不過我的眼睛。",
-  mediocre:"我沒什麼本事，但命是自己的，我會想辦法保住。"
+  mediocre:"我沒什麼本事，但命是自己的，我會想辦法保住。",
+  boss:"我從不自己動手，這裡的人都聽我的。"
 };
 (()=>{
   const voiceBtn=document.getElementById("voiceMuteBtn");
@@ -1391,6 +1411,7 @@ function makePlayer(id,isAI,profId,stats,name){
       farmerUses:0, caregiverUses:0, minerUses:0,
       hunterSprintUses:0, hunterUses:0, hunterAmbushActive:false,
       poisonImmune:false, lotteryDodgeActive:false,
+      bossHenchmen:[], bossHenchmenPool:[], bossHenchmanOf:null,
       pendingItemUses:[], wineExcludedQueue:[], roomCommitted:false},
     pendingActions:{targetRoom:null, movementDone:false, roomActed:false},
     weaponWeightless: profId==="merc",
@@ -1452,6 +1473,20 @@ function combatPower(p){
   if(p.prof==="tamer") ; // already added at init to base power
   return base;
 }
+// 黑社會老大的一呼百應: registers exactly 3 other players as A/B/C 小弟, each getting a permanent
+// +1 power. bossHenchmenPool starts as a copy of the same 3 ids and is drawn down (never refilled)
+// by 你們先上 at damagePlayer — see there for the draw-once-per-henchman redirect.
+function applyBossHenchmen(boss, ids){
+  const letters=["A","B","C"];
+  boss.flags.bossHenchmen=ids.map((id,i)=>({id,letter:letters[i]}));
+  boss.flags.bossHenchmenPool=ids.slice();
+  ids.forEach((id,i)=>{
+    const h=STATE.players.find(x=>x.id===id);
+    if(!h) return;
+    h.power+=1;
+    h.flags.bossHenchmanOf={bossId:boss.id,letter:letters[i]};
+  });
+}
 
 /* ===================== GAME SETUP ===================== */
 function startGame(){
@@ -1490,16 +1525,66 @@ function startGame(){
       p.inv.push("wine"); p.inv.push("wine");
       ROOMS["B601"].stock.wine=Math.max(0,(ROOMS["B601"].stock.wine||0)-2);
     }
+    // AI 黑社會老大 has no UI to pick from, so it picks its 3 小弟 at random right away — the
+    // human boss instead picks manually via #bossSelect below, after this loop.
+    if(p.prof==="boss" && p.isAI){
+      const picks=shuffleArr(players.filter(x=>x.id!==p.id)).slice(0,3).map(x=>x.id);
+      applyBossHenchmen(p,picks);
+    }
   });
   // AI players secretly pick a spawn now; human picks via the spawn-select screen next.
   players.filter(p=>p.isAI).forEach(p=>{ p.spawnRoom=chooseAISpawn(p); });
   document.getElementById("setup").classList.add("hidden");
-  renderSpawnGrid();
-  document.getElementById("spawnSelect").classList.remove("hidden");
+  if(you.prof==="boss"){
+    renderBossGrid();
+    document.getElementById("bossSelect").classList.remove("hidden");
+  } else {
+    renderSpawnGrid();
+    document.getElementById("spawnSelect").classList.remove("hidden");
+  }
   setAbandonBtnVisible(true);
   saveGame();
 }
 
+/* ---------- 黑社會老大: pick 3 小弟 (A/B/C) ---------- */
+function renderBossGrid(){
+  const grid=document.getElementById("bossGrid"); grid.innerHTML="";
+  const boss=you();
+  const letters=["A","B","C"];
+  let picked=[]; // ordered array of player ids, in click order == A/B/C
+  const confirmBtn=document.getElementById("confirmBossBtn");
+  confirmBtn.disabled=true;
+  STATE.players.filter(p=>p.id!==boss.id).forEach(p=>{
+    const div=document.createElement("div");
+    div.className="prof-card"; div.dataset.pid=p.id;
+    div.innerHTML=`<h3>${p.name}</h3><div class="sk">點選指定為小弟</div>`;
+    div.addEventListener("click",()=>{
+      const i=picked.indexOf(p.id);
+      if(i>=0){
+        picked.splice(i,1);
+      } else {
+        if(picked.length>=3) return; // already have 3 — must deselect one first
+        picked.push(p.id);
+      }
+      grid.querySelectorAll(".prof-card").forEach(c=>{
+        const idx=picked.indexOf(+c.dataset.pid);
+        if(idx>=0){ c.classList.add("selected"); c.querySelector(".sk").textContent="小弟 "+letters[idx]; }
+        else { c.classList.remove("selected"); c.querySelector(".sk").textContent="點選指定為小弟"; }
+      });
+      confirmBtn.disabled=picked.length!==3;
+    });
+    grid.appendChild(div);
+  });
+  confirmBtn.onclick=()=>{
+    if(picked.length!==3) return;
+    applyBossHenchmen(boss,picked);
+    log("你（黑社會老大）指定了小弟：A="+STATE.players.find(x=>x.id===picked[0]).name+"、B="+STATE.players.find(x=>x.id===picked[1]).name+"、C="+STATE.players.find(x=>x.id===picked[2]).name+"，三人武力各永久+1。");
+    document.getElementById("bossSelect").classList.add("hidden");
+    renderSpawnGrid();
+    document.getElementById("spawnSelect").classList.remove("hidden");
+    saveGame();
+  };
+}
 /* ---------- spawn point selection (紅色出生點) ---------- */
 function chooseAISpawn(p){
   // weighted random: rooms closer to rooms with starting stock score higher, plus a flat random component
@@ -3724,6 +3809,23 @@ function screenShake(){
 function damagePlayer(p,amount,cause){
   if(amount<=0) return;
   p.roundEvents=p.roundEvents||[];
+  // 黑社會老大的你們先上: forced substitution, checked before anything else (including his own
+  // adrenaline) — a still-alive boss with an unused 小弟 in the pool never takes this hit at all;
+  // the drawn 小弟 does instead, then loses 1 power for it. Each 小弟 can only ever be drawn once
+  // (spliced out of the pool here), so after all 3 are used damage goes back to hitting the boss.
+  if(p.prof==="boss" && p.alive && p.flags.bossHenchmenPool && p.flags.bossHenchmenPool.length){
+    const idx=Math.floor(Math.random()*p.flags.bossHenchmenPool.length);
+    const henchId=p.flags.bossHenchmenPool.splice(idx,1)[0];
+    const h=STATE.players.find(x=>x.id===henchId);
+    const letter=(p.flags.bossHenchmen.find(x=>x.id===henchId)||{}).letter||"?";
+    if(h){
+      h.power=Math.max(0,h.power-1);
+      log(p.name+"（你們先上）強制由小弟"+letter+" "+h.name+" 代為承受傷害，"+h.name+" 武力永久-1（現為"+h.power+"）。");
+      speakSkill(p,"boss:1");
+      damagePlayer(h,amount,cause+"〔老大轉嫁〕");
+      return;
+    }
+  }
   if(p.flags.adrenalineActive){ p.hp=Math.max(1,p.hp-amount); p.roundEvents.push({cause,amount}); return; }
   // Already eliminated this round (e.g. a 3+-fighter free-for-all where an earlier fighter's hit
   // already killed the target) — record the hit for the log, but don't re-run killPlayer's
