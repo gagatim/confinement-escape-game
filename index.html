@@ -305,6 +305,7 @@
         <div class="panel-title">你的狀態</div>
         <div id="youName" style="font-size:15px;color:var(--cyan-bright);font-weight:700"></div>
         <div class="muted mono" id="youProf" style="font-size:11px;margin-bottom:6px"></div>
+        <div class="mono hidden" id="bossHenchmenStatus" style="font-size:11px;color:var(--amber-bright);margin-bottom:6px"></div>
         <div class="hpbar-outer"><div class="hpbar-inner" id="hpBar" style="width:100%"></div></div>
         <div class="mono" id="hpText" style="font-size:12px;margin:4px 0 8px">HP 10/10</div>
         <div class="row mono" style="font-size:11px;gap:14px">
@@ -4339,6 +4340,7 @@ const EL={
   roundNo:document.getElementById("roundNo"), phaseName:document.getElementById("phaseName"),
   poisonedFloors:document.getElementById("poisonedFloors"), voteBallotFloors:document.getElementById("voteBallotFloors"),
   youName:document.getElementById("youName"), youProf:document.getElementById("youProf"),
+  bossHenchmenStatus:document.getElementById("bossHenchmenStatus"),
   hpBar:document.getElementById("hpBar"), hpText:document.getElementById("hpText"),
   stPower:document.getElementById("stPower"), stSpeed:document.getElementById("stSpeed"), stCarry:document.getElementById("stCarry"),
   curRoom:document.getElementById("curRoom"), stepsLeft:document.getElementById("stepsLeft"),
@@ -4356,6 +4358,15 @@ function renderAll(){
   EL.voteBallotFloors.textContent=(STATE.voteBallot||[]).filter(f=>!STATE.poisoned.has(f)).map(f=>FLOOR_LABEL[f]).join("、")||"無";
   EL.youName.textContent=p.name;
   EL.youProf.textContent=profIcon(p.prof)+" "+PROFESSIONS[p.prof].name;
+  // 黑社會老大的你們先上: shows how many 小弟 charges are left to soak a hit for him — 0 means
+  // the skill has stopped doing anything and damage is back to hitting him directly.
+  if(p.prof==="boss"){
+    const left=(p.flags.bossHenchmenPool||[]).length;
+    EL.bossHenchmenStatus.textContent="你們先上｜剩餘小弟數量: "+left+(left===0?"（已用完，此技能失效）":"");
+    EL.bossHenchmenStatus.classList.remove("hidden");
+  } else {
+    EL.bossHenchmenStatus.classList.add("hidden");
+  }
   if(p.ghost){
     EL.hpBar.style.width=Math.min(100,(p.ghostDrainTotal/2*100))+"%";
     EL.hpText.textContent="暗影吸血進度 "+p.ghostDrainTotal+"/2（吸滿2點復活）";
