@@ -4372,8 +4372,12 @@ function showRoundSummary(){
   STATE.players.forEach(p=>{
     const companions=playersInRoom(p.room,false).filter(x=>x.id!==p.id).map(x=>x.name+(x.ghost?"[暗影]":"")).join("、")||"（無）";
     const events=(p.roundEvents||[]).map(e=>e.cause+" -"+e.amount).join("、")||"無扣血";
+    // 死亡一律被搬到 B701 停屍間，跟死因/實際挨打地點無關 (見 killPlayer) — 路徑欄位在這種
+    // 情況下容易被誤讀成「這輪的傷害發生在701」，所以額外註明這只是死後的停屍位置，實際傷害
+    // 房間請對照上方即時紀錄裡「被...轟炸/扣血於「房間」」那一行。
+    const diedThisRound = p.ghost && p.room==="B701" && p.roundStartRoom!=="B701";
     const path = p.roundStartRoom && p.roundStartRoom!==p.room
-      ? "「"+p.roundStartRoom+"」→「"+p.room+" "+(ROOMS[p.room].name||"")+"」"
+      ? "「"+p.roundStartRoom+"」→「"+p.room+" "+(ROOMS[p.room].name||"")+"」"+(diedThisRound?"<span class='muted'>（死亡後移至停屍間，非傷害實際發生地點）</span>":"")
       : "「"+p.room+" "+(ROOMS[p.room].name||"")+"」（未移動）";
     html+="<div style='margin-bottom:6px;padding-bottom:6px;border-bottom:1px dashed var(--line)'>"+
       "<b>"+p.name+"</b>（"+profIcon(p.prof)+" "+PROFESSIONS[p.prof].name+"） HP "+p.hp+(p.ghost?" [暗影]":p.alive?"":" 💀")+"<br>"+
