@@ -773,7 +773,7 @@ const PROFESSIONS = {
   ]},
   exorcist:{name:"超度師", skills:[
     {name:"臨終祝禱", desc:"（被動）你死亡成為暗影時，吸血所需總量降為1點即可復活。", passive:true},
-    {name:"安魂儀式", desc:"整局限用1次：指定1名暗影玩家（可指定自己）立即復活，恢復其生命上限一半的生命值。", uses:1}
+    {name:"安魂儀式", desc:"（被動）你死亡的瞬間自動發動：立刻復活，恢復生命上限一半的生命值。整局限用1次，第6輪（最後一輪）死亡不會觸發。", passive:true}
   ]},
   guardian:{name:"守護者", skills:[
     {name:"庇護結界", desc:"（被動）自身所有傷害-1；同房間的其他玩家所有傷害也-1。", passive:true},
@@ -3051,7 +3051,6 @@ const SKILL_USE_LIMITS={
   "hunter:1":{flag:"hunterUses",max:2},
   "mediocre:1":{flag:"mediocreSacrificeUses",max:3},
   "collector:1":{flag:"collectorTradeUses",max:2},
-  "exorcist:1":{flag:"exorcistRiteUsed",max:1,bool:true},
   "guardian:1":{flag:"guardianDefenseUsed",max:1,bool:true},
 };
 function skillUsedCount(p,key){
@@ -3251,12 +3250,6 @@ function useProfSkill(p,idx){
     if(skillUseCapReached(p,"collector:1")){ flashMsg("已用完2次"); return; }
     if(p.inv.length<2){ flashMsg("背包內道具不足2張，無法發動"); return; }
     openCollectorTradeModal(p);
-  } else if(p.prof==="exorcist" && idx===1){
-    // Self-targeting while the 超度師 himself is the shade is handled by the standalone button
-    // in the ghost status panel (renderAll) instead — this branch only runs while he's alive,
-    // so it only ever needs to offer OTHER shades.
-    if(skillUseCapReached(p,"exorcist:1")){ flashMsg("已用完"); return; }
-    openExorcistReviveModal(p);
   } else if(p.prof==="guardian" && idx===1){
     if(skillUseCapReached(p,"guardian:1")){ flashMsg("已用完"); return; }
     p.flags.guardianDefenseUsed=true; p.flags.guardianDefenseActive=true; p.flags.skillUsedThisRound=true;
@@ -3270,7 +3263,7 @@ function useProfSkill(p,idx){
 // nothing. Every OTHER active skill executes immediately on click, which is risky for a
 // limited-use skill (a stray click permanently burns one of only 1-4 charges) — those get a
 // confirm prompt naming the skill and its effect before anything happens.
-const SKILL_OPENS_OWN_MODAL=new Set(["chemist:0","hacker:1","geneFreak:1","shopper:1","pickpocket:0","courier:1","caregiver:1","mediocre:1","mediocre:2","collector:1","exorcist:1"]);
+const SKILL_OPENS_OWN_MODAL=new Set(["chemist:0","hacker:1","geneFreak:1","shopper:1","pickpocket:0","courier:1","caregiver:1","mediocre:1","mediocre:2","collector:1"]);
 function confirmAndUseSkill(p,idx){
   const s=PROFESSIONS[p.prof].skills[idx];
   openModal(`<h3>發動技能：${s.name}</h3><div style="margin-bottom:12px;font-size:13px;line-height:1.6">${s.desc}</div>
@@ -3459,23 +3452,6 @@ function openCollectorTradeModal(p){
     renderAll();
   };
   bindModalClose("colCancel");
-}
-// 超度師的安魂儀式 (targeting someone else, cast while still alive) — the self-targeting case
-// is handled separately by exorcistRevive's other call site, the standalone ghost-panel button
-// in renderAll, since a shade has no skill list to open this modal from in the first place.
-function openExorcistReviveModal(p){
-  const ghosts=STATE.players.filter(x=>x.ghost);
-  if(!ghosts.length){ flashMsg("目前沒有暗影玩家可以超度。"); return; }
-  const opts=ghosts.map(g=>`<option value="${g.id}">${g.name}（${g.room}，已吸血${g.ghostDrainTotal}/${ghostDrainNeeded(g)}）</option>`).join("");
-  openModal(`<h3>安魂儀式：指定1名暗影玩家立即復活</h3><select id="exorSel">${opts}</select><br><br>
-    <button class="btn small warn" id="exorOk">施展</button> <button class="btn small ghost" id="exorCancel">取消</button>`);
-  document.getElementById("exorOk").onclick=()=>{
-    const targetId=+document.getElementById("exorSel").value;
-    const target=STATE.players.find(x=>x.id===targetId);
-    closeModal();
-    exorcistRevive(p,target);
-  };
-  bindModalClose("exorCancel");
 }
 
 /* ===================== VOTE / TRADE ===================== */
@@ -4079,22 +4055,29 @@ function killPlayer(p,cause,killerId){
   embalmers.forEach(e=>{ e.carry++; log(e.name+"（蠱耗感應）負重永久+1（現為 "+e.carry+"）。"); });
   // shade immunity/heal handled separately in ghost-drain resolution; 暗影親和 speed+2 below
   if(p.prof==="shade"){ p.speed+=2; log(p.name+"（暗影親和）成為暗影，移動速度永久+2（現為 "+p.speed+"）。"); }
+  // 超度師的安魂儀式: auto-fires the instant they die, once per game — excluded on round 6 (the
+  // last round) for the same reason the old manually-targeted version was: a revival that can
+  // never again be put at risk before the game ends would be a free ranking boost, since
+  // renderEndScreen sorts purely by final hp (then power).
+  if(p.prof==="exorcist" && !p.flags.exorcistRiteUsed){
+    if(STATE.round<6) exorcistAutoRevive(p);
+    else log(p.name+"（安魂儀式）第6輪死亡不會觸發，維持暗影狀態。");
+  }
 }
 // 超度師的臨終祝禱: only ever lowers the THREATENED player's own revival bar (their prof at the
 // moment they died), not whoever's asking — used both by the drain-settlement check and the
 // live progress bar/skill-list text, so all three stay in sync automatically.
 function ghostDrainNeeded(p){ return p.prof==="exorcist" ? 1 : 2; }
-// 超度師的安魂儀式: shared by both entry points — a still-alive 超度師 targeting someone ELSE
-// (through the normal skill-list button and openExorcistReviveModal) and a 超度師 who is
-// themselves currently a shade self-targeting (through the special button rendered inside their
-// own ghost status panel, since ghosts otherwise have no skill list to click at all).
-function exorcistRevive(exorcist,target){
-  target.ghost=false; target.alive=true;
-  target.hp=Math.min(target.maxhp, Math.ceil(target.maxhp/2));
-  exorcist.flags.exorcistRiteUsed=true;
-  log(exorcist.name+"（超度師）對 "+target.name+" 施展安魂儀式"+(exorcist===target?"（為自己超度）":"")+"，立即復活並恢復至 "+target.hp+" 點生命。","heal");
-  speakSkill(exorcist,"exorcist:1");
-  renderAll();
+// 超度師的安魂儀式: a death-triggered auto-passive, called from killPlayer below — the exorcist
+// always revives only THEMSELVES, the instant they die, once per game. No renderAll() here since
+// this runs mid-settlement (same as 你們先上/破釜沉舟 etc.) — the eventual round-end render
+// picks up the reverted alive/ghost state along with everything else.
+function exorcistAutoRevive(p){
+  p.flags.exorcistRiteUsed=true;
+  p.ghost=false; p.alive=true;
+  p.hp=Math.min(p.maxhp, Math.ceil(p.maxhp/2));
+  log(p.name+"（安魂儀式）死而復生，立即恢復至 "+p.hp+" 點生命！","heal");
+  speakSkill(p,"exorcist:1");
 }
 // 守護者: 絕對防禦（本回合、僅自己）makes him fully immune to whatever dmg is passed in; failing
 // that, his 自身所有傷害-1／同房間人所有傷害-1 aura still knocks 1 off — for himself AND anyone
@@ -4760,15 +4743,6 @@ function renderAll(){
   if(p.ghost){
     const needed=ghostDrainNeeded(p);
     skEl.innerHTML="<div class='muted' style='font-size:12px'>你是暗影：可自由穿牆移動到任意房間，回合結束時若與存活玩家同房，將於結算階段吸取1點生命；目前已吸 "+p.ghostDrainTotal+"/"+needed+" 點，吸滿即可原地復活。</div>";
-    // 超度師的安魂儀式 can target the caster's OWN shade — but a shade otherwise has no skill
-    // list at all (see the branch above), so this is the one exception rendered directly into
-    // the ghost status panel instead of going through the normal PROFESSIONS.skills loop below.
-    if(p.prof==="exorcist" && !skillUseCapReached(p,"exorcist:1")){
-      const selfBtn=document.createElement("button"); selfBtn.className="skillbtn"; selfBtn.style.marginTop="8px";
-      selfBtn.innerHTML="<b>安魂儀式（自行超度）</b>立即復活，恢復生命上限一半的生命值。";
-      selfBtn.onclick=()=>exorcistRevive(p,p);
-      skEl.appendChild(selfBtn);
-    }
   } else {
   PROFESSIONS[p.prof].skills.forEach((s,idx)=>{
     const btn=document.createElement("button"); btn.className="skillbtn";
