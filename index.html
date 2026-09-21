@@ -3992,17 +3992,30 @@ function killPlayer(p,cause,killerId){
   }
   // drop items into mortuary
   const embalmers=STATE.players.filter(x=>x.alive && x.prof==="embalmer");
+  const e=embalmers[0];
+  // 亡者遺贈 replaces 蠱耗感應's automatic random grab entirely for this specific death — every
+  // item still lands in B701 as normal, and instead of auto-taking whichever one happens to come
+  // first in iteration order, the embalmer gets a real pick (via STATE.pendingEmbalmerChoice,
+  // resolved in openEmbalmerChoiceModal right after this round's summary) from exactly this batch.
+  const choiceMode = e && e.flags.embalmerChoiceMode;
+  const droppedForChoice=[];
   p.inv.forEach(it=>{
+    if(choiceMode){ ROOMS["B701"].stock[it]=(ROOMS["B701"].stock[it]||0)+1; droppedForChoice.push(it); return; }
     // automatic passive pickup — mid-settlement, so there's no moment to ask what to drop;
     // just skip it (item goes to the mortuary instead) rather than silently exceeding carry.
-    const canCarry=!(itemCostsCarry(embalmers[0]||{}, it) && embalmers.length && carryRoom(embalmers[0])<=0);
-    if(embalmers.length && canCarry){
-      const e=embalmers[0];
-      if(e.flags.embalmerChoiceMode){ e.inv.push(it); e.flags.embalmerChoiceMode=false; log(e.name+" 以亡者遺贈自行選擇獲得: "+ITEMS[it].name); return; }
-      if(!e.flags.__embalmerGotThisRound){ e.inv.push(it); e.flags.__embalmerGotThisRound=true; log(e.name+" 蠱耗感應獲得: "+ITEMS[it].name); return; }
+    const canCarry=!(itemCostsCarry(e||{}, it) && e && carryRoom(e)<=0);
+    if(e && canCarry && !e.flags.__embalmerGotThisRound){
+      e.inv.push(it); e.flags.__embalmerGotThisRound=true; log(e.name+" 蠱耗感應獲得: "+ITEMS[it].name); return;
     }
     ROOMS["B701"].stock[it]=(ROOMS["B701"].stock[it]||0)+1;
   });
+  // Only consumed once an actual item was there to choose from — a death with an empty inventory
+  // leaves the charge armed for a later death, matching "下次道具進入停屍間時" literally.
+  if(choiceMode && droppedForChoice.length){
+    e.flags.embalmerChoiceMode=false;
+    STATE.pendingEmbalmerChoice={embalmerId:e.id, items:droppedForChoice, fromName:p.name};
+    log(e.name+"（亡者遺贈）"+p.name+" 的遺物已送入停屍間，結算後可自行挑選1張。");
+  }
   p.inv=[];
   p.room="B701";
   embalmers.forEach(e=>{ e.carry++; log(e.name+"（蠱耗感應）負重永久+1（現為 "+e.carry+"）。"); });
@@ -4389,6 +4402,14 @@ function showRoundSummary(){
   openModal(html);
   document.getElementById("sumOk").onclick=()=>{
     closeModal();
+    // 入殮師的亡者遺贈: a pending pick takes priority over advancing the round — the player
+    // must choose their 1 item from THIS specific death's drops before settlement's other
+    // consequences (next round's setup, or game end) proceed.
+    if(STATE.pendingEmbalmerChoice){ openEmbalmerChoiceModal(); return; }
+    advanceAfterRoundSummary();
+  };
+}
+function advanceAfterRoundSummary(){
     if(STATE.round>=6){ endGame(); }
     else { STATE.round++; STATE.phase="positioning";
       // Track the boost as a DELTA rather than snapshotting/overwriting the whole speed value:
@@ -4446,7 +4467,40 @@ function showRoundSummary(){
         }
       });
       logRound(STATE.round); beginRound(); }
+}
+// 入殮師的亡者遺贈: STATE.pendingEmbalmerChoice is set by killPlayer the moment a death (with at
+// least 1 item to drop) happens while embalmerChoiceMode is armed — every dropped item still
+// lands in B701's shared stock as normal, this just lets the embalmer immediately pull exactly
+// ONE of THOSE specific items back out for free before the round is allowed to advance, instead
+// of leaving it to 蠱耗感應's usual random luck.
+function openEmbalmerChoiceModal(){
+  const choice=STATE.pendingEmbalmerChoice;
+  const e=STATE.players.find(x=>x.id===choice.embalmerId);
+  if(!e || !e.alive){ STATE.pendingEmbalmerChoice=null; advanceAfterRoundSummary(); return; }
+  const opts=choice.items.map((it,i)=>`<option value="${i}">${ITEMS[it].name}</option>`).join("");
+  openModal(`<h3>亡者遺贈：從 ${choice.fromName} 的遺物中自行挑選1張</h3>
+    <select id="embalmerChoiceSel">${opts}</select><br><br>
+    <button class="btn small warn" id="embalmerChoiceOk">拿取</button>
+    <button class="btn small ghost" id="embalmerChoiceSkip">不拿，直接繼續</button>`);
+  const finish=()=>{ STATE.pendingEmbalmerChoice=null; closeModal(); advanceAfterRoundSummary(); };
+  document.getElementById("embalmerChoiceOk").onclick=()=>{
+    const idx=+document.getElementById("embalmerChoiceSel").value;
+    const item=choice.items[idx];
+    const room=ROOMS["B701"];
+    if((room.stock[item]||0)>0) room.stock[item]--; // pull it back out of the shared mortuary stock
+    log(e.name+"（亡者遺贈）從 "+choice.fromName+" 的遺物中選擇了「"+ITEMS[item].name+"」。","heal");
+    if(itemCostsCarry(e,item) && carryRoom(e)<=0){
+      STATE.pendingEmbalmerChoice=null; closeModal();
+      openDrawSelectionModal(e,[item],e.room);
+      // openDrawSelectionModal resolves on its own confirm button, so advance from there instead.
+      const origConfirm=document.getElementById("drawConfirm").onclick;
+      document.getElementById("drawConfirm").onclick=()=>{ origConfirm(); advanceAfterRoundSummary(); };
+      return;
+    }
+    e.inv.push(item);
+    finish();
   };
+  document.getElementById("embalmerChoiceSkip").onclick=finish;
 }
 function endGame(){
   STATE.gameOver=true;
