@@ -774,12 +774,16 @@ const PROFESSIONS = {
   exorcist:{name:"超度師", skills:[
     {name:"臨終祝禱", desc:"（被動）你死亡成為暗影時，吸血所需總量降為1點即可復活。", passive:true},
     {name:"安魂儀式", desc:"整局限用1次：指定1名暗影玩家（可指定自己）立即復活，恢復其生命上限一半的生命值。", uses:1}
+  ]},
+  guardian:{name:"守護者", skills:[
+    {name:"庇護結界", desc:"（被動）自身所有傷害-1；同房間的其他玩家所有傷害也-1。", passive:true},
+    {name:"絕對防禦", desc:"整局限用1次：本回合可以不移動，無視任何傷害，且可直接使用房間功能。", uses:1}
   ]}
 };
 // 擴充模式: these professions are hidden from the setup screen (and never randomly given to
 // AI) unless the player opts into 擴充模式 — keeps a first game to the base roster, while letting
 // anyone who wants the larger expansion roster turn it on.
-const EXPANSION_PROFS=new Set(["fatty","trucker","bartender","chemist","hacker","shade","merc","outsider","climber","pilot","chef","diver","courier","gourmet","farmer","caregiver","mediocre","collector"]);
+const EXPANSION_PROFS=new Set(["fatty","trucker","bartender","chemist","hacker","shade","merc","outsider","climber","pilot","chef","diver","courier","gourmet","farmer","caregiver","mediocre","collector","guardian"]);
 // One small emoji "portrait" per profession — shown on the selection card and anywhere a player's
 // profession is listed in-game, so each of the 16 is visually distinct at a glance, not just by name.
 const PROF_ICON={
@@ -789,7 +793,7 @@ const PROF_ICON={
   medic:"🩺", pilot:"✈️", demolitions:"🧨", chef:"🍳", smuggler:"🧳", survivor:"🎒",
   shopper:"🛍️", runner:"🏃", herbalist:"🌿", veteran:"🎖️", pickpocket:"🥷",
   diver:"🤿", courier:"📦", gourmet:"🍽️", farmer:"🌾", caregiver:"💕", miner:"⛏️", hunter:"🏹",
-  mediocre:"🤷", boss:"🕴️", collector:"📿", butcher:"🥩", exorcist:"🕯️"
+  mediocre:"🤷", boss:"🕴️", collector:"📿", butcher:"🥩", exorcist:"🕯️", guardian:"🛡️"
 };
 // 去圖示模式 (低調模式 companion toggle): when on, every emoji "picture" in the UI is swapped
 // for a plain bracketed-text stand-in instead — unlike 低調模式 (the boss key), this is meant to
@@ -1074,7 +1078,8 @@ const SKILL_QUOTES={
   "mediocre:2":"少一口氣，換一條路。",
   "boss:1":"你們先上。",
   "collector:1":"這個，換給我吧。",
-  "exorcist:1":"回來吧，你的路還沒走完。"
+  "exorcist:1":"回來吧，你的路還沒走完。",
+  "guardian:1":"這一輪，什麼都傷不了我。"
 };
 const VOICE=(()=>{
   const supported="speechSynthesis" in window;
@@ -1181,7 +1186,8 @@ const SELECT_QUOTES={
   boss:"我從不自己動手，這裡的人都聽我的。",
   collector:"你手上的東西，我都想收一份。",
   butcher:"刀在我手上，才叫刀。",
-  exorcist:"就算死了，我也能把你請回來。"
+  exorcist:"就算死了，我也能把你請回來。",
+  guardian:"站在我旁邊，我會扛下這一切。"
 };
 (()=>{
   const voiceBtn=document.getElementById("voiceMuteBtn");
@@ -1428,7 +1434,7 @@ function makePlayer(id,isAI,profId,stats,name){
       diverHoldBreathUses:0, diverHoldBreathActive:false, courierUses:0,
       farmerUses:0, caregiverUses:0, minerUses:0,
       hunterSprintUses:0, hunterUses:0, hunterAmbushActive:false, mediocreSacrificeUses:0,
-      collectorTradeUses:0, exorcistRiteUsed:false,
+      collectorTradeUses:0, exorcistRiteUsed:false, guardianDefenseUsed:false, guardianDefenseActive:false,
       poisonImmune:false, lotteryDodgeActive:false,
       bossHenchmen:[], bossHenchmenPool:[], bossHenchmanOf:null,
       pendingItemUses:[], wineExcludedQueue:[], roomCommitted:false},
@@ -1840,6 +1846,7 @@ function beginRound(){
     p.flags.smugglerBonusUsedThisRound=false; // 走私客的熟悉門路: once per round
     p.flags.diverHoldBreathActive=false; // 潛水員的憋氣術: declared fresh each round it's used
     p.flags.hunterAmbushActive=false; // 獵人的埋伏: the must-move waiver only covers the round it's used
+    p.flags.guardianDefenseActive=false; // 守護者的絕對防禦: the must-move waiver + damage immunity only covers the round it's used
     p.flags.lotteryDodgeActive=false; // 樂透房's "本輪躲避毒氣" outcome: re-armed fresh each round it's rolled
     p.flags.smokeActive=false; // 煙霧彈: exempts this round's combat only, declared fresh each round it's used
     p.flags.oxygenImmuneActive=false; // 氧氣瓶: poison immunity for this round only, declared fresh each round it's used
@@ -1994,7 +2001,7 @@ function tryMove(p,target){
 // unless they physically can't move at all this round (e.g. 0 speed), in which case forcing it
 // would just soft-lock them. 獵人's 埋伏 is a deliberate exception (can act without moving at all).
 function mustMoveThisRound(p){
-  if(p.ghost || p.flags.hunterAmbushActive) return false;
+  if(p.ghost || p.flags.hunterAmbushActive || p.flags.guardianDefenseActive) return false;
   const reach=reachableRooms(p.roundStartRoom, p.roundStartSteps);
   return Object.keys(reach).some(r=>r!==p.roundStartRoom);
 }
@@ -2924,7 +2931,7 @@ function useMysteryDice(p){
   const roll=Math.floor(Math.random()*6)+1;
   let msg="神秘骰子(擲骰"+roll+"): ";
   if(roll===1){ p.power++; msg+="武力永久+1。"; }
-  else if(roll===2){ damagePlayer(p,2,"神秘骰子"); msg+="生命-2。"; }
+  else if(roll===2){ const gc=guardianCut(p,2); damagePlayer(p,gc.dmg,"神秘骰子"); msg+="生命-"+gc.dmg+gc.note+"。"; }
   else if(roll===3){ p.speed++; msg+="速度永久+1。"; }
   else if(roll===4){
     const pool=["water","food","pill","wine","knife"];
@@ -3028,6 +3035,7 @@ const SKILL_USE_LIMITS={
   "mediocre:1":{flag:"mediocreSacrificeUses",max:3},
   "collector:1":{flag:"collectorTradeUses",max:2},
   "exorcist:1":{flag:"exorcistRiteUsed",max:1,bool:true},
+  "guardian:1":{flag:"guardianDefenseUsed",max:1,bool:true},
 };
 function skillUsedCount(p,key){
   const lim=SKILL_USE_LIMITS[key];
@@ -3204,10 +3212,14 @@ function useProfSkill(p,idx){
     p.flags.hunterAmbushActive=true;
     p.power++;
     const ambushTargets=playersInRoom(p.room,true).filter(x=>x.id!==p.id);
-    // 攀岩者的剛硬意志 knocks their own share of this down to 1 — computed per-target since the
-    // room may hold a mix of climbers and non-climbers.
-    ambushTargets.forEach(t=>damagePlayer(t, t.prof==="climber"?1:2, "獵人埋伏"));
-    log(p.name+" 使用埋伏：武力永久+1"+(ambushTargets.length?"，"+ambushTargets.map(t=>t.name+(t.prof==="climber"?"(剛硬意志-1)":"")).join("、")+" 各受到傷害":"（房內無其他玩家）")+"。","dmg");
+    // 攀岩者的剛硬意志／守護者的庇護或絕對防禦 can each reduce a target's share of this —
+    // computed per-target up front since the room may hold a mix of protected players.
+    const ambushHits=ambushTargets.map(t=>{
+      const gc=guardianCut(t, t.prof==="climber"?1:2);
+      return {t, dmg:gc.dmg, tag:t.prof==="climber"?"(剛硬意志-1)":(gc.note?"("+gc.note+")":"")};
+    });
+    ambushHits.forEach(h=>damagePlayer(h.t,h.dmg,"獵人埋伏"));
+    log(p.name+" 使用埋伏：武力永久+1"+(ambushHits.length?"，"+ambushHits.map(h=>h.t.name+h.tag).join("、")+" 各受到傷害":"（房內無其他玩家）")+"。","dmg");
     speakSkill(p,"hunter:1");
   } else if(p.prof==="mediocre" && idx===1){
     if(skillUseCapReached(p,"mediocre:1")){ flashMsg("已用完3次"); return; }
@@ -3225,6 +3237,10 @@ function useProfSkill(p,idx){
     // so it only ever needs to offer OTHER shades.
     if(skillUseCapReached(p,"exorcist:1")){ flashMsg("已用完"); return; }
     openExorcistReviveModal(p);
+  } else if(p.prof==="guardian" && idx===1){
+    if(skillUseCapReached(p,"guardian:1")){ flashMsg("已用完"); return; }
+    p.flags.guardianDefenseUsed=true; p.flags.guardianDefenseActive=true; p.flags.skillUsedThisRound=true;
+    log(p.name+" 發動絕對防禦：本輪可不移動、無視任何傷害，並能直接使用房間功能。"); speakSkill(p,"guardian:1");
   }
   renderAll();
 }
@@ -3708,8 +3724,12 @@ function aiConsiderSkillAfterMove(p){
         p.flags.hunterUses++; p.flags.skillUsedThisRound=true;
         p.flags.hunterAmbushActive=true;
         p.power++;
-        targets.forEach(t=>damagePlayer(t, t.prof==="climber"?1:2, "獵人埋伏"));
-        log(p.name+" 使用埋伏：武力永久+1，"+targets.map(t=>t.name+(t.prof==="climber"?"(剛硬意志-1)":"")).join("、")+" 各受到傷害。");
+        const ambushHits=targets.map(t=>{
+          const gc=guardianCut(t, t.prof==="climber"?1:2);
+          return {t, dmg:gc.dmg, tag:t.prof==="climber"?"(剛硬意志-1)":(gc.note?"("+gc.note+")":"")};
+        });
+        ambushHits.forEach(h=>damagePlayer(h.t,h.dmg,"獵人埋伏"));
+        log(p.name+" 使用埋伏：武力永久+1，"+ambushHits.map(h=>h.t.name+h.tag).join("、")+" 各受到傷害。");
       }
     }
     return;
@@ -3874,7 +3894,9 @@ function resolveAITurn(p){
   // 郵差's 專人配送 is deliberately left unused by AI, same precedent as 賭徒/基因怪人 noted
   // above — sending a card to an arbitrary distant player has no clear heuristic payoff. 收藏家's
   // 以物易物 is left unused for the same reason: "which exact card is worth 2 of mine" is a
-  // judgment call the AI's heuristics don't model.
+  // judgment call the AI's heuristics don't model. 守護者's 絕對防禦 is likewise left unused by
+  // AI — "is this round dangerous enough to burn my one whole-game charge" has no clean signal
+  // the AI tracks (incoming rocket/ambush declarations aren't visible to it ahead of settlement).
   if(p.prof==="caregiver" && countItem(p,"pill")>0){
     const hurtAlly=playersInRoom(p.room,true).find(x=>x.id!==p.id && x.hp<=6);
     if(hurtAlly && Math.random()<0.7){
@@ -4003,6 +4025,19 @@ function exorcistRevive(exorcist,target){
   speakSkill(exorcist,"exorcist:1");
   renderAll();
 }
+// 守護者: 絕對防禦（本回合、僅自己）makes him fully immune to whatever dmg is passed in; failing
+// that, his 自身所有傷害-1／同房間人所有傷害-1 aura still knocks 1 off — for himself AND anyone
+// else currently sharing his room. Returns {dmg,note} in the same shape every other profession's
+// inline reduction already uses (fatty/bomb/veteran/climber above), so callers just splice the
+// note into their own accumulating note string exactly the same way.
+function guardianCut(target,dmg){
+  if(dmg<=0) return {dmg,note:""};
+  if(target.prof==="guardian" && target.flags.guardianDefenseActive) return {dmg:0,note:"〔絕對防禦〕"};
+  if(target.prof==="guardian" || playersInRoom(target.room,true).some(x=>x.prof==="guardian")){
+    return {dmg:Math.max(0,dmg-1),note:"〔守護者庇護 -1〕"};
+  }
+  return {dmg,note:""};
+}
 
 // A room is poisoned when its floor is a voted-poison floor, EXCEPT: B501 (the tall B4/B5
 // warehouse) which per the rulebook only turns toxic once BOTH the floors it spans are poisoned,
@@ -4106,6 +4141,7 @@ function settleRound(){
       if(p.prof==="bomb"){ dmg=Math.max(0,dmg-1); note="〔爆破緩衝 -1〕"; }
       if(p.prof==="mediocre"){ dmg+=1; note+="〔脆弱體質 +1〕"; }
       if(p.prof==="climber" && dmg>0){ dmg=Math.max(0,dmg-1); note+="〔剛硬意志 -1〕"; }
+      { const gc=guardianCut(p,dmg); dmg=gc.dmg; note+=gc.note; }
       damagePlayer(p,dmg,"火箭筒");
       log(p.name+" 被火箭筒轟炸於「"+r+"」，受到 "+dmg+" 點傷害"+note+"。","dmg");
     });
@@ -4120,8 +4156,9 @@ function settleRound(){
     const victims=playersInRoom(trap.room,true).filter(x=>x.id!==trap.ownerId);
     if(victims.length){
       const v=victims[Math.floor(Math.random()*victims.length)];
-      damagePlayer(v,4,"地雷");
-      log(v.name+" 在「"+trap.room+" "+(ROOMS[trap.room].name||"")+"」誤觸地雷，受到 4 點傷害。","dmg");
+      const gc=guardianCut(v,4);
+      damagePlayer(v,gc.dmg,"地雷");
+      log(v.name+" 在「"+trap.room+" "+(ROOMS[trap.room].name||"")+"」誤觸地雷，受到 "+gc.dmg+" 點傷害"+gc.note+"。","dmg");
       trap.triggered=true;
     }
   });
@@ -4133,9 +4170,10 @@ function settleRound(){
       // 攀岩者的剛硬意志 can zero this out for them specifically, so each target's own actual
       // damage is computed individually rather than assuming the flat 1 the aggregate log states.
       playersInRoom(p.room,true).filter(x=>x.id!==p.id).forEach(x=>{
-        const dmg=x.prof==="climber"?0:1;
-        damagePlayer(x,dmg,"貨車司機猛烈衝撞");
-        if(dmg===0) log(x.name+"（剛硬意志）抵銷了猛烈衝撞的傷害。");
+        const gc=guardianCut(x, x.prof==="climber"?0:1);
+        damagePlayer(x,gc.dmg,"貨車司機猛烈衝撞");
+        if(x.prof==="climber") log(x.name+"（剛硬意志）抵銷了猛烈衝撞的傷害。");
+        else if(gc.note) log(x.name+gc.note+"抵銷了猛烈衝撞的傷害。");
       });
       log(p.name+" 觸發猛烈衝撞：房內其他玩家各受到1點傷害（剛硬意志者除外），房間強制公開。");
       p.flags.truckerJustUsed=false; p.flags.truckerDoubled=false;
@@ -4158,6 +4196,7 @@ function settleRound(){
       if(p.flags.poisonImmune){ dmg=0; note+="〔樂透：永久免疫毒氣〕"; }
       if(p.prof==="climber" && dmg>0){ dmg=Math.max(0,dmg-1); note+="〔剛硬意志 -1〕"; }
       if(p.room==="202") dmg=0;
+      { const gc=guardianCut(p,dmg); dmg=gc.dmg; note+=gc.note; }
       damagePlayer(p,dmg,"毒氣");
       if(dmg>0) log(p.name+" 在毒氣區受到 "+dmg+" 點傷害"+note+"。","dmg");
       STATE.__report.poisonDamage.push(p.name+"（"+p.room+" "+(ROOMS[p.room].name||"")+"） -"+dmg+note);
@@ -4176,6 +4215,7 @@ function settleRound(){
       if(missing>0){
         let note="";
         if(p.prof==="climber"){ missing=Math.max(0,missing-1); note="〔剛硬意志 -1〕"; }
+        { const gc=guardianCut(p,missing); missing=gc.dmg; note+=gc.note; }
         damagePlayer(p,missing,"飢餓"); log(p.name+" 缺水/糧，受到 "+missing+" 點傷害"+note+"。","dmg"); STATE.__report.hunger.push(p.name+" -"+missing);
         // 農夫的自給自足: a small consolation chance out of hunger, exempt from carry (pushed directly).
         if(p.alive && p.prof==="farmer"){
@@ -4193,8 +4233,10 @@ function settleRound(){
   // 5) laser room
   STATE.players.forEach(p=>{
     if(p.alive && p.pendingLaser){
-      damagePlayer(p, p.prof==="climber"?0:1, "激光室");
+      const laserGc=guardianCut(p, p.prof==="climber"?0:1);
+      damagePlayer(p, laserGc.dmg, "激光室");
       if(p.prof==="climber") log(p.name+"（剛硬意志）抵銷了激光室的傷害。");
+      if(laserGc.note) log(p.name+laserGc.note+"抵銷了激光室的傷害。");
       p.pendingLaser=false;
     }
   });
@@ -4208,12 +4250,14 @@ function settleRound(){
         log(v.name+"（暗影使者）免疫暗影吸血。"); return;
       }
       const drainRoom=g.room; // capture before damagePlayer can move a killed victim to the mortuary
-      // 攀岩者的剛硬意志: the drain itself still counts toward the ghost's revival total (it's
-      // still a successful drain attempt), it just costs the climber victim 0 HP instead of 1.
-      const drainDmg=v.prof==="climber"?0:1;
+      // 攀岩者的剛硬意志／守護者的庇護或絕對防禦: the drain itself still counts toward the
+      // ghost's revival total (it's still a successful drain attempt), it just costs the
+      // protected victim 0 HP instead of 1.
+      const drainGc=guardianCut(v, v.prof==="climber"?0:1);
+      const drainDmg=drainGc.dmg;
       damagePlayer(v,drainDmg,"暗影吸血");
       g.ghostDrainTotal++;
-      log(g.name+"（暗影）吸取了 "+v.name+" "+drainDmg+"點生命"+(v.prof==="climber"?"（剛硬意志抵銷）":"")+"。","dmg");
+      log(g.name+"（暗影）吸取了 "+v.name+" "+drainDmg+"點生命"+(v.prof==="climber"?"（剛硬意志抵銷）":drainGc.note?"（"+drainGc.note+"抵銷）":"")+"。","dmg");
       STATE.__report.drain.push(g.name+"（暗影）@"+drainRoom+"：吸取 "+v.name+" "+drainDmg+"點生命（"+v.name+" HP→"+v.hp+(v.alive?"":" 💀")+"）");
       STATE.players.forEach(sh=>{ if(sh.prof==="shade" && sh.alive && !sh.ghost){ sh.hp=Math.min(sh.maxhp,sh.hp+1); log(sh.name+"（暗影共鳴）恢復1點生命。","heal"); } });
     });
@@ -4304,6 +4348,7 @@ function resolveCombat(a,b,roomId,frozenA){
     if(p.prof==="bomb" && attackerHasGun && d>0){ const before=d; d=Math.max(0,d-3); note+="〔防爆盾牌 -"+(before-d)+"〕"; }
     if(p.prof==="veteran" && p.hp<=3 && d>0){ const before=d; d=Math.max(0,d-4); note+="〔破釜沉舟 -"+(before-d)+"〕"; }
     if(p.prof==="climber" && d>0){ const before=d; d=Math.max(0,d-1); note+="〔剛硬意志 -"+(before-d)+"〕"; }
+    const gc=guardianCut(p,d); d=gc.dmg; note+=gc.note;
     return {d,note};
   };
   const ra=reduce(a,dmgToA,bGun), rb=reduce(b,dmgToB,aGun);
