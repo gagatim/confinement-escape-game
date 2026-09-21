@@ -3555,6 +3555,11 @@ function aiChooseTarget(p){
     if(room.draw>0) score+=1.5;
     if(roomIsPoisoned(room)) score-=6;
     if(r==="102") score-=4;
+    // 操作室(重新分配點數) is a no-op for the AI — it always keeps its stats as rolled rather
+    // than actually re-speccing (see aiConsiderSkillAfterMove's 基因重組 comment for the same
+    // reasoning) — so there's nothing here for it to gain by walking over, heavily discouraged
+    // rather than outright excluded so it's still a valid fallback if nothing else is reachable.
+    if(room.special==="respec") score-=6;
     if(score>bestScore){ bestScore=score; best=r; }
   }
   return best;
