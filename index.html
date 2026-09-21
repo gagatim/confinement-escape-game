@@ -651,7 +651,7 @@ const PROFESSIONS = {
   ]},
   hacker:{name:"黑客", skills:[
     {name:"系統監控", desc:"（永久被動）可查看任意1個房間目前人數與各玩家武力值(無法得知是否持槍)。", passive:true},
-    {name:"遠端操控", desc:"移動結束可使用，若身處功能房間需放棄該房間功能，改為在任意位置使用基因室/總控室/操作室其一（3選1）。整局限用2次，不可重複選擇同一房間。", uses:2}
+    {name:"遠端操控", desc:"抵達功能房間時，可放棄執行該房間功能，改為遠端使用任意1個房間的功能。不可重複選擇同一房間，第1輪無法使用，整局限用3次。", uses:3}
   ]},
   tycoon:{name:"富豪", skills:[
     {name:"腰纏萬貫", desc:"你的金條不佔負重。金庫2根+大倉庫1根金條，測試開始即歸你所有。每回合限用1根金條。", passive:true}
@@ -2436,6 +2436,23 @@ function doSpecialRoom(p,room){
     case "laser": break;
   }
 }
+// 黑客的遠端操控: any room whose function only ever reads/writes the CALLER's own state is safe
+// to trigger from anywhere — a plain search (draw>0) or gene/canteen/lottery/helipad/control's
+// vote-boost all qualify. 手術室 is excluded because its trigger checks who's physically in
+// playersInRoom(p.room,true) — i.e. the HACKER's own room, not the remote target — so remotely
+// "using" it would silently check the wrong room. 回收站/傳送室/激光室 are movement/trap
+// mechanics, not something you'd remotely "use" at all.
+function hackerRemoteRoomIds(){
+  return Object.keys(ROOMS).filter(id=>{
+    const r=ROOMS[id];
+    if(["slide","teleport","laser","surgery"].includes(r.special)) return false;
+    return r.draw>0 || !!r.special;
+  });
+}
+// 操作室(respec)/控制室(control) open their own follow-up modal (openRespecModal/openControlModal)
+// — the caller must NOT also close/re-render around them, or the just-opened modal gets covered
+// up immediately by the caller's own cleanup.
+const HACKER_OWN_MODAL_SPECIALS=new Set(["control","respec"]);
 function carrySpendStep(p){
   if(p.stepsLeft<1) { flashMsg("步數不足"); return false; }
   p.stepsLeft--; return true;
@@ -3017,7 +3034,7 @@ const SKILL_USE_LIMITS={
   "scavenger:1":{flag:"scavengerUses",max:2},
   "trucker:0":{flag:"truckerUses",max:3},
   "chemist:0":{flag:"chemistUses",max:2},
-  "hacker:1":{flag:"hackerUses",max:2},
+  "hacker:1":{flag:"hackerUses",max:3},
   "tamer:0":{flag:"tamerUses",max:4},
   "geneFreak:1":{flag:"geneUses",max:2},
   "climber:1":{flag:"climberDietUsed",max:1,bool:true},
@@ -3108,22 +3125,25 @@ function useProfSkill(p,idx){
     };
     bindModalClose("chCancel");
   } else if(p.prof==="hacker" && idx===1){
-    if(skillUseCapReached(p,"hacker:1")){ flashMsg("已用完2次"); return; }
-    openModal(`<h3>遠端操控：選擇要使用的房間功能</h3>
-      <button class="btn small" data-r="201">基因庫</button>
-      <button class="btn small" data-r="B101">控制室</button>
-      <button class="btn small" data-r="B304">操作室</button><br><br>
+    if(skillUseCapReached(p,"hacker:1")){ flashMsg("已用完3次"); return; }
+    if(STATE.round===1){ flashMsg("第1輪無法使用遠端操控"); return; }
+    const opts=hackerRemoteRoomIds().filter(r=>!p.flags.hackerUsedRooms.includes(r));
+    if(!opts.length){ flashMsg("已無可遠端使用的房間"); return; }
+    openModal(`<h3>遠端操控：選擇要遠端使用的房間功能</h3>
+      <select id="hackRoomSel">${opts.map(r=>`<option value="${r}">${r} ${ROOMS[r].name||""}</option>`).join("")}</select><br><br>
+      <button class="btn small warn" id="hackOk">發動</button>
       <button class="btn small ghost" id="hackCancel">取消</button>`);
-    document.querySelectorAll("#modal button[data-r]").forEach(btn=>{
-      btn.onclick=()=>{
-        const r=btn.dataset.r;
-        if(p.flags.hackerUsedRooms.includes(r)){ flashMsg("不可重複選擇同一房間"); return; }
-        p.flags.hackerUsedRooms.push(r); p.flags.hackerUses++; p.flags.skillUsedThisRound=true;
-        doSpecialRoom(p,ROOMS[r]);
-        log(p.name+" 使用遠端操控：於本回合遠端使用了「"+r+" "+ROOMS[r].name+"」。"); speakSkill(p,"hacker:1");
-        closeModal(); renderAll();
-      };
-    });
+    document.getElementById("hackOk").onclick=()=>{
+      const r=document.getElementById("hackRoomSel").value;
+      const room=ROOMS[r];
+      p.flags.hackerUsedRooms.push(r); p.flags.hackerUses++; p.flags.skillUsedThisRound=true;
+      log(p.name+" 使用遠端操控：於本回合遠端使用了「"+r+" "+(room.name||"")+"」。"); speakSkill(p,"hacker:1");
+      const opensOwnModal=HACKER_OWN_MODAL_SPECIALS.has(room.special);
+      if(!opensOwnModal) closeModal();
+      if(room.draw>0) resolveHumanDraw(p,r,room.draw);
+      if(room.special) doSpecialRoom(p,room);
+      if(!opensOwnModal) renderAll();
+    };
     bindModalClose("hackCancel");
   } else if(p.prof==="tamer" && idx===0){
     if(skillUseCapReached(p,"tamer:0")){ flashMsg("已用完4次"); return; }
@@ -3744,17 +3764,34 @@ function aiConsiderSkillAfterMove(p){
     return;
   }
   if(p.prof==="hacker"){
-    if(skillUseCapReached(p,"hacker:1")) return;
-    if(!p.flags.hackerUsedRooms.includes("201")){
-      p.flags.hackerUsedRooms.push("201"); p.flags.hackerUses++; p.flags.skillUsedThisRound=true;
-      p.power++; p.speed++; p.carry++;
-      log(p.name+" 使用遠端操控：遠端使用了「201 基因庫」。"); speakSkill(p,"hacker:1");
-    } else if(!p.flags.hackerUsedRooms.includes("B101")){
-      p.flags.hackerUsedRooms.push("B101"); p.flags.hackerUses++; p.flags.skillUsedThisRound=true;
-      p.flags.voteWeight=10;
-      log(p.name+" 使用遠端操控：遠端使用了「B101 控制室」（本輪投票視為10票）。"); speakSkill(p,"hacker:1");
-    }
-    // a third candidate (B304 操作室) exists but is skipped for the same reason as 基因重組 above.
+    if(skillUseCapReached(p,"hacker:1") || STATE.round===1) return;
+    // 操作室(respec) needs a live interactive choice the AI can't make, same reason 基因重組 is
+    // skipped elsewhere — excluded from AI's candidate pool entirely (a human still gets the
+    // full list via useProfSkill's own modal).
+    const opts=hackerRemoteRoomIds().filter(r=>ROOMS[r].special!=="respec" && !p.flags.hackerUsedRooms.includes(r));
+    if(!opts.length) return;
+    const drawRooms=opts.filter(r=>ROOMS[r].draw>0);
+    let pick;
+    if(opts.includes("201")) pick="201"; // 基因庫: permanent stat gain, always worth it first
+    else if(drawRooms.length){
+      // Prefer whichever stocked room currently holds the most items — a rough "is there
+      // actually something worth grabbing" proxy without modeling exact item values.
+      pick=drawRooms.reduce((best,r)=>{
+        const sum=Object.values(ROOMS[r].stock).reduce((a,b)=>a+b,0);
+        const bestSum=Object.values(ROOMS[best].stock).reduce((a,b)=>a+b,0);
+        return sum>bestSum?r:best;
+      },drawRooms[0]);
+    } else if(opts.includes("B101")) pick="B101";
+    else pick=opts[0];
+    p.flags.hackerUsedRooms.push(pick); p.flags.hackerUses++; p.flags.skillUsedThisRound=true;
+    const room=ROOMS[pick];
+    if(room.draw>0) resolveAIDraw(p,pick,room.draw);
+    if(room.special==="gene"){ p.power++; p.speed++; p.carry++; }
+    else if(room.special==="control"){ p.flags.voteWeight=10; }
+    else if(room.special==="canteen"){ p.flags.dietThisRound=true; }
+    else if(room.special==="lottery"){ doLottery(p); }
+    else if(room.special==="helipad"){ collectAirdrop(p); }
+    log(p.name+" 使用遠端操控：遠端使用了「"+pick+" "+(room.name||"")+"」。"); speakSkill(p,"hacker:1");
     return;
   }
   if(p.prof==="mediocre"){
