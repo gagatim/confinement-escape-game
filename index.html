@@ -692,7 +692,7 @@ const PROFESSIONS = {
   ]},
   demolitions:{name:"拆彈教官", skills:[
     {name:"軍火專精", desc:"（被動）火箭筒每輪可瞄準2個不同房間（一般玩家每輪限1次）。", passive:true},
-    {name:"防爆演練", desc:"（被動）你發射的火箭筒，對你發射當下所在的房間無效。", passive:true},
+    {name:"防爆演練", desc:"（被動）若你朝自己當下所在的房間發射火箭筒，自己不會受到這次爆炸傷害（同房間其他人仍正常挨炸）。", passive:true},
     {name:"廢墟搜索", desc:"（被動）在垃圾場執行搜索後，若火箭筒仍在庫存中，有40%機率額外直接獲得1把（不佔用本次抽取次數）。", passive:true}
   ]},
   chef:{name:"廚師", skills:[
@@ -1410,7 +1410,7 @@ function makePlayer(id,isAI,profId,stats,name){
       runnerSprintUses:0, runnerEnduranceReady:false, pickpocketUses:0,
       diverHoldBreathUses:0, diverHoldBreathActive:false, courierUses:0,
       farmerUses:0, caregiverUses:0, minerUses:0,
-      hunterSprintUses:0, hunterUses:0, hunterAmbushActive:false,
+      hunterSprintUses:0, hunterUses:0, hunterAmbushActive:false, mediocreSacrificeUses:0,
       poisonImmune:false, lotteryDodgeActive:false,
       bossHenchmen:[], bossHenchmenPool:[], bossHenchmanOf:null,
       pendingItemUses:[], wineExcludedQueue:[], roomCommitted:false},
@@ -1517,8 +1517,7 @@ function startGame(){
   players.forEach(p=>{
     if(p.prof==="tamer"){ p.power+=1; p.carry+=1; }
     if(p.prof==="tycoon"){
-      addItem(p,"__forced"); p.inv.push("gold"); p.inv.push("gold"); p.inv.push("gold");
-      p.inv=p.inv.filter(x=>x!=="__forced");
+      p.inv.push("gold","gold","gold");
       ROOMS["B206"].stock.gold=Math.max(0,(ROOMS["B206"].stock.gold||0)-2);
       ROOMS["B501"].stock.gold=Math.max(0,(ROOMS["B501"].stock.gold||0)-1);
     }
