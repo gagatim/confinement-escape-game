@@ -762,12 +762,24 @@ const PROFESSIONS = {
   boss:{name:"黑社會老大", skills:[
     {name:"一呼百應", desc:"（被動）遊戲開始時指定3名其他玩家為小弟（A／B／C），三人的武力值各永久+1。", passive:true},
     {name:"你們先上", desc:"（被動）你每次即將扣血時強制發動：隨機抽取尚未使用過的小弟其中一人（每人只會被抽中1次），改由該小弟代替你承受這次傷害，事後該小弟武力永久-1。三名小弟皆用完後，扣血才會恢復由你自己承受。", passive:true}
+  ]},
+  collector:{name:"收藏家", skills:[
+    {name:"貪婪囤積", desc:"（被動）背包內同一種道具持有數量達3張以上時，第3張起不佔負重。", passive:true},
+    {name:"以物易物", desc:"整局限用2次：可查看任意1名玩家的完整背包內容，用你背包中任意2張道具，強制向對方換取其中1張指定道具（不需同房，無視對方意願）。", uses:2}
+  ]},
+  butcher:{name:"屠夫", skills:[
+    {name:"屠宰專精", desc:"（被動）手持刀時，武力額外+2。", passive:true},
+    {name:"以血養血", desc:"（被動）擊殺其他玩家後，恢復2點生命。", passive:true}
+  ]},
+  exorcist:{name:"超度師", skills:[
+    {name:"臨終祝禱", desc:"（被動）你死亡成為暗影時，吸血所需總量降為1點即可復活。", passive:true},
+    {name:"安魂儀式", desc:"整局限用1次：指定1名暗影玩家（可指定自己）立即復活，恢復其生命上限一半的生命值。", uses:1}
   ]}
 };
 // 擴充模式: these professions are hidden from the setup screen (and never randomly given to
 // AI) unless the player opts into 擴充模式 — keeps a first game to the base roster, while letting
 // anyone who wants the larger expansion roster turn it on.
-const EXPANSION_PROFS=new Set(["fatty","trucker","bartender","chemist","hacker","shade","merc","outsider","climber","pilot","chef","diver","courier","gourmet","farmer","caregiver","mediocre"]);
+const EXPANSION_PROFS=new Set(["fatty","trucker","bartender","chemist","hacker","shade","merc","outsider","climber","pilot","chef","diver","courier","gourmet","farmer","caregiver","mediocre","collector"]);
 // One small emoji "portrait" per profession — shown on the selection card and anywhere a player's
 // profession is listed in-game, so each of the 16 is visually distinct at a glance, not just by name.
 const PROF_ICON={
@@ -777,7 +789,7 @@ const PROF_ICON={
   medic:"🩺", pilot:"✈️", demolitions:"🧨", chef:"🍳", smuggler:"🧳", survivor:"🎒",
   shopper:"🛍️", runner:"🏃", herbalist:"🌿", veteran:"🎖️", pickpocket:"🥷",
   diver:"🤿", courier:"📦", gourmet:"🍽️", farmer:"🌾", caregiver:"💕", miner:"⛏️", hunter:"🏹",
-  mediocre:"🤷", boss:"🕴️"
+  mediocre:"🤷", boss:"🕴️", collector:"📿", butcher:"🥩", exorcist:"🕯️"
 };
 // 去圖示模式 (低調模式 companion toggle): when on, every emoji "picture" in the UI is swapped
 // for a plain bracketed-text stand-in instead — unlike 低調模式 (the boss key), this is meant to
@@ -1060,7 +1072,9 @@ const SKILL_QUOTES={
   "hunter:1":"你已經在我的射程內了。",
   "mediocre:1":"東西不重要，命才重要。",
   "mediocre:2":"少一口氣，換一條路。",
-  "boss:1":"你們先上。"
+  "boss:1":"你們先上。",
+  "collector:1":"這個，換給我吧。",
+  "exorcist:1":"回來吧，你的路還沒走完。"
 };
 const VOICE=(()=>{
   const supported="speechSynthesis" in window;
@@ -1164,7 +1178,10 @@ const SELECT_QUOTES={
   miner:"哪裡有礦，我一挖就知道。",
   hunter:"躲得再好，也逃不過我的眼睛。",
   mediocre:"我沒什麼本事，但命是自己的，我會想辦法保住。",
-  boss:"我從不自己動手，這裡的人都聽我的。"
+  boss:"我從不自己動手，這裡的人都聽我的。",
+  collector:"你手上的東西，我都想收一份。",
+  butcher:"刀在我手上，才叫刀。",
+  exorcist:"就算死了，我也能把你請回來。"
 };
 (()=>{
   const voiceBtn=document.getElementById("voiceMuteBtn");
@@ -1411,6 +1428,7 @@ function makePlayer(id,isAI,profId,stats,name){
       diverHoldBreathUses:0, diverHoldBreathActive:false, courierUses:0,
       farmerUses:0, caregiverUses:0, minerUses:0,
       hunterSprintUses:0, hunterUses:0, hunterAmbushActive:false, mediocreSacrificeUses:0,
+      collectorTradeUses:0, exorcistRiteUsed:false,
       poisonImmune:false, lotteryDodgeActive:false,
       bossHenchmen:[], bossHenchmenPool:[], bossHenchmanOf:null,
       pendingItemUses:[], wineExcludedQueue:[], roomCommitted:false},
@@ -1436,6 +1454,9 @@ function effectiveCarryCap(p){
 function usedCarry(p,invOverride){
   const inv=invOverride||p.inv;
   let n=0, minerGold=0;
+  // 收藏家的貪婪囤積: tallied per item type, same shape as 礦工's paired-gold tally below —
+  // the first 2 of a given type cost carry as normal, the 3rd and any beyond that are free.
+  const collectorCounts=p.prof==="collector" ? {} : null;
   for(const it of inv){
     if(it==="trash" && p.weightlessTrash) continue;
     if(it==="gold" && p.weightlessGold) continue;
@@ -1447,6 +1468,10 @@ function usedCarry(p,invOverride){
     if((it==="pill"||it==="adrenaline") && p.weightlessMedical) continue;
     if((it==="water"||it==="food"||it==="waterfood") && p.weightlessRation) continue;
     if(it==="pill" && p.weightlessPill) continue;
+    if(collectorCounts){
+      collectorCounts[it]=(collectorCounts[it]||0)+1;
+      if(collectorCounts[it]>2) continue;
+    }
     n++;
   }
   if(minerGold>0) n+=Math.ceil(minerGold/2);
@@ -1472,6 +1497,9 @@ function combatPower(p){
   let base=p.power;
   for(const it of p.inv){ if(ITEMS[it].weapon) base+=ITEMS[it].power; }
   if(p.prof==="tamer") ; // already added at init to base power
+  // 屠夫的屠宰專精: flat +2 while a (single-bladed) 刀 is in the backpack — 雙刀 is its own
+  // separate item with its own power value, so it doesn't trigger this bonus.
+  if(p.prof==="butcher" && p.inv.includes("knife")) base+=2;
   return base;
 }
 // 黑社會老大的一呼百應: registers exactly 3 other players as A/B/C 小弟, each getting a permanent
@@ -2124,6 +2152,9 @@ function itemCostsCarry(p,item){
   if((item==="pill"||item==="adrenaline") && p.weightlessMedical) return false;
   if((item==="water"||item==="food"||item==="waterfood") && p.weightlessRation) return false;
   if(item==="pill" && p.weightlessPill) return false;
+  // 收藏家的貪婪囤積: same-type items only cost a slot for the 1st and 2nd held — adding a 3rd
+  // (or later) of a type you already hold 2+ of is free.
+  if(p.prof==="collector" && countItem(p,item)>=2) return false;
   return true;
 }
 // Inverse of itemCostsCarry, needed only because 礦工's paired gold weight makes "does adding one
@@ -2133,6 +2164,9 @@ function itemCostsCarry(p,item){
 // slot, freeing nothing. Every other item/profession's cost is flat, so the two always agree.
 function itemRemovalFrees(p,item){
   if(item==="gold" && p.prof==="miner") return countItem(p,"gold")%2===1;
+  // 收藏家的貪婪囤積: removing one of a type only frees a slot if you held 2 or fewer of it —
+  // dropping from a 3rd-or-later (already-free) copy leaves the paid-for 2 untouched.
+  if(p.prof==="collector") return countItem(p,item)<=2;
   return itemCostsCarry(p,item);
 }
 // Quantity-independent "this item type never costs carry for this player" check — true/false
@@ -2992,6 +3026,8 @@ const SKILL_USE_LIMITS={
   "hunter:0":{flag:"hunterSprintUses",max:2},
   "hunter:1":{flag:"hunterUses",max:2},
   "mediocre:1":{flag:"mediocreSacrificeUses",max:3},
+  "collector:1":{flag:"collectorTradeUses",max:2},
+  "exorcist:1":{flag:"exorcistRiteUsed",max:1,bool:true},
 };
 function skillUsedCount(p,key){
   const lim=SKILL_USE_LIMITS[key];
@@ -3179,6 +3215,16 @@ function useProfSkill(p,idx){
   } else if(p.prof==="mediocre" && idx===2){
     if(p.hp<=1){ flashMsg("生命不足，無法發動"); return; }
     openMediocreTradeModal(p);
+  } else if(p.prof==="collector" && idx===1){
+    if(skillUseCapReached(p,"collector:1")){ flashMsg("已用完2次"); return; }
+    if(p.inv.length<2){ flashMsg("背包內道具不足2張，無法發動"); return; }
+    openCollectorTradeModal(p);
+  } else if(p.prof==="exorcist" && idx===1){
+    // Self-targeting while the 超度師 himself is the shade is handled by the standalone button
+    // in the ghost status panel (renderAll) instead — this branch only runs while he's alive,
+    // so it only ever needs to offer OTHER shades.
+    if(skillUseCapReached(p,"exorcist:1")){ flashMsg("已用完"); return; }
+    openExorcistReviveModal(p);
   }
   renderAll();
 }
@@ -3188,7 +3234,7 @@ function useProfSkill(p,idx){
 // nothing. Every OTHER active skill executes immediately on click, which is risky for a
 // limited-use skill (a stray click permanently burns one of only 1-4 charges) — those get a
 // confirm prompt naming the skill and its effect before anything happens.
-const SKILL_OPENS_OWN_MODAL=new Set(["chemist:0","hacker:1","geneFreak:1","shopper:1","pickpocket:0","courier:1","caregiver:1","mediocre:1","mediocre:2"]);
+const SKILL_OPENS_OWN_MODAL=new Set(["chemist:0","hacker:1","geneFreak:1","shopper:1","pickpocket:0","courier:1","caregiver:1","mediocre:1","mediocre:2","collector:1","exorcist:1"]);
 function confirmAndUseSkill(p,idx){
   const s=PROFESSIONS[p.prof].skills[idx];
   openModal(`<h3>發動技能：${s.name}</h3><div style="margin-bottom:12px;font-size:13px;line-height:1.6">${s.desc}</div>
@@ -3329,6 +3375,71 @@ function openMediocreTradeModal(p){
     closeModal(); renderAll();
   };
   bindModalClose("mediocreTradeCancel");
+}
+// 收藏家的以物易物: no consent required (like 神偷's 順手牽羊) and no shared room needed (like
+// 郵差's 專人配送), but unlike either one you get to see the target's FULL inventory and cherry-
+// pick exactly what to take — the steep price (give up 2 of your own items) and the whole-game
+// cap of 2 uses are what keep that information/resource edge in check.
+function openCollectorTradeModal(p){
+  const targets=STATE.players.filter(x=>x.id!==p.id && x.alive && !x.ghost && x.inv.length>0);
+  if(!targets.length){ flashMsg("沒有持有道具的其他玩家可以交換。"); return; }
+  const targetOpts=targets.map(t=>`<option value="${t.id}">${t.name}（${t.room}，${t.inv.length}件道具）</option>`).join("");
+  const myOpts=p.inv.map((it,i)=>`<label style="display:block;margin:2px 0"><input type="checkbox" class="colGive" value="${i}"> ${ITEMS[it].name}</label>`).join("");
+  openModal(`<h3>以物易物：查看對方背包並指定換取</h3>
+    <div>對象：<select id="colTargetSel">${targetOpts}</select></div><br>
+    <div>指定換取的道具：<select id="colWantSel"></select></div><br>
+    <div style="margin-bottom:4px">用你背包中剛好2張道具交換：</div>
+    <div id="colGiveWrap">${myOpts}</div><br>
+    <button class="btn small warn" id="colOk">交換</button> <button class="btn small ghost" id="colCancel">取消</button>`);
+  const updateWantOpts=()=>{
+    const targetId=+document.getElementById("colTargetSel").value;
+    const target=STATE.players.find(x=>x.id===targetId);
+    document.getElementById("colWantSel").innerHTML=target.inv.map((it,i)=>`<option value="${i}">${ITEMS[it].name}</option>`).join("");
+  };
+  document.getElementById("colTargetSel").addEventListener("change",updateWantOpts);
+  updateWantOpts();
+  document.getElementById("colOk").onclick=()=>{
+    const give=[...document.querySelectorAll(".colGive:checked")].map(cb=>+cb.value);
+    if(give.length!==2){ flashMsg("請剛好選擇2張你要交出的道具"); return; }
+    const targetId=+document.getElementById("colTargetSel").value;
+    const target=STATE.players.find(x=>x.id===targetId);
+    const wantIdx=+document.getElementById("colWantSel").value;
+    const wanted=target.inv[wantIdx];
+    if(wanted===undefined){ flashMsg("對方背包已變動，請重新選擇。"); closeModal(); openCollectorTradeModal(p); return; }
+    // splice the 2 given items out highest-index-first so earlier indices don't shift mid-loop
+    const givenItems=give.sort((a,b)=>b-a).map(i=>p.inv.splice(i,1)[0]);
+    target.inv.splice(wantIdx,1);
+    givenItems.forEach(it=>{
+      if(itemCostsCarry(target,it) && carryRoom(target)<=0){
+        ROOMS[target.room].stock[it]=(ROOMS[target.room].stock[it]||0)+1;
+        log(target.name+" 背包已滿，「"+ITEMS[it].name+"」被留在了「"+target.room+"」。");
+      } else { target.inv.push(it); }
+    });
+    p.flags.collectorTradeUses++; p.flags.skillUsedThisRound=true;
+    log(p.name+" 使用以物易物，用「"+givenItems.map(it=>ITEMS[it].name).join("、")+"」向 "+target.name+" 換到了「"+ITEMS[wanted].name+"」。"); speakSkill(p,"collector:1");
+    closeModal();
+    if(itemCostsCarry(p,wanted) && carryRoom(p)<=0){ openDrawSelectionModal(p,[wanted],p.room); return; }
+    p.inv.push(wanted);
+    renderAll();
+  };
+  bindModalClose("colCancel");
+}
+// 超度師的安魂儀式 (targeting someone else, cast while still alive) — the self-targeting case
+// is handled separately by exorcistRevive's other call site, the standalone ghost-panel button
+// in renderAll, since a shade has no skill list to open this modal from in the first place.
+function openExorcistReviveModal(p){
+  const ghosts=STATE.players.filter(x=>x.ghost);
+  if(!ghosts.length){ flashMsg("目前沒有暗影玩家可以超度。"); return; }
+  const opts=ghosts.map(g=>`<option value="${g.id}">${g.name}（${g.room}，已吸血${g.ghostDrainTotal}/${ghostDrainNeeded(g)}）</option>`).join("");
+  openModal(`<h3>安魂儀式：指定1名暗影玩家立即復活</h3><select id="exorSel">${opts}</select><br><br>
+    <button class="btn small warn" id="exorOk">施展</button> <button class="btn small ghost" id="exorCancel">取消</button>`);
+  document.getElementById("exorOk").onclick=()=>{
+    const targetId=+document.getElementById("exorSel").value;
+    const target=STATE.players.find(x=>x.id===targetId);
+    closeModal();
+    exorcistRevive(p,target);
+  };
+  bindModalClose("exorCancel");
 }
 
 /* ===================== VOTE / TRADE ===================== */
@@ -3761,7 +3872,9 @@ function resolveAITurn(p){
   // 護理師的悉心照料 — not gated by skillUsedThisRound (see useCaregiverPill), so it lives here
   // rather than in aiConsiderSkillAfterMove, same reasoning as 工程師's recycle check above.
   // 郵差's 專人配送 is deliberately left unused by AI, same precedent as 賭徒/基因怪人 noted
-  // above — sending a card to an arbitrary distant player has no clear heuristic payoff.
+  // above — sending a card to an arbitrary distant player has no clear heuristic payoff. 收藏家's
+  // 以物易物 is left unused for the same reason: "which exact card is worth 2 of mine" is a
+  // judgment call the AI's heuristics don't model.
   if(p.prof==="caregiver" && countItem(p,"pill")>0){
     const hurtAlly=playersInRoom(p.room,true).find(x=>x.id!==p.id && x.hp<=6);
     if(hurtAlly && Math.random()<0.7){
@@ -3810,7 +3923,10 @@ function screenShake(){
   document.body.classList.add("laser-shake");
   setTimeout(()=>document.body.classList.remove("laser-shake"),450);
 }
-function damagePlayer(p,amount,cause){
+// killerId is optional and only ever passed from resolveCombat's two 1v1 hits — every other
+// damage source (rocket, poison, hunger, ambush, ...) has no single clean "who gets credit"
+// answer, so it's left undefined there and 屠夫's 以血養血 simply never triggers off them.
+function damagePlayer(p,amount,cause,killerId){
   if(amount<=0) return;
   p.roundEvents=p.roundEvents||[];
   // 黑社會老大的你們先上: forced substitution, checked before anything else (including his own
@@ -3826,7 +3942,7 @@ function damagePlayer(p,amount,cause){
       h.power=Math.max(0,h.power-1);
       log(p.name+"（你們先上）強制由小弟"+letter+" "+h.name+" 代為承受傷害，"+h.name+" 武力永久-1（現為"+h.power+"）。");
       speakSkill(p,"boss:1");
-      damagePlayer(h,amount,cause+"〔老大轉嫁〕");
+      damagePlayer(h,amount,cause+"〔老大轉嫁〕",killerId);
       return;
     }
   }
@@ -3837,12 +3953,21 @@ function damagePlayer(p,amount,cause){
   if(!p.alive){ p.roundEvents.push({cause,amount}); return; }
   p.hp-=amount;
   p.roundEvents.push({cause,amount});
-  if(p.hp<=0){ p.hp=0; killPlayer(p,cause); }
+  if(p.hp<=0){ p.hp=0; killPlayer(p,cause,killerId); }
 }
-function killPlayer(p,cause){
+function killPlayer(p,cause,killerId){
   p.alive=false; p.ghost=true; p.ghostDrainTotal=0;
   log(p.name+" 死亡（"+cause+"），於停屍間化為暗影...","dmg");
   SFX.death();
+  // 屠夫的以血養血: only fires off the two direct combat hits in resolveCombat (see killerId's
+  // doc comment on damagePlayer above) — killer must still be alive to benefit.
+  if(killerId!==undefined){
+    const killer=STATE.players.find(x=>x.id===killerId);
+    if(killer && killer.alive && killer.prof==="butcher"){
+      killer.hp=Math.min(killer.maxhp,killer.hp+2);
+      log(killer.name+"（以血養血）擊殺 "+p.name+"，恢復2點生命（HP→"+killer.hp+"）。","heal");
+    }
+  }
   // drop items into mortuary
   const embalmers=STATE.players.filter(x=>x.alive && x.prof==="embalmer");
   p.inv.forEach(it=>{
@@ -3861,6 +3986,22 @@ function killPlayer(p,cause){
   embalmers.forEach(e=>{ e.carry++; log(e.name+"（蠱耗感應）負重永久+1（現為 "+e.carry+"）。"); });
   // shade immunity/heal handled separately in ghost-drain resolution; 暗影親和 speed+2 below
   if(p.prof==="shade"){ p.speed+=2; log(p.name+"（暗影親和）成為暗影，移動速度永久+2（現為 "+p.speed+"）。"); }
+}
+// 超度師的臨終祝禱: only ever lowers the THREATENED player's own revival bar (their prof at the
+// moment they died), not whoever's asking — used both by the drain-settlement check and the
+// live progress bar/skill-list text, so all three stay in sync automatically.
+function ghostDrainNeeded(p){ return p.prof==="exorcist" ? 1 : 2; }
+// 超度師的安魂儀式: shared by both entry points — a still-alive 超度師 targeting someone ELSE
+// (through the normal skill-list button and openExorcistReviveModal) and a 超度師 who is
+// themselves currently a shade self-targeting (through the special button rendered inside their
+// own ghost status panel, since ghosts otherwise have no skill list to click at all).
+function exorcistRevive(exorcist,target){
+  target.ghost=false; target.alive=true;
+  target.hp=Math.min(target.maxhp, Math.ceil(target.maxhp/2));
+  exorcist.flags.exorcistRiteUsed=true;
+  log(exorcist.name+"（超度師）對 "+target.name+" 施展安魂儀式"+(exorcist===target?"（為自己超度）":"")+"，立即復活並恢復至 "+target.hp+" 點生命。","heal");
+  speakSkill(exorcist,"exorcist:1");
+  renderAll();
 }
 
 // A room is poisoned when its floor is a voted-poison floor, EXCEPT: B501 (the tall B4/B5
@@ -4076,9 +4217,9 @@ function settleRound(){
       STATE.__report.drain.push(g.name+"（暗影）@"+drainRoom+"：吸取 "+v.name+" "+drainDmg+"點生命（"+v.name+" HP→"+v.hp+(v.alive?"":" 💀")+"）");
       STATE.players.forEach(sh=>{ if(sh.prof==="shade" && sh.alive && !sh.ghost){ sh.hp=Math.min(sh.maxhp,sh.hp+1); log(sh.name+"（暗影共鳴）恢復1點生命。","heal"); } });
     });
-    if(g.ghostDrainTotal>=2){
+    if(g.ghostDrainTotal>=ghostDrainNeeded(g)){
       g.ghost=false; g.alive=true; g.hp=Math.min(g.maxhp, Math.max(3,g.ghostDrainTotal));
-      log(g.name+" 吸滿2點生命，於「"+g.room+"」復活！(HP "+g.hp+")","heal");
+      log(g.name+" 吸滿"+ghostDrainNeeded(g)+"點生命，於「"+g.room+"」復活！(HP "+g.hp+")","heal");
     }
   });
 
@@ -4167,8 +4308,8 @@ function resolveCombat(a,b,roomId,frozenA){
   };
   const ra=reduce(a,dmgToA,bGun), rb=reduce(b,dmgToB,aGun);
   dmgToA=ra.d; dmgToB=rb.d;
-  if(dmgToA>0){ damagePlayer(a,dmgToA,"與"+b.name+"戰鬥"); log(a.name+" 在「"+roomId+"」戰鬥中受到 "+dmgToA+" 點傷害（對手 "+b.name+"）"+ra.note+"。","dmg"); }
-  if(dmgToB>0){ damagePlayer(b,dmgToB,"與"+a.name+"戰鬥"); log(b.name+" 在「"+roomId+"」戰鬥中受到 "+dmgToB+" 點傷害（對手 "+a.name+"）"+rb.note+"。","dmg"); }
+  if(dmgToA>0){ damagePlayer(a,dmgToA,"與"+b.name+"戰鬥",b.id); log(a.name+" 在「"+roomId+"」戰鬥中受到 "+dmgToA+" 點傷害（對手 "+b.name+"）"+ra.note+"。","dmg"); }
+  if(dmgToB>0){ damagePlayer(b,dmgToB,"與"+a.name+"戰鬥",a.id); log(b.name+" 在「"+roomId+"」戰鬥中受到 "+dmgToB+" 點傷害（對手 "+a.name+"）"+rb.note+"。","dmg"); }
   if(dmgToA===0 && dmgToB===0) log(a.name+" 與 "+b.name+" 在「"+roomId+"」武力相同，未分勝負。");
   STATE.__report.combat.push(a.name+" vs "+b.name+" @"+roomId+"（"+a.name+" -"+dmgToA+" / "+b.name+" -"+dmgToB+"）");
 }
@@ -4371,8 +4512,9 @@ function renderAll(){
     EL.bossHenchmenStatus.classList.add("hidden");
   }
   if(p.ghost){
-    EL.hpBar.style.width=Math.min(100,(p.ghostDrainTotal/2*100))+"%";
-    EL.hpText.textContent="暗影吸血進度 "+p.ghostDrainTotal+"/2（吸滿2點復活）";
+    const needed=ghostDrainNeeded(p);
+    EL.hpBar.style.width=Math.min(100,(p.ghostDrainTotal/needed*100))+"%";
+    EL.hpText.textContent="暗影吸血進度 "+p.ghostDrainTotal+"/"+needed+"（吸滿"+needed+"點復活）";
   } else {
     EL.hpBar.style.width=Math.max(0,(p.hp/p.maxhp*100))+"%";
     EL.hpText.textContent="HP "+p.hp+"/"+p.maxhp;
@@ -4455,7 +4597,17 @@ function renderAll(){
   // skills — 暗影 no longer plays as its old profession; it just wanders and drains blood
   const skEl=EL.skillList; skEl.innerHTML="";
   if(p.ghost){
-    skEl.innerHTML="<div class='muted' style='font-size:12px'>你是暗影：可自由穿牆移動到任意房間，回合結束時若與存活玩家同房，將於結算階段吸取1點生命；目前已吸 "+p.ghostDrainTotal+"/2 點，吸滿即可原地復活。</div>";
+    const needed=ghostDrainNeeded(p);
+    skEl.innerHTML="<div class='muted' style='font-size:12px'>你是暗影：可自由穿牆移動到任意房間，回合結束時若與存活玩家同房，將於結算階段吸取1點生命；目前已吸 "+p.ghostDrainTotal+"/"+needed+" 點，吸滿即可原地復活。</div>";
+    // 超度師的安魂儀式 can target the caster's OWN shade — but a shade otherwise has no skill
+    // list at all (see the branch above), so this is the one exception rendered directly into
+    // the ghost status panel instead of going through the normal PROFESSIONS.skills loop below.
+    if(p.prof==="exorcist" && !skillUseCapReached(p,"exorcist:1")){
+      const selfBtn=document.createElement("button"); selfBtn.className="skillbtn"; selfBtn.style.marginTop="8px";
+      selfBtn.innerHTML="<b>安魂儀式（自行超度）</b>立即復活，恢復生命上限一半的生命值。";
+      selfBtn.onclick=()=>exorcistRevive(p,p);
+      skEl.appendChild(selfBtn);
+    }
   } else {
   PROFESSIONS[p.prof].skills.forEach((s,idx)=>{
     const btn=document.createElement("button"); btn.className="skillbtn";
