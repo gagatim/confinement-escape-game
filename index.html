@@ -4013,8 +4013,24 @@ function killPlayer(p,cause,killerId){
   // leaves the charge armed for a later death, matching "下次道具進入停屍間時" literally.
   if(choiceMode && droppedForChoice.length){
     e.flags.embalmerChoiceMode=false;
-    STATE.pendingEmbalmerChoice={embalmerId:e.id, items:droppedForChoice, fromName:p.name};
-    log(e.name+"（亡者遺贈）"+p.name+" 的遺物已送入停屍間，結算後可自行挑選1張。");
+    if(e.isAI){
+      // An AI embalmer has no human sitting at a picker menu — resolve it immediately with the
+      // same value heuristic other AI item-keeping decisions use (weapon > medical > ration > rest),
+      // instead of queuing STATE.pendingEmbalmerChoice, which would otherwise hand the interactive
+      // picker modal to the HUMAN player to operate on the AI's behalf.
+      const priority=(it)=>(ITEMS[it].weapon?0:(it==="pill"||it==="adrenaline")?1:(it==="water"||it==="food")?2:3);
+      let bestIdx=0;
+      droppedForChoice.forEach((it,i)=>{ if(priority(it)<priority(droppedForChoice[bestIdx])) bestIdx=i; });
+      const chosen=droppedForChoice[bestIdx];
+      if(!itemCostsCarry(e,chosen) || carryRoom(e)>0){
+        ROOMS["B701"].stock[chosen]=Math.max(0,(ROOMS["B701"].stock[chosen]||0)-1);
+        e.inv.push(chosen);
+        log(e.name+"（亡者遺贈）從 "+p.name+" 的遺物中選擇了「"+ITEMS[chosen].name+"」。");
+      }
+    } else {
+      STATE.pendingEmbalmerChoice={embalmerId:e.id, items:droppedForChoice, fromName:p.name};
+      log(e.name+"（亡者遺贈）"+p.name+" 的遺物已送入停屍間，結算後可自行挑選1張。");
+    }
   }
   p.inv=[];
   p.room="B701";
