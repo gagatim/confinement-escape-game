@@ -778,12 +778,16 @@ const PROFESSIONS = {
   guardian:{name:"守護者", skills:[
     {name:"庇護結界", desc:"（被動）自身所有傷害-1；同房間的其他玩家所有傷害也-1。", passive:true},
     {name:"絕對防禦", desc:"整局限用1次：本回合可以不移動，無視任何傷害，且可直接使用房間功能。", uses:1}
+  ]},
+  lucky:{name:"幸運兒", skills:[
+    {name:"吉星高照", desc:"（被動）每次抽取道具前自動擲骰，骰到1或4時，本次額外多抽1張。", passive:true},
+    {name:"逢凶化吉", desc:"主動，每輪可發動：判定1/6機率成功，成功則本回合免疫所有傷害（戰鬥、毒氣、火箭筒等），但飢餓仍需正常繳交水/糧。", uses:99}
   ]}
 };
 // 擴充模式: these professions are hidden from the setup screen (and never randomly given to
 // AI) unless the player opts into 擴充模式 — keeps a first game to the base roster, while letting
 // anyone who wants the larger expansion roster turn it on.
-const EXPANSION_PROFS=new Set(["fatty","trucker","bartender","chemist","hacker","shade","merc","outsider","climber","pilot","chef","diver","courier","gourmet","farmer","caregiver","mediocre","collector","guardian","hunter","pickpocket"]);
+const EXPANSION_PROFS=new Set(["fatty","trucker","bartender","chemist","hacker","shade","merc","outsider","climber","pilot","chef","diver","courier","gourmet","farmer","caregiver","mediocre","collector","guardian","hunter","pickpocket","lucky"]);
 // One small emoji "portrait" per profession — shown on the selection card and anywhere a player's
 // profession is listed in-game, so each of the 16 is visually distinct at a glance, not just by name.
 const PROF_ICON={
@@ -793,7 +797,7 @@ const PROF_ICON={
   medic:"🩺", pilot:"✈️", demolitions:"🧨", chef:"🍳", smuggler:"🧳", survivor:"🎒",
   shopper:"🛍️", runner:"🏃", herbalist:"🌿", veteran:"🎖️", pickpocket:"🥷",
   diver:"🤿", courier:"📦", gourmet:"🍽️", farmer:"🌾", caregiver:"💕", miner:"⛏️", hunter:"🏹",
-  mediocre:"🤷", boss:"🕴️", collector:"📿", butcher:"🥩", exorcist:"🕯️", guardian:"🛡️"
+  mediocre:"🤷", boss:"🕴️", collector:"📿", butcher:"🥩", exorcist:"🕯️", guardian:"🛡️", lucky:"🍀"
 };
 // 去圖示模式 (低調模式 companion toggle): when on, every emoji "picture" in the UI is swapped
 // for a plain bracketed-text stand-in instead — unlike 低調模式 (the boss key), this is meant to
@@ -1079,7 +1083,8 @@ const SKILL_QUOTES={
   "boss:1":"你們先上。",
   "collector:1":"這個，換給我吧。",
   "exorcist:1":"回來吧，你的路還沒走完。",
-  "guardian:1":"這一輪，什麼都傷不了我。"
+  "guardian:1":"這一輪，什麼都傷不了我。",
+  "lucky:1":"倒楣事，今天輪不到我。"
 };
 const VOICE=(()=>{
   const supported="speechSynthesis" in window;
@@ -1187,7 +1192,8 @@ const SELECT_QUOTES={
   collector:"你手上的東西，我都想收一份。",
   butcher:"刀在我手上，才叫刀。",
   exorcist:"就算死了，我也能把你請回來。",
-  guardian:"站在我旁邊，我會扛下這一切。"
+  guardian:"站在我旁邊，我會扛下這一切。",
+  lucky:"我這個人，運氣一向不差。"
 };
 (()=>{
   const voiceBtn=document.getElementById("voiceMuteBtn");
@@ -1435,6 +1441,7 @@ function makePlayer(id,isAI,profId,stats,name){
       farmerUses:0, caregiverUses:0, minerUses:0,
       hunterSprintUses:0, hunterUses:0, hunterAmbushActive:false, mediocreSacrificeUses:0,
       collectorTradeUses:0, exorcistRiteUsed:false, guardianDefenseUsed:false, guardianDefenseActive:false,
+      luckyImmuneActive:false,
       poisonImmune:false, lotteryDodgeActive:false,
       bossHenchmen:[], bossHenchmenPool:[], bossHenchmanOf:null,
       pendingItemUses:[], wineExcludedQueue:[], roomCommitted:false},
@@ -1847,6 +1854,7 @@ function beginRound(){
     p.flags.diverHoldBreathActive=false; // 潛水員的憋氣術: declared fresh each round it's used
     p.flags.hunterAmbushActive=false; // 獵人的埋伏: the must-move waiver only covers the round it's used
     p.flags.guardianDefenseActive=false; // 守護者的絕對防禦: the must-move waiver + damage immunity only covers the round it's used
+    p.flags.luckyImmuneActive=false; // 幸運兒的逢凶化吉: the damage immunity only covers the round it's used
     p.flags.lotteryDodgeActive=false; // 樂透房's "本輪躲避毒氣" outcome: re-armed fresh each round it's rolled
     p.flags.smokeActive=false; // 煙霧彈: exempts this round's combat only, declared fresh each round it's used
     p.flags.oxygenImmuneActive=false; // 氧氣瓶: poison immunity for this round only, declared fresh each round it's used
@@ -2192,6 +2200,17 @@ function isFlatWeightless(p,item){
 }
 // Human draw: reveal everything, auto-keep it all if it fits, otherwise let the player choose
 // which to keep up to remaining carry space (weightless items are always kept for free).
+// 幸運兒的吉星高照: rolled fresh on every single search, human or AI — no per-round/per-game cap,
+// since there's no cost to it and nothing to strategically withhold it for. 1 and 4 out of 6
+// hitting (not just a 1-in-6) keeps the bonus common enough to actually feel like the profession's
+// gimmick rather than a rare fluke.
+function rollLuckyBonus(p){
+  if(p.prof!=="lucky") return 0;
+  const roll=Math.floor(Math.random()*6)+1;
+  const hit=roll===1||roll===4;
+  log(p.name+"（吉星高照）擲骰"+roll+(hit?"：額外多抽1張！":"：本次無加成。"));
+  return hit?1:0;
+}
 function resolveHumanDraw(p,roomId,maxDraw){
   const room=ROOMS[roomId];
   // 購物大媽的精挑細選: see 1 extra item, but must put exactly 1 of the reveal back — actual
@@ -2202,7 +2221,7 @@ function resolveHumanDraw(p,roomId,maxDraw){
   // shopper-only return-1 modal below. One-shot: consumed the instant a search happens.
   const mediocreExtra = (p.prof==="mediocre" && p.flags.mediocreExtraDraw) ? 1 : 0;
   if(mediocreExtra) p.flags.mediocreExtraDraw=false;
-  const keepCap=maxDraw+mediocreExtra;
+  const keepCap=maxDraw+mediocreExtra+rollLuckyBonus(p);
   const drawnItems=drawItemsFromStock(p,roomId,keepCap+extra);
   if(!drawnItems.length){ log("在「"+(room.name||roomId)+"」搜索到: （無收穫）"); return; }
   if(mediocreExtra) log(p.name+"（以命換命）本次搜索多抽了1張。");
@@ -2301,7 +2320,7 @@ function resolveAIDraw(p,roomId,maxDraw){
   // 庸才的以命換命 (抽卡選項): see resolveHumanDraw's matching comment.
   const mediocreExtra = (p.prof==="mediocre" && p.flags.mediocreExtraDraw) ? 1 : 0;
   if(mediocreExtra) p.flags.mediocreExtraDraw=false;
-  const keepCap=maxDraw+mediocreExtra;
+  const keepCap=maxDraw+mediocreExtra+rollLuckyBonus(p);
   let drawnItems=drawItemsFromStock(p,roomId,keepCap+extra);
   if(extra && drawnItems.length>keepCap){
     // 精挑細選: keep the best maxDraw of what was revealed, put the single worst back.
@@ -2948,7 +2967,7 @@ function useMysteryDice(p){
   const roll=Math.floor(Math.random()*6)+1;
   let msg="神秘骰子(擲骰"+roll+"): ";
   if(roll===1){ p.power++; msg+="武力永久+1。"; }
-  else if(roll===2){ const gc=guardianCut(p,2); damagePlayer(p,gc.dmg,"神秘骰子"); msg+="生命-"+gc.dmg+gc.note+"。"; }
+  else if(roll===2){ const gc=damageWard(p,2); damagePlayer(p,gc.dmg,"神秘骰子"); msg+="生命-"+gc.dmg+gc.note+"。"; }
   else if(roll===3){ p.speed++; msg+="速度永久+1。"; }
   else if(roll===4){
     const pool=["water","food","pill","wine","knife"];
@@ -3234,7 +3253,7 @@ function useProfSkill(p,idx){
     // 攀岩者的剛硬意志／守護者的庇護或絕對防禦 can each reduce a target's share of this —
     // computed per-target up front since the room may hold a mix of protected players.
     const ambushHits=ambushTargets.map(t=>{
-      const gc=guardianCut(t, t.prof==="climber"?1:2);
+      const gc=damageWard(t, t.prof==="climber"?1:2);
       return {t, dmg:gc.dmg, tag:t.prof==="climber"?"(剛硬意志-1)":(gc.note?"("+gc.note+")":"")};
     });
     ambushHits.forEach(h=>damagePlayer(h.t,h.dmg,"獵人埋伏"));
@@ -3254,6 +3273,17 @@ function useProfSkill(p,idx){
     if(skillUseCapReached(p,"guardian:1")){ flashMsg("已用完"); return; }
     p.flags.guardianDefenseUsed=true; p.flags.guardianDefenseActive=true; p.flags.skillUsedThisRound=true;
     log(p.name+" 發動絕對防禦：本輪可不移動、無視任何傷害，並能直接使用房間功能。"); speakSkill(p,"guardian:1");
+  } else if(p.prof==="lucky" && idx===1){
+    // No SKILL_USE_LIMITS entry — unlike guardian's once-per-game 絕對防禦, this can be
+    // attempted every round; the 1/6 gate is what keeps it in check instead of a use cap.
+    p.flags.skillUsedThisRound=true;
+    const roll=Math.floor(Math.random()*6)+1;
+    if(roll===1){
+      p.flags.luckyImmuneActive=true;
+      log(p.name+" 發動逢凶化吉(擲骰"+roll+")：本輪免疫所有傷害（飢餓仍正常結算）！"); speakSkill(p,"lucky:1");
+    } else {
+      log(p.name+" 發動逢凶化吉(擲骰"+roll+")：這次沒能觸發。");
+    }
   }
   renderAll();
 }
@@ -3628,6 +3658,9 @@ function aiConsiderSkillAfterMove(p){
   }
   if(p.prof==="tamer"){ if(!skillUseCapReached(p,"tamer:0")) useProfSkill(p,0); return; }
   if(p.prof==="embalmer"){ if(!skillUseCapReached(p,"embalmer:1")) useProfSkill(p,1); return; }
+  // 幸運兒的逢凶化吉: unlike guardian's once-per-game 絕對防禦, this is a free unlimited 1/6
+  // gamble with no downside and nothing to reserve it for — always worth trying every round.
+  if(p.prof==="lucky"){ useProfSkill(p,1); return; }
   if(p.prof==="survivor"){
     // 野戰急救: only worth its one-per-game use when actually hurt and not already carrying a cure.
     if(!skillUseCapReached(p,"survivor:1") && p.hp<=6 && countItem(p,"pill")===0 && carryRoom(p)>0) useProfSkill(p,1);
@@ -3726,7 +3759,7 @@ function aiConsiderSkillAfterMove(p){
         p.flags.hunterAmbushActive=true;
         p.power++;
         const ambushHits=targets.map(t=>{
-          const gc=guardianCut(t, t.prof==="climber"?1:2);
+          const gc=damageWard(t, t.prof==="climber"?1:2);
           return {t, dmg:gc.dmg, tag:t.prof==="climber"?"(剛硬意志-1)":(gc.note?"("+gc.note+")":"")};
         });
         ambushHits.forEach(h=>damagePlayer(h.t,h.dmg,"獵人埋伏"));
@@ -4079,13 +4112,20 @@ function exorcistAutoRevive(p){
   log(p.name+"（安魂儀式）死而復生，立即恢復至 "+p.hp+" 點生命！","heal");
   speakSkill(p,"exorcist:1");
 }
-// 守護者: 絕對防禦（本回合、僅自己）makes him fully immune to whatever dmg is passed in; failing
-// that, his 自身所有傷害-1／同房間人所有傷害-1 aura still knocks 1 off — for himself AND anyone
-// else currently sharing his room. Returns {dmg,note} in the same shape every other profession's
-// inline reduction already uses (fatty/bomb/veteran/climber above), so callers just splice the
-// note into their own accumulating note string exactly the same way.
-function guardianCut(target,dmg){
+// Shared "damage warding" checks — every profession whose defense needs to reach ALL damage
+// sources (not just combat) funnels through here, next to fatty/bomb/veteran/climber's inline
+// checks above: 幸運兒's 逢凶化吉 (a per-round 1/6 gamble, see useProfSkill) and 守護者's
+// 絕對防禦 (guaranteed, once per game) both short-circuit to 0 outright; failing those, 守護者's
+// 自身所有傷害-1／同房間人所有傷害-1 aura still knocks 1 off for himself AND anyone else
+// currently sharing his room. Returns {dmg,note} in the same shape every other profession's
+// inline reduction already uses, so callers just splice the note into their own accumulating
+// note string exactly the same way.
+// opts.hunger excludes 逢凶化吉 specifically — the skill's own wording carves out 飢餓 (仍需要
+// 水糧) as the one damage source it does NOT cover, unlike 絕對防禦 which is unconditional.
+function damageWard(target,dmg,opts){
   if(dmg<=0) return {dmg,note:""};
+  const isHunger = opts&&opts.hunger;
+  if(!isHunger && target.prof==="lucky" && target.flags.luckyImmuneActive) return {dmg:0,note:"〔逢凶化吉〕"};
   if(target.prof==="guardian" && target.flags.guardianDefenseActive) return {dmg:0,note:"〔絕對防禦〕"};
   if(target.prof==="guardian" || playersInRoom(target.room,true).some(x=>x.prof==="guardian")){
     return {dmg:Math.max(0,dmg-1),note:"〔守護者庇護 -1〕"};
@@ -4195,7 +4235,7 @@ function settleRound(){
       if(p.prof==="bomb"){ dmg=Math.max(0,dmg-1); note="〔爆破緩衝 -1〕"; }
       if(p.prof==="mediocre"){ dmg+=1; note+="〔脆弱體質 +1〕"; }
       if(p.prof==="climber" && dmg>0){ dmg=Math.max(0,dmg-1); note+="〔剛硬意志 -1〕"; }
-      { const gc=guardianCut(p,dmg); dmg=gc.dmg; note+=gc.note; }
+      { const gc=damageWard(p,dmg); dmg=gc.dmg; note+=gc.note; }
       damagePlayer(p,dmg,"火箭筒");
       log(p.name+" 被火箭筒轟炸於「"+r+"」，受到 "+dmg+" 點傷害"+note+"。","dmg");
     });
@@ -4210,7 +4250,7 @@ function settleRound(){
     const victims=playersInRoom(trap.room,true).filter(x=>x.id!==trap.ownerId);
     if(victims.length){
       const v=victims[Math.floor(Math.random()*victims.length)];
-      const gc=guardianCut(v,4);
+      const gc=damageWard(v,4);
       damagePlayer(v,gc.dmg,"地雷");
       log(v.name+" 在「"+trap.room+" "+(ROOMS[trap.room].name||"")+"」誤觸地雷，受到 "+gc.dmg+" 點傷害"+gc.note+"。","dmg");
       trap.triggered=true;
@@ -4224,7 +4264,7 @@ function settleRound(){
       // 攀岩者的剛硬意志 can zero this out for them specifically, so each target's own actual
       // damage is computed individually rather than assuming the flat 1 the aggregate log states.
       playersInRoom(p.room,true).filter(x=>x.id!==p.id).forEach(x=>{
-        const gc=guardianCut(x, x.prof==="climber"?0:1);
+        const gc=damageWard(x, x.prof==="climber"?0:1);
         damagePlayer(x,gc.dmg,"貨車司機猛烈衝撞");
         if(x.prof==="climber") log(x.name+"（剛硬意志）抵銷了猛烈衝撞的傷害。");
         else if(gc.note) log(x.name+gc.note+"抵銷了猛烈衝撞的傷害。");
@@ -4250,7 +4290,7 @@ function settleRound(){
       if(p.flags.poisonImmune){ dmg=0; note+="〔樂透：永久免疫毒氣〕"; }
       if(p.prof==="climber" && dmg>0){ dmg=Math.max(0,dmg-1); note+="〔剛硬意志 -1〕"; }
       if(p.room==="202") dmg=0;
-      { const gc=guardianCut(p,dmg); dmg=gc.dmg; note+=gc.note; }
+      { const gc=damageWard(p,dmg); dmg=gc.dmg; note+=gc.note; }
       damagePlayer(p,dmg,"毒氣");
       if(dmg>0) log(p.name+" 在毒氣區受到 "+dmg+" 點傷害"+note+"。","dmg");
       STATE.__report.poisonDamage.push(p.name+"（"+p.room+" "+(ROOMS[p.room].name||"")+"） -"+dmg+note);
@@ -4269,7 +4309,7 @@ function settleRound(){
       if(missing>0){
         let note="";
         if(p.prof==="climber"){ missing=Math.max(0,missing-1); note="〔剛硬意志 -1〕"; }
-        { const gc=guardianCut(p,missing); missing=gc.dmg; note+=gc.note; }
+        { const gc=damageWard(p,missing,{hunger:true}); missing=gc.dmg; note+=gc.note; }
         damagePlayer(p,missing,"飢餓"); log(p.name+" 缺水/糧，受到 "+missing+" 點傷害"+note+"。","dmg"); STATE.__report.hunger.push(p.name+" -"+missing);
         // 農夫的自給自足: a small consolation chance out of hunger, exempt from carry (pushed directly).
         if(p.alive && p.prof==="farmer"){
@@ -4287,7 +4327,7 @@ function settleRound(){
   // 5) laser room
   STATE.players.forEach(p=>{
     if(p.alive && p.pendingLaser){
-      const laserGc=guardianCut(p, p.prof==="climber"?0:1);
+      const laserGc=damageWard(p, p.prof==="climber"?0:1);
       damagePlayer(p, laserGc.dmg, "激光室");
       if(p.prof==="climber") log(p.name+"（剛硬意志）抵銷了激光室的傷害。");
       if(laserGc.note) log(p.name+laserGc.note+"抵銷了激光室的傷害。");
@@ -4307,7 +4347,7 @@ function settleRound(){
       // 攀岩者的剛硬意志／守護者的庇護或絕對防禦: the drain itself still counts toward the
       // ghost's revival total (it's still a successful drain attempt), it just costs the
       // protected victim 0 HP instead of 1.
-      const drainGc=guardianCut(v, v.prof==="climber"?0:1);
+      const drainGc=damageWard(v, v.prof==="climber"?0:1);
       const drainDmg=drainGc.dmg;
       damagePlayer(v,drainDmg,"暗影吸血");
       g.ghostDrainTotal++;
@@ -4402,7 +4442,7 @@ function resolveCombat(a,b,roomId,frozenA){
     if(p.prof==="bomb" && attackerHasGun && d>0){ const before=d; d=Math.max(0,d-3); note+="〔防爆盾牌 -"+(before-d)+"〕"; }
     if(p.prof==="veteran" && p.hp<=3 && d>0){ const before=d; d=Math.max(0,d-4); note+="〔破釜沉舟 -"+(before-d)+"〕"; }
     if(p.prof==="climber" && d>0){ const before=d; d=Math.max(0,d-1); note+="〔剛硬意志 -"+(before-d)+"〕"; }
-    const gc=guardianCut(p,d); d=gc.dmg; note+=gc.note;
+    const gc=damageWard(p,d); d=gc.dmg; note+=gc.note;
     return {d,note};
   };
   const ra=reduce(a,dmgToA,bGun), rb=reduce(b,dmgToB,aGun);
