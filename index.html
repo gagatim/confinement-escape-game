@@ -786,10 +786,6 @@ const PROFESSIONS = {
     {name:"吉星高照", desc:"（被動）每次抽取道具前自動擲骰，骰到1或4時，本次額外多抽1張。", passive:true},
     {name:"逢凶化吉", desc:"主動，每輪可發動：判定1/6機率成功，成功則本回合免疫所有傷害（戰鬥、毒氣、火箭筒等），但飢餓仍需正常繳交水/糧。", uses:99}
   ]},
-  rusher:{name:"搶跑者", skills:[
-    {name:"先發制人", desc:"（被動）每輪順序牌洗牌後，可查看順序並選擇與1名玩家互換位置（同一人整局限用1次）。", passive:true},
-    {name:"搶佔先機", desc:"整局限用2次：發動後，本輪確定由你第一個行動。", uses:2}
-  ]},
   hermit:{name:"隱士", skills:[
     {name:"離群索居", desc:"（被動）房間內只有你1人（無其他玩家、無暗影）時，戰鬥／中毒／飢餓傷害各-1。", passive:true},
     {name:"遁世", desc:"整局限用2次：發動後本回合視為不存在於任何房間（不會被系統監控等位置類技能偵測到），但也無法使用房間功能。", uses:2}
@@ -806,7 +802,7 @@ const PROFESSIONS = {
 // 擴充模式: these professions are hidden from the setup screen (and never randomly given to
 // AI) unless the player opts into 擴充模式 — keeps a first game to the base roster, while letting
 // anyone who wants the larger expansion roster turn it on.
-const EXPANSION_PROFS=new Set(["fatty","trucker","bartender","chemist","hacker","shade","merc","outsider","climber","pilot","chef","diver","courier","gourmet","farmer","caregiver","mediocre","collector","guardian","hunter","pickpocket","lucky","rusher","hermit","prepper","witch"]);
+const EXPANSION_PROFS=new Set(["fatty","trucker","bartender","chemist","hacker","shade","merc","outsider","climber","pilot","chef","diver","courier","gourmet","farmer","caregiver","mediocre","collector","guardian","hunter","pickpocket","lucky","hermit","prepper","witch"]);
 // One small emoji "portrait" per profession — shown on the selection card and anywhere a player's
 // profession is listed in-game, so each of the 16 is visually distinct at a glance, not just by name.
 const PROF_ICON={
@@ -817,7 +813,7 @@ const PROF_ICON={
   shopper:"🛍️", runner:"🏃", herbalist:"🌿", veteran:"🎖️", pickpocket:"🥷",
   diver:"🤿", courier:"📦", gourmet:"🍽️", farmer:"🌾", caregiver:"💕", miner:"⛏️", hunter:"🏹",
   mediocre:"🤷", boss:"🕴️", collector:"📿", butcher:"🥩", exorcist:"🕯️", guardian:"🛡️", lucky:"🍀",
-  rusher:"⏰", hermit:"🏚️", prepper:"🥫", witch:"🧙"
+  hermit:"🏚️", prepper:"🥫", witch:"🧙"
 };
 // 去圖示模式 (低調模式 companion toggle): when on, every emoji "picture" in the UI is swapped
 // for a plain bracketed-text stand-in instead — unlike 低調模式 (the boss key), this is meant to
@@ -1461,7 +1457,7 @@ function makePlayer(id,isAI,profId,stats,name){
       farmerUses:0, caregiverUses:0, minerUses:0,
       hunterSprintUses:0, hunterUses:0, hunterAmbushActive:false, mediocreSacrificeUses:0,
       collectorTradeUses:0, exorcistRiteUsed:false, guardianDefenseUsed:false, guardianDefenseActive:false,
-      luckyImmuneActive:false, rushSwappedWith:[], rushEarlyUses:0,
+      luckyImmuneActive:false,
       hermitCloakUses:0, hermitCloakActive:false, prepperCopyUses:0, witchSprinkleUsed:false,
       poisonImmune:false, lotteryDodgeActive:false,
       bossHenchmen:[], bossHenchmenPool:[], bossHenchmanOf:null,
@@ -3098,7 +3094,6 @@ const SKILL_USE_LIMITS={
   "mediocre:1":{flag:"mediocreSacrificeUses",max:3},
   "collector:1":{flag:"collectorTradeUses",max:2},
   "guardian:1":{flag:"guardianDefenseUsed",max:1,bool:true},
-  "rusher:1":{flag:"rushEarlyUses",max:2},
   "hermit:1":{flag:"hermitCloakUses",max:2},
   "prepper:1":{flag:"prepperCopyUses",max:2},
   "witch:0":{flag:"witchSprinkleUsed",max:1,bool:true},
@@ -4162,6 +4157,7 @@ function killPlayer(p,cause,killerId){
     }
   }
   p.inv=[];
+  p.deathRoom=p.room; // where they actually died, before the mortuary relocation below overwrites p.room
   p.room="B701";
   embalmers.forEach(e=>{ e.carry++; log(e.name+"（蠱耗感應）負重永久+1（現為 "+e.carry+"）。"); });
   // shade immunity/heal handled separately in ghost-drain resolution; 暗影親和 speed+2 below
@@ -4559,13 +4555,14 @@ function showRoundSummary(){
   STATE.players.forEach(p=>{
     const companions=playersInRoom(p.room,false).filter(x=>x.id!==p.id).map(x=>x.name+(x.ghost?"[暗影]":"")).join("、")||"（無）";
     const events=(p.roundEvents||[]).map(e=>e.cause+" -"+e.amount).join("、")||"無扣血";
-    // 死亡一律被搬到 B701 停屍間，跟死因/實際挨打地點無關 (見 killPlayer) — 路徑欄位在這種
-    // 情況下容易被誤讀成「這輪的傷害發生在701」，所以額外註明這只是死後的停屍位置，實際傷害
-    // 房間請對照上方即時紀錄裡「被...轟炸/扣血於「房間」」那一行。
+    // 死亡一律被搬到 B701 停屍間，跟死因/實際挨打地點無關 (見 killPlayer) — 路徑欄位改用
+    // p.deathRoom（killPlayer 覆寫 p.room 前存下的實際死亡地點），單純顯示這輪真正的移動路徑，
+    // 不把死後被搬去停屍間這一步當成移動。
     const diedThisRound = p.ghost && p.room==="B701" && p.roundStartRoom!=="B701";
-    const path = p.roundStartRoom && p.roundStartRoom!==p.room
-      ? "「"+p.roundStartRoom+"」→「"+p.room+" "+(ROOMS[p.room].name||"")+"」"+(diedThisRound?"<span class='muted'>（死亡後移至停屍間，非傷害實際發生地點）</span>":"")
-      : "「"+p.room+" "+(ROOMS[p.room].name||"")+"」（未移動）";
+    const displayRoom = diedThisRound ? (p.deathRoom||p.room) : p.room;
+    const path = p.roundStartRoom && p.roundStartRoom!==displayRoom
+      ? "「"+p.roundStartRoom+"」→「"+displayRoom+" "+(ROOMS[displayRoom].name||"")+"」"
+      : "「"+displayRoom+" "+(ROOMS[displayRoom].name||"")+"」（未移動）";
     html+="<div style='margin-bottom:6px;padding-bottom:6px;border-bottom:1px dashed var(--line)'>"+
       "<b>"+p.name+"</b>（"+profIcon(p.prof)+" "+PROFESSIONS[p.prof].name+"） HP "+p.hp+(p.ghost?" [暗影]":p.alive?"":" 💀")+"<br>"+
       "路徑："+path+"　同房："+companions+"<br>"+
@@ -4899,12 +4896,6 @@ function renderAll(){
     else if(p.flags.skillUsedThisRound){ btn.disabled=true; btn.title="本輪已使用過職業技能，下輪才能再使用"; }
     else if(p.prof==="gambler" && idx===0 && p.flags.roomActsUsedThisRound>0){
       btn.disabled=true; btn.title="已使用過房間功能，好賭成性必須在使用房間功能前發動";
-    }
-    else if(p.prof==="rusher" && idx===1){
-      // 搶佔先機 only means anything BEFORE this round's turn order starts resolving — by the
-      // time any skill button is clickable it's already this player's own turn, so moving
-      // "to the front" would be a no-op. Only reachable via the round-start modal (beginRound).
-      btn.disabled=true; btn.title="只能在每輪開始時的順序牌視窗中發動";
     }
     else if(SKILL_OPENS_OWN_MODAL.has(p.prof+":"+idx)){ btn.onclick=()=>useProfSkill(p,idx); }
     else { btn.onclick=()=>confirmAndUseSkill(p,idx); }
