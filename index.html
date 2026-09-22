@@ -796,8 +796,8 @@ const PROFESSIONS = {
     {name:"儲備糧倉", desc:"整局限用2次：可將背包內1份水或糧食憑空複製成2份。", uses:2}
   ]},
   witch:{name:"女巫", skills:[
-    {name:"毒藥", desc:"整局限用1次：讓本輪第二高票的樓層也淪為毒氣區域。第1輪與第6輪無法使用。", uses:1},
-    {name:"毒氣投票", desc:"（被動）你的毒氣樓層投票永久視為2票；你受到的毒氣傷害永久-2。", passive:true}
+    {name:"灑毒", desc:"整局限用1次：指定1層樓，直接使其本輪淪為毒氣區域。第1輪與第6輪無法使用。", uses:1},
+    {name:"毒氣防護", desc:"（被動）你受到的毒氣傷害：第1~3輪-2，第4~6輪-1。", passive:true}
   ]}
 };
 // 擴充模式: these professions are hidden from the setup screen (and never randomly given to
@@ -1459,7 +1459,7 @@ function makePlayer(id,isAI,profId,stats,name){
       hunterSprintUses:0, hunterUses:0, hunterAmbushActive:false, mediocreSacrificeUses:0,
       collectorTradeUses:0, exorcistRiteUsed:false, guardianDefenseUsed:false, guardianDefenseActive:false,
       luckyImmuneActive:false, rushSwappedWith:[], rushEarlyUses:0,
-      hermitCloakUses:0, hermitCloakActive:false, prepperCopyUses:0, witchPoisonUsed:false,
+      hermitCloakUses:0, hermitCloakActive:false, prepperCopyUses:0, witchSprinkleUsed:false,
       poisonImmune:false, lotteryDodgeActive:false,
       bossHenchmen:[], bossHenchmenPool:[], bossHenchmanOf:null,
       pendingItemUses:[], wineExcludedQueue:[], roomCommitted:false},
@@ -3098,7 +3098,7 @@ const SKILL_USE_LIMITS={
   "rusher:1":{flag:"rushEarlyUses",max:2},
   "hermit:1":{flag:"hermitCloakUses",max:2},
   "prepper:1":{flag:"prepperCopyUses",max:2},
-  "witch:0":{flag:"witchPoisonUsed",max:1,bool:true},
+  "witch:0":{flag:"witchSprinkleUsed",max:1,bool:true},
 };
 function skillUsedCount(p,key){
   const lim=SKILL_USE_LIMITS[key];
@@ -3322,10 +3322,8 @@ function useProfSkill(p,idx){
     openPrepperCopyModal(p);
   } else if(p.prof==="witch" && idx===0){
     if(skillUseCapReached(p,"witch:0")){ flashMsg("已用完"); return; }
-    if(STATE.round===1 || STATE.round>=6){ flashMsg("第1輪與第6輪無法使用毒藥"); return; }
-    p.flags.witchPoisonUsed=true; p.flags.skillUsedThisRound=true;
-    STATE.witchPoisonActive=true;
-    log(p.name+" 使用毒藥：本輪結算後，第二高票樓層也將淪為毒氣區域。"); speakSkill(p,"witch:0");
+    if(STATE.round===1 || STATE.round>=6){ flashMsg("第1輪與第6輪無法使用灑毒"); return; }
+    openWitchSprinkleModal(p);
   }
   renderAll();
 }
@@ -3335,7 +3333,7 @@ function useProfSkill(p,idx){
 // nothing. Every OTHER active skill executes immediately on click, which is risky for a
 // limited-use skill (a stray click permanently burns one of only 1-4 charges) — those get a
 // confirm prompt naming the skill and its effect before anything happens.
-const SKILL_OPENS_OWN_MODAL=new Set(["chemist:0","hacker:1","geneFreak:1","shopper:1","pickpocket:0","courier:1","caregiver:1","mediocre:1","mediocre:2","collector:1","prepper:1"]);
+const SKILL_OPENS_OWN_MODAL=new Set(["chemist:0","hacker:1","geneFreak:1","shopper:1","pickpocket:0","courier:1","caregiver:1","mediocre:1","mediocre:2","collector:1","prepper:1","witch:0"]);
 function confirmAndUseSkill(p,idx){
   const s=PROFESSIONS[p.prof].skills[idx];
   openModal(`<h3>發動技能：${s.name}</h3><div style="margin-bottom:12px;font-size:13px;line-height:1.6">${s.desc}</div>
@@ -3542,6 +3540,23 @@ function openPrepperCopyModal(p){
   };
   bindModalClose("prepperCancel");
 }
+// 女巫的灑毒: directly poisons a chosen floor, independent of the vote outcome — only
+// non-poisoned floors are offered since re-poisoning an already-toxic floor is a no-op.
+function openWitchSprinkleModal(p){
+  const floorOpts=Object.keys(FLOOR_LABEL).map(Number).filter(f=>!STATE.poisoned.has(f));
+  if(!floorOpts.length){ flashMsg("目前所有樓層皆已中毒"); return; }
+  const optsHtml=floorOpts.map(f=>`<option value="${f}">${FLOOR_LABEL[f]}</option>`).join("");
+  openModal(`<h3>灑毒：選擇要毒化的樓層</h3><select id="witchFloor">${optsHtml}</select><br><br>
+    <button class="btn small warn" id="witchOk">灑毒</button> <button class="btn small ghost" id="witchCancel">取消</button>`);
+  document.getElementById("witchOk").onclick=()=>{
+    const f=+document.getElementById("witchFloor").value;
+    STATE.poisoned.add(f);
+    p.flags.witchSprinkleUsed=true; p.flags.skillUsedThisRound=true;
+    log(p.name+" 使用灑毒：「"+FLOOR_LABEL[f]+"」樓層直接淪為毒氣區域。"); speakSkill(p,"witch:0");
+    closeModal(); renderAll();
+  };
+  bindModalClose("witchCancel");
+}
 
 /* ===================== VOTE / TRADE ===================== */
 document.getElementById("voteBtn").addEventListener("click",()=>{
@@ -3556,10 +3571,7 @@ document.getElementById("voteBtn").addEventListener("click",()=>{
     <button class="btn small warn" id="voteOk">投票</button> <button class="btn small ghost" id="voteCancel">取消</button>`);
   document.getElementById("voteOk").onclick=()=>{
     const f=+document.getElementById("voteSel").value;
-    // 女巫的毒氣投票: a permanent floor of 2, not a one-round boost like 控制室's — takes
-    // whichever is higher so a witch who ALSO landed a control-room boost this round still
-    // gets that bigger number instead of being capped back down to her own baseline.
-    const weight=Math.max(p.flags.voteWeight||1, p.prof==="witch"?2:1);
+    const weight=p.flags.voteWeight||1;
     STATE.voteCounts[f]=(STATE.voteCounts[f]||0)+weight;
     STATE.voteLog.push({name:p.name, floor:f, weight});
     p.flags.voteWeight=1;
@@ -4040,8 +4052,7 @@ function resolveAITurn(p){
   if(!floorOpts.length) floorOpts=ballot;
   if(floorOpts.length){
     const voteFloor=floorOpts[Math.floor(Math.random()*floorOpts.length)];
-    // 女巫的毒氣投票: same permanent-floor-of-2 rule as the human path above.
-    const voteWeight=Math.max(p.flags.voteWeight||1, p.prof==="witch"?2:1);
+    const voteWeight=p.flags.voteWeight||1;
     STATE.voteCounts[voteFloor]=(STATE.voteCounts[voteFloor]||0)+voteWeight;
     STATE.voteLog.push({name:p.name, floor:voteFloor, weight:voteWeight});
     p.flags.voteWeight=1;
@@ -4354,7 +4365,7 @@ function settleRound(){
       let dmg=baseDmg, note="";
       if(ROOMS[p.room].floor===STATE.poisonReduceFloor){ dmg=Math.max(0,dmg-2); note+="〔毒性調和 -2〕"; }
       if(p.prof==="chemist" && dmg>0){ dmg=Math.max(0,dmg-1); note+="〔抗毒 -1〕"; }
-      if(p.prof==="witch" && dmg>0){ const before=dmg; dmg=Math.max(0,dmg-2); note+="〔毒氣投票 -"+(before-dmg)+"〕"; }
+      if(p.prof==="witch" && dmg>0){ const before=dmg; const cut=STATE.round<=3?2:1; dmg=Math.max(0,dmg-cut); note+="〔毒氣防護 -"+(before-dmg)+"〕"; }
       if(p.prof==="diver" && p.flags.diverHoldBreathActive){ dmg=0; note+="〔憋氣術〕"; }
       if(p.inv.includes("gasmask")){ dmg=0; note+="〔防毒面具〕"; }
       if(p.flags.oxygenImmuneActive){ dmg=0; note+="〔氧氣瓶〕"; }
