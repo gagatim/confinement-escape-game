@@ -546,8 +546,8 @@ const MEETING_ROOM = "B204"; // 會議室 hub: treated as the assembly room play
 const HELI_TARGETS = ["B101","101","B103","201","B105"];
 const SPAWN_ROOMS = ["103","B103","B303","B307","B402","B603"]; // 紅色出生點 marked on img1.jpg
 // AI 火箭筒瞄準時，即使目標房間本身是「功能房間」(見 resolveAITurn 的挑選邏輯) 也一律不打：
-// 102 激光室、B102/B602 配給站、B104/B405/B302 樂透房、B206 金庫、B403 傳送室。
-const ROCKET_AI_AVOID_ROOMS = new Set(["102","B102","B602","B104","B405","B302","B206","B403"]);
+// 102 激光室、B102/B602 配給站、B104/B405/B302 樂透房、B206 金庫、B403 傳送室、B105 回收站。
+const ROCKET_AI_AVOID_ROOMS = new Set(["102","B102","B602","B104","B405","B302","B206","B403","B105"]);
 const AIRDROP_SCHEDULE = [null,["knifeX2"],["wine","wine"],["waterfood"],["pistol"],["adrenaline"],["pill"]];
 
 function bfsPath(from,to,maxSteps){
