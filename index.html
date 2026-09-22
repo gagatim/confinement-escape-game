@@ -527,7 +527,7 @@ const ADJ = {
   "201":["102"], "202":["104"],
   "101":["B102"], "102":["201","B104"], "103":["104","B106"], "104":["103","202"],
   "B101":["B102"], "B102":["B101","B103","101","B201"], "B103":["B102","B104"],
-  "B104":["B103","B105"], "B105":["B104","B106","B205"], "B106":["B105","B107","103","B206"],
+  "B104":["B103","B105","102"], "B105":["B104","B106","B205"], "B106":["B105","B107","103","B206"],
   "B107":["B106"],
   "B201":["B202","B102"], "B202":["B201","B203"], "B203":["B202","B204"],
   "B204":["B203","B205","B305"], "B205":["B204","B105","B503"], "B206":["B106","B308"],
@@ -782,12 +782,28 @@ const PROFESSIONS = {
   lucky:{name:"幸運兒", skills:[
     {name:"吉星高照", desc:"（被動）每次抽取道具前自動擲骰，骰到1或4時，本次額外多抽1張。", passive:true},
     {name:"逢凶化吉", desc:"主動，每輪可發動：判定1/6機率成功，成功則本回合免疫所有傷害（戰鬥、毒氣、火箭筒等），但飢餓仍需正常繳交水/糧。", uses:99}
+  ]},
+  rusher:{name:"搶跑者", skills:[
+    {name:"先發制人", desc:"（被動）每輪順序牌洗牌後，可查看順序並選擇與1名玩家互換位置（同一人整局限用1次）。", passive:true},
+    {name:"搶佔先機", desc:"整局限用2次：發動後，本輪確定由你第一個行動。", uses:2}
+  ]},
+  hermit:{name:"隱士", skills:[
+    {name:"離群索居", desc:"（被動）房間內只有你1人（無其他玩家、無暗影）時，戰鬥／中毒／飢餓傷害各-1。", passive:true},
+    {name:"遁世", desc:"整局限用2次：發動後本回合視為不存在於任何房間（不會被系統監控等位置類技能偵測到），但也無法使用房間功能。", uses:2}
+  ]},
+  prepper:{name:"生存狂", skills:[
+    {name:"未雨綢繆", desc:"（被動）遊戲開始時背包多帶2份水、2份糧食（皆不佔負重）。", passive:true},
+    {name:"儲備糧倉", desc:"整局限用2次：可將背包內1份水或糧食憑空複製成2份。", uses:2}
+  ]},
+  witch:{name:"女巫", skills:[
+    {name:"毒藥", desc:"整局限用1次：讓本輪第二高票的樓層也淪為毒氣區域。第1輪與第6輪無法使用。", uses:1},
+    {name:"毒氣投票", desc:"（被動）你的毒氣樓層投票永久視為2票；你受到的毒氣傷害永久-2。", passive:true}
   ]}
 };
 // 擴充模式: these professions are hidden from the setup screen (and never randomly given to
 // AI) unless the player opts into 擴充模式 — keeps a first game to the base roster, while letting
 // anyone who wants the larger expansion roster turn it on.
-const EXPANSION_PROFS=new Set(["fatty","trucker","bartender","chemist","hacker","shade","merc","outsider","climber","pilot","chef","diver","courier","gourmet","farmer","caregiver","mediocre","collector","guardian","hunter","pickpocket","lucky"]);
+const EXPANSION_PROFS=new Set(["fatty","trucker","bartender","chemist","hacker","shade","merc","outsider","climber","pilot","chef","diver","courier","gourmet","farmer","caregiver","mediocre","collector","guardian","hunter","pickpocket","lucky","rusher","hermit","prepper","witch"]);
 // One small emoji "portrait" per profession — shown on the selection card and anywhere a player's
 // profession is listed in-game, so each of the 16 is visually distinct at a glance, not just by name.
 const PROF_ICON={
@@ -797,7 +813,8 @@ const PROF_ICON={
   medic:"🩺", pilot:"✈️", demolitions:"🧨", chef:"🍳", smuggler:"🧳", survivor:"🎒",
   shopper:"🛍️", runner:"🏃", herbalist:"🌿", veteran:"🎖️", pickpocket:"🥷",
   diver:"🤿", courier:"📦", gourmet:"🍽️", farmer:"🌾", caregiver:"💕", miner:"⛏️", hunter:"🏹",
-  mediocre:"🤷", boss:"🕴️", collector:"📿", butcher:"🥩", exorcist:"🕯️", guardian:"🛡️", lucky:"🍀"
+  mediocre:"🤷", boss:"🕴️", collector:"📿", butcher:"🥩", exorcist:"🕯️", guardian:"🛡️", lucky:"🍀",
+  rusher:"⏰", hermit:"🏚️", prepper:"🥫", witch:"🧙"
 };
 // 去圖示模式 (低調模式 companion toggle): when on, every emoji "picture" in the UI is swapped
 // for a plain bracketed-text stand-in instead — unlike 低調模式 (the boss key), this is meant to
@@ -1441,7 +1458,8 @@ function makePlayer(id,isAI,profId,stats,name){
       farmerUses:0, caregiverUses:0, minerUses:0,
       hunterSprintUses:0, hunterUses:0, hunterAmbushActive:false, mediocreSacrificeUses:0,
       collectorTradeUses:0, exorcistRiteUsed:false, guardianDefenseUsed:false, guardianDefenseActive:false,
-      luckyImmuneActive:false,
+      luckyImmuneActive:false, rushSwappedWith:[], rushEarlyUses:0,
+      hermitCloakUses:0, hermitCloakActive:false, prepperCopyUses:0, witchPoisonUsed:false,
       poisonImmune:false, lotteryDodgeActive:false,
       bossHenchmen:[], bossHenchmenPool:[], bossHenchmanOf:null,
       pendingItemUses:[], wineExcludedQueue:[], roomCommitted:false},
@@ -1451,7 +1469,7 @@ function makePlayer(id,isAI,profId,stats,name){
     weightlessTrash: profId==="scavenger",
     weightlessWine: profId==="bartender",
     weightlessMedical: profId==="medic", // 醫官的隨身醫療包: 藥片/腎上腺素不佔負重
-    weightlessRation: profId==="chef" || profId==="gourmet", // 廚師的儲糧有道／老饕的多多益善: 水/糧不佔負重
+    weightlessRation: profId==="chef" || profId==="gourmet" || profId==="prepper", // 廚師的儲糧有道／老饕的多多益善／生存狂的未雨綢繆: 水/糧不佔負重
     weightlessPill: profId==="herbalist" // 草藥師的藥草袋: 藥片不佔負重
   };
   return p;
@@ -1566,6 +1584,8 @@ function startGame(){
       p.inv.push("wine"); p.inv.push("wine");
       ROOMS["B601"].stock.wine=Math.max(0,(ROOMS["B601"].stock.wine||0)-2);
     }
+    // 生存狂的未雨綢繆: brought from outside, not looted from any room — no room stock to deduct.
+    if(p.prof==="prepper"){ p.inv.push("water","water","food","food"); }
     // AI 黑社會老大 has no UI to pick from, so it picks its 3 小弟 at random right away — the
     // human boss instead picks manually via #bossSelect below, after this loop.
     if(p.prof==="boss" && p.isAI){
@@ -1855,6 +1875,7 @@ function beginRound(){
     p.flags.hunterAmbushActive=false; // 獵人的埋伏: the must-move waiver only covers the round it's used
     p.flags.guardianDefenseActive=false; // 守護者的絕對防禦: the must-move waiver + damage immunity only covers the round it's used
     p.flags.luckyImmuneActive=false; // 幸運兒的逢凶化吉: the damage immunity only covers the round it's used
+    p.flags.hermitCloakActive=false; // 隱士的遁世: the invisibility + room-function lockout only covers the round it's used
     p.flags.lotteryDodgeActive=false; // 樂透房's "本輪躲避毒氣" outcome: re-armed fresh each round it's rolled
     p.flags.smokeActive=false; // 煙霧彈: exempts this round's combat only, declared fresh each round it's used
     p.flags.oxygenImmuneActive=false; // 氧氣瓶: poison immunity for this round only, declared fresh each round it's used
@@ -2382,6 +2403,7 @@ function doRoomAction(){
   const totalOps=1+(p.flags.gamblerBonusOps||0);
   const used=p.flags.roomActsUsedThisRound||0;
   if(used>=totalOps){ flashMsg("本輪已使用過房間功能。"); return; }
+  if(p.flags.hermitCloakActive){ flashMsg("遁世中：本回合視為不存在於任何房間，無法使用房間功能。"); return; }
   if(room.draw>0) resolveHumanDraw(p,p.room,room.draw);
   if(room.special) doSpecialRoom(p,room);
   p.flags.roomActsUsedThisRound=used+1;
@@ -2672,7 +2694,9 @@ function openHackerMonitorModal(p){
     <button class="btn small" id="hackViewOk">查看</button> <button class="btn small ghost" id="hackViewCancel">取消</button>`);
   document.getElementById("hackViewOk").onclick=()=>{
     const rid=document.getElementById("hackViewSel").value;
-    const occupants=playersInRoom(rid,true);
+    // 隱士的遁世: cloaked while active, invisible to exactly this kind of position query —
+    // filtered out of both the headcount and the list, not just hidden from the name list.
+    const occupants=playersInRoom(rid,true).filter(o=>!o.flags.hermitCloakActive);
     const lines=occupants.length? occupants.map(o=>o.name+"（武力 "+o.power+"）").join("<br>") : "（無人）";
     openModal(`<h3>系統監控：「${rid} ${ROOMS[rid].name||""}」</h3>
       <div>目前人數：${occupants.length}</div>
@@ -3071,6 +3095,10 @@ const SKILL_USE_LIMITS={
   "mediocre:1":{flag:"mediocreSacrificeUses",max:3},
   "collector:1":{flag:"collectorTradeUses",max:2},
   "guardian:1":{flag:"guardianDefenseUsed",max:1,bool:true},
+  "rusher:1":{flag:"rushEarlyUses",max:2},
+  "hermit:1":{flag:"hermitCloakUses",max:2},
+  "prepper:1":{flag:"prepperCopyUses",max:2},
+  "witch:0":{flag:"witchPoisonUsed",max:1,bool:true},
 };
 function skillUsedCount(p,key){
   const lim=SKILL_USE_LIMITS[key];
@@ -3284,6 +3312,20 @@ function useProfSkill(p,idx){
     } else {
       log(p.name+" 發動逢凶化吉(擲骰"+roll+")：這次沒能觸發。");
     }
+  } else if(p.prof==="hermit" && idx===1){
+    if(skillUseCapReached(p,"hermit:1")){ flashMsg("已用完2次"); return; }
+    p.flags.hermitCloakUses++; p.flags.hermitCloakActive=true; p.flags.skillUsedThisRound=true;
+    log(p.name+" 發動遁世：本回合不會被系統監控等位置類技能偵測到，但也無法使用房間功能。"); speakSkill(p,"hermit:1");
+  } else if(p.prof==="prepper" && idx===1){
+    if(skillUseCapReached(p,"prepper:1")){ flashMsg("已用完2次"); return; }
+    if(countItem(p,"water")<1 && countItem(p,"food")<1){ flashMsg("背包內沒有水或糧食可複製"); return; }
+    openPrepperCopyModal(p);
+  } else if(p.prof==="witch" && idx===0){
+    if(skillUseCapReached(p,"witch:0")){ flashMsg("已用完"); return; }
+    if(STATE.round===1 || STATE.round>=6){ flashMsg("第1輪與第6輪無法使用毒藥"); return; }
+    p.flags.witchPoisonUsed=true; p.flags.skillUsedThisRound=true;
+    STATE.witchPoisonActive=true;
+    log(p.name+" 使用毒藥：本輪結算後，第二高票樓層也將淪為毒氣區域。"); speakSkill(p,"witch:0");
   }
   renderAll();
 }
@@ -3293,7 +3335,7 @@ function useProfSkill(p,idx){
 // nothing. Every OTHER active skill executes immediately on click, which is risky for a
 // limited-use skill (a stray click permanently burns one of only 1-4 charges) — those get a
 // confirm prompt naming the skill and its effect before anything happens.
-const SKILL_OPENS_OWN_MODAL=new Set(["chemist:0","hacker:1","geneFreak:1","shopper:1","pickpocket:0","courier:1","caregiver:1","mediocre:1","mediocre:2","collector:1"]);
+const SKILL_OPENS_OWN_MODAL=new Set(["chemist:0","hacker:1","geneFreak:1","shopper:1","pickpocket:0","courier:1","caregiver:1","mediocre:1","mediocre:2","collector:1","prepper:1"]);
 function confirmAndUseSkill(p,idx){
   const s=PROFESSIONS[p.prof].skills[idx];
   openModal(`<h3>發動技能：${s.name}</h3><div style="margin-bottom:12px;font-size:13px;line-height:1.6">${s.desc}</div>
@@ -3483,6 +3525,23 @@ function openCollectorTradeModal(p){
   };
   bindModalClose("colCancel");
 }
+// 生存狂的儲備糧倉: only lets you pick between water/food when you actually hold both — a
+// single-item inventory just copies whichever one it is.
+function openPrepperCopyModal(p){
+  const opts=["water","food"].filter(it=>countItem(p,it)>0);
+  const optsHtml=opts.map(it=>`<option value="${it}">${ITEMS[it].name}</option>`).join("");
+  openModal(`<h3>儲備糧倉：選擇要複製的道具</h3><select id="prepperSel">${optsHtml}</select><br><br>
+    <button class="btn small warn" id="prepperOk">複製（憑空+1份）</button> <button class="btn small ghost" id="prepperCancel">取消</button>`);
+  document.getElementById("prepperOk").onclick=()=>{
+    const item=document.getElementById("prepperSel").value;
+    if(carryRoom(p)<=0){ flashMsg("背包空間不足，無法容納複製的道具"); return; }
+    p.flags.prepperCopyUses++; p.flags.skillUsedThisRound=true;
+    p.inv.push(item);
+    log(p.name+" 使用儲備糧倉：憑空複製了1份「"+ITEMS[item].name+"」。"); speakSkill(p,"prepper:1");
+    closeModal(); renderAll();
+  };
+  bindModalClose("prepperCancel");
+}
 
 /* ===================== VOTE / TRADE ===================== */
 document.getElementById("voteBtn").addEventListener("click",()=>{
@@ -3497,7 +3556,10 @@ document.getElementById("voteBtn").addEventListener("click",()=>{
     <button class="btn small warn" id="voteOk">投票</button> <button class="btn small ghost" id="voteCancel">取消</button>`);
   document.getElementById("voteOk").onclick=()=>{
     const f=+document.getElementById("voteSel").value;
-    const weight=p.flags.voteWeight||1;
+    // 女巫的毒氣投票: a permanent floor of 2, not a one-round boost like 控制室's — takes
+    // whichever is higher so a witch who ALSO landed a control-room boost this round still
+    // gets that bigger number instead of being capped back down to her own baseline.
+    const weight=Math.max(p.flags.voteWeight||1, p.prof==="witch"?2:1);
     STATE.voteCounts[f]=(STATE.voteCounts[f]||0)+weight;
     STATE.voteLog.push({name:p.name, floor:f, weight});
     p.flags.voteWeight=1;
@@ -3978,7 +4040,8 @@ function resolveAITurn(p){
   if(!floorOpts.length) floorOpts=ballot;
   if(floorOpts.length){
     const voteFloor=floorOpts[Math.floor(Math.random()*floorOpts.length)];
-    const voteWeight=p.flags.voteWeight||1;
+    // 女巫的毒氣投票: same permanent-floor-of-2 rule as the human path above.
+    const voteWeight=Math.max(p.flags.voteWeight||1, p.prof==="witch"?2:1);
     STATE.voteCounts[voteFloor]=(STATE.voteCounts[voteFloor]||0)+voteWeight;
     STATE.voteLog.push({name:p.name, floor:voteFloor, weight:voteWeight});
     p.flags.voteWeight=1;
@@ -4132,6 +4195,14 @@ function damageWard(target,dmg,opts){
   }
   return {dmg,note:""};
 }
+// 隱士的離群索居: true only when NEITHER another living player NOR a shade shares the room —
+// playersInRoom already can't return a ghost (its p.alive check excludes them), so the ghost
+// half of the check has to look at STATE.players directly instead.
+function hermitAlone(p){
+  if(p.prof!=="hermit") return false;
+  if(playersInRoom(p.room,true).some(x=>x.id!==p.id)) return false;
+  return !STATE.players.some(x=>x.ghost && x.room===p.room);
+}
 
 // A room is poisoned when its floor is a voted-poison floor, EXCEPT: B501 (the tall B4/B5
 // warehouse) which per the rulebook only turns toxic once BOTH the floors it spans are poisoned,
@@ -4283,12 +4354,14 @@ function settleRound(){
       let dmg=baseDmg, note="";
       if(ROOMS[p.room].floor===STATE.poisonReduceFloor){ dmg=Math.max(0,dmg-2); note+="〔毒性調和 -2〕"; }
       if(p.prof==="chemist" && dmg>0){ dmg=Math.max(0,dmg-1); note+="〔抗毒 -1〕"; }
+      if(p.prof==="witch" && dmg>0){ const before=dmg; dmg=Math.max(0,dmg-2); note+="〔毒氣投票 -"+(before-dmg)+"〕"; }
       if(p.prof==="diver" && p.flags.diverHoldBreathActive){ dmg=0; note+="〔憋氣術〕"; }
       if(p.inv.includes("gasmask")){ dmg=0; note+="〔防毒面具〕"; }
       if(p.flags.oxygenImmuneActive){ dmg=0; note+="〔氧氣瓶〕"; }
       if(p.flags.lotteryDodgeActive){ dmg=0; note+="〔樂透：躲避毒氣〕"; }
       if(p.flags.poisonImmune){ dmg=0; note+="〔樂透：永久免疫毒氣〕"; }
       if(p.prof==="climber" && dmg>0){ dmg=Math.max(0,dmg-1); note+="〔剛硬意志 -1〕"; }
+      if(hermitAlone(p) && dmg>0){ dmg=Math.max(0,dmg-1); note+="〔離群索居 -1〕"; }
       if(p.room==="202") dmg=0;
       { const gc=damageWard(p,dmg); dmg=gc.dmg; note+=gc.note; }
       damagePlayer(p,dmg,"毒氣");
@@ -4309,6 +4382,7 @@ function settleRound(){
       if(missing>0){
         let note="";
         if(p.prof==="climber"){ missing=Math.max(0,missing-1); note="〔剛硬意志 -1〕"; }
+        if(hermitAlone(p) && missing>0){ missing=Math.max(0,missing-1); note+="〔離群索居 -1〕"; }
         { const gc=damageWard(p,missing,{hunger:true}); missing=gc.dmg; note+=gc.note; }
         damagePlayer(p,missing,"飢餓"); log(p.name+" 缺水/糧，受到 "+missing+" 點傷害"+note+"。","dmg"); STATE.__report.hunger.push(p.name+" -"+missing);
         // 農夫的自給自足: a small consolation chance out of hunger, exempt from carry (pushed directly).
@@ -4442,6 +4516,10 @@ function resolveCombat(a,b,roomId,frozenA){
     if(p.prof==="bomb" && attackerHasGun && d>0){ const before=d; d=Math.max(0,d-3); note+="〔防爆盾牌 -"+(before-d)+"〕"; }
     if(p.prof==="veteran" && p.hp<=3 && d>0){ const before=d; d=Math.max(0,d-4); note+="〔破釜沉舟 -"+(before-d)+"〕"; }
     if(p.prof==="climber" && d>0){ const before=d; d=Math.max(0,d-1); note+="〔剛硬意志 -"+(before-d)+"〕"; }
+    // 隱士的離群索居: included for completeness (the skill's own wording lists 戰鬥 alongside
+    // 中毒/飢餓), though combat inherently requires an opponent sharing the room, so "truly
+    // alone" can never actually be true here — this branch is a structural no-op.
+    if(hermitAlone(p) && d>0){ const before=d; d=Math.max(0,d-1); note+="〔離群索居 -"+(before-d)+"〕"; }
     const gc=damageWard(p,d); d=gc.dmg; note+=gc.note;
     return {d,note};
   };
@@ -4806,6 +4884,12 @@ function renderAll(){
     else if(p.flags.skillUsedThisRound){ btn.disabled=true; btn.title="本輪已使用過職業技能，下輪才能再使用"; }
     else if(p.prof==="gambler" && idx===0 && p.flags.roomActsUsedThisRound>0){
       btn.disabled=true; btn.title="已使用過房間功能，好賭成性必須在使用房間功能前發動";
+    }
+    else if(p.prof==="rusher" && idx===1){
+      // 搶佔先機 only means anything BEFORE this round's turn order starts resolving — by the
+      // time any skill button is clickable it's already this player's own turn, so moving
+      // "to the front" would be a no-op. Only reachable via the round-start modal (beginRound).
+      btn.disabled=true; btn.title="只能在每輪開始時的順序牌視窗中發動";
     }
     else if(SKILL_OPENS_OWN_MODAL.has(p.prof+":"+idx)){ btn.onclick=()=>useProfSkill(p,idx); }
     else { btn.onclick=()=>confirmAndUseSkill(p,idx); }
