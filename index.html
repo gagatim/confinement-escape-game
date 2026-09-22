@@ -667,7 +667,8 @@ const PROFESSIONS = {
     {name:"巡迴獵犬", desc:"武力和負重永久+1。移動階段可使用，派遣獵犬至距離5以內有庫存的房間隨機抽1張道具(不可超過負重)。整局限用4次。", uses:4}
   ]},
   merc:{name:"雇傭兵", skills:[
-    {name:"武器精通", desc:"你的武器(刀/手槍/霰彈槍)不佔負重。刀與手槍效果相同(武力數值不變)。", passive:true}
+    {name:"武器精通", desc:"你的武器(刀/雙刀/手槍/霰彈槍)不佔負重，等於背包多2格空間。", passive:true},
+    {name:"槍械專家", desc:"（被動）你手持任何武器（含刀/雙刀）時視為持槍：對上同樣持槍的對手，照常比武力值高低；對上持刀或空手的對手，直接以你的武力值（含武器加成）扣減對方生命。", passive:true}
   ]},
   geneFreak:{name:"基因怪人", skills:[
     {name:"先天優勢", desc:"初始可分配基因點數為12點，武力上限為5點。", passive:true},
@@ -1515,7 +1516,13 @@ function removeItem(p,item){
   return false;
 }
 function countItem(p,item){ return p.inv.filter(x=>x===item).length; }
-function hasGun(p){ return p.inv.some(x=>ITEMS[x].gun); }
+// 雇傭兵的槍械專家: any weapon in hand — even a bare 刀/雙刀 — counts as a gun for combat
+// resolution purposes, so resolveCombat's gun-vs-unarmed "full power dealt as damage" branch
+// (see below) kicks in off a plain knife instead of needing an actual pistol/shotgun.
+function hasGun(p){
+  if(p.inv.some(x=>ITEMS[x].gun)) return true;
+  return p.prof==="merc" && p.inv.some(x=>ITEMS[x].weapon);
+}
 function combatPower(p){
   let base=p.power;
   for(const it of p.inv){ if(ITEMS[it].weapon) base+=ITEMS[it].power; }
@@ -1558,9 +1565,10 @@ function startGame(){
     const pw=Math.floor(Math.random()*5)+2, sp=Math.floor(Math.random()*4)+1;
     const cap = pid==="geneFreak"?12:10;
     let power=Math.min(pw, pid==="geneFreak"?5:99);
-    let speed=sp;
-    let carry=Math.max(1,cap-power-speed);
-    if(power+speed+carry>cap){ carry=Math.max(1,cap-power-speed); }
+    // speed is capped to leave at least 1 point for carry, so the 3 stats never add up past cap
+    // (power maxes at 6, or 5 for geneFreak, so this never has to clamp speed below its own 1 floor).
+    let speed=Math.min(sp, cap-power-1);
+    let carry=cap-power-speed;
     players.push(makePlayer(i,true,pid,{power,speed,carry}));
   }
   STATE={round:1, phase:"positioning", players, poisoned:new Set(), detoxedRooms:new Set(), voteCounts:{}, voteLog:[], voteBallot:[], discardPile:[], gameOver:false, roundHistory:[]};
@@ -1972,8 +1980,8 @@ function advanceTurn(){
 // where players tend to congregate to use room functions, giving it a chance at blood without
 // omniscient tracking.
 function resolveGhostAITurn(p){
-  const funcRooms=Object.keys(ROOMS).filter(id=>ROOMS[id].special);
-  const allRooms=Object.keys(ROOMS);
+  const funcRooms=Object.keys(ROOMS).filter(id=>ROOMS[id].special && id!==p.room);
+  const allRooms=Object.keys(ROOMS).filter(id=>id!==p.room);
   const pool = (funcRooms.length && Math.random()<0.7) ? funcRooms : allRooms;
   p.room=pool[Math.floor(Math.random()*pool.length)];
   p.flags.roomCommitted=true;
@@ -2021,8 +2029,11 @@ function tryMove(p,target){
 // 每輪強制移動: a player may not end their turn back in the room they started the round in —
 // unless they physically can't move at all this round (e.g. 0 speed), in which case forcing it
 // would just soft-lock them. 獵人's 埋伏 is a deliberate exception (can act without moving at all).
+// 暗影 is NOT exempt — it can reach literally any room for free (see onRoomClick), so it's checked
+// against every room in the game instead of the step/adjacency-limited reach a living player uses.
 function mustMoveThisRound(p){
-  if(p.ghost || p.flags.hunterAmbushActive || p.flags.guardianDefenseActive) return false;
+  if(p.flags.hunterAmbushActive || p.flags.guardianDefenseActive) return false;
+  if(p.ghost) return Object.keys(ROOMS).some(r=>r!==p.roundStartRoom);
   const reach=reachableRooms(p.roundStartRoom, p.roundStartSteps);
   return Object.keys(reach).some(r=>r!==p.roundStartRoom);
 }
