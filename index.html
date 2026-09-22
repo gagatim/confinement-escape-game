@@ -704,7 +704,7 @@ const PROFESSIONS = {
   ]},
   smuggler:{name:"走私客", skills:[
     {name:"暗格夾層", desc:"（被動）背包容量永久+3。", passive:true},
-    {name:"熟悉門路", desc:"（被動）在金庫／武器庫／藥房抽取道具時，40%機率額外多抽1張，每輪最多觸發1次。", passive:true}
+    {name:"熟悉門路", desc:"（被動）在金庫／武器庫／藥房／垃圾場抽取道具時，40%機率額外多抽1張，每輪最多觸發1次。", passive:true}
   ]},
   survivor:{name:"求生教官", skills:[
     {name:"強健體魄", desc:"（被動）生命上限永久+2（初始12血）。", passive:true},
@@ -744,10 +744,6 @@ const PROFESSIONS = {
     {name:"自給自足", desc:"（被動）本輪若飢餓扣血，30%機率額外獲得1份糧食（下輪可用，不佔負重）。", passive:true},
     {name:"綠手指", desc:"整局限用2次：可將1個垃圾直接轉換成1份水+1份糧，不限房間。", uses:2}
   ]},
-  caregiver:{name:"護理師", skills:[
-    {name:"悉心照料", desc:"（被動）可消耗背包中1張藥片，立即治療同房間另1名玩家3點生命（一般藥效為2點）。", passive:true},
-    {name:"隨傳隨到", desc:"整局限用2次：可立即移動到目前生命值≤3的玩家所在房間，不消耗步數。", uses:2}
-  ]},
   miner:{name:"礦工", skills:[
     {name:"挖礦本能", desc:"（被動）不限房間，只要完成一次搜索道具，就有70%機率額外判定發動一次，憑空獲得1根金條（不佔負重、不消耗該房間庫存）；若搜索的房間是金庫，還能額外得知金庫剩餘金條數量。", passive:true},
     {name:"精煉技術", desc:"可將背包中1根金條轉換為1份水+1份糧。（無使用限制）", uses:99},
@@ -780,7 +776,7 @@ const PROFESSIONS = {
   ]},
   guardian:{name:"守護者", skills:[
     {name:"庇護結界", desc:"（被動）自身所有傷害-1；同房間的其他玩家所有傷害也-1。", passive:true},
-    {name:"絕對防禦", desc:"整局限用1次：本回合可以不移動，無視任何傷害，且可直接使用房間功能。", uses:1}
+    {name:"絕對防禦", desc:"整局限用1次：本回合可以不移動，無視戰鬥、毒氣、火箭筒等任何傷害，且可直接使用房間功能，但飢餓仍需正常繳交水/糧。", uses:1}
   ]},
   lucky:{name:"幸運兒", skills:[
     {name:"吉星高照", desc:"（被動）每次抽取道具前自動擲骰，骰到1或4時，本次額外多抽1張。", passive:true},
@@ -802,7 +798,7 @@ const PROFESSIONS = {
 // 擴充模式: these professions are hidden from the setup screen (and never randomly given to
 // AI) unless the player opts into 擴充模式 — keeps a first game to the base roster, while letting
 // anyone who wants the larger expansion roster turn it on.
-const EXPANSION_PROFS=new Set(["fatty","trucker","bartender","chemist","hacker","shade","merc","outsider","climber","pilot","chef","diver","courier","gourmet","farmer","caregiver","mediocre","collector","guardian","hunter","pickpocket","lucky","hermit","prepper","witch"]);
+const EXPANSION_PROFS=new Set(["fatty","trucker","bartender","chemist","hacker","shade","merc","outsider","climber","pilot","chef","diver","courier","gourmet","farmer","mediocre","collector","guardian","hunter","pickpocket","lucky","hermit","prepper","witch"]);
 // One small emoji "portrait" per profession — shown on the selection card and anywhere a player's
 // profession is listed in-game, so each of the 16 is visually distinct at a glance, not just by name.
 const PROF_ICON={
@@ -811,7 +807,7 @@ const PROF_ICON={
   merc:"🔪", geneFreak:"🧬", outsider:"🚪", climber:"🧗", engineer:"🔧",
   medic:"🩺", pilot:"✈️", demolitions:"🧨", chef:"🍳", smuggler:"🧳", survivor:"🎒",
   shopper:"🛍️", runner:"🏃", herbalist:"🌿", veteran:"🎖️", pickpocket:"🥷",
-  diver:"🤿", courier:"📦", gourmet:"🍽️", farmer:"🌾", caregiver:"💕", miner:"⛏️", hunter:"🏹",
+  diver:"🤿", courier:"📦", gourmet:"🍽️", farmer:"🌾", miner:"⛏️", hunter:"🏹",
   mediocre:"🤷", boss:"🕴️", collector:"📿", butcher:"🥩", exorcist:"🕯️", guardian:"🛡️", lucky:"🍀",
   hermit:"🏚️", prepper:"🥫", witch:"🧙"
 };
@@ -1089,8 +1085,6 @@ const SKILL_QUOTES={
   "diver:1":"閉氣，我很拿手。",
   "courier:1":"貨已經在路上了。",
   "farmer:1":"一點垃圾，也能長出東西來。",
-  "caregiver:0":"忍一下，馬上就不痛了。",
-  "caregiver:1":"我來了，撐住！",
   "miner:1":"金子雖好，命更重要。",
   "hunter:0":"獵物跑不掉的。",
   "hunter:1":"你已經在我的射程內了。",
@@ -1200,7 +1194,6 @@ const SELECT_QUOTES={
   courier:"再遠的地方，我都能送到。",
   gourmet:"沒吃飽，我可不逃命。",
   farmer:"地不會虧待認真的人。",
-  caregiver:"別怕，有我在。",
   miner:"哪裡有礦，我一挖就知道。",
   hunter:"躲得再好，也逃不過我的眼睛。",
   mediocre:"我沒什麼本事，但命是自己的，我會想辦法保住。",
@@ -1454,7 +1447,7 @@ function makePlayer(id,isAI,profId,stats,name){
       survivorFirstAidUsed:false, shopperJumpUses:0, shopperSpeedPenaltyApplied:false,
       runnerSprintUses:0, runnerEnduranceReady:false, pickpocketUses:0,
       diverHoldBreathUses:0, diverHoldBreathActive:false, courierUses:0,
-      farmerUses:0, caregiverUses:0, minerUses:0,
+      farmerUses:0, minerUses:0,
       hunterSprintUses:0, hunterUses:0, hunterAmbushActive:false, mediocreSacrificeUses:0,
       collectorTradeUses:0, exorcistRiteUsed:false, guardianDefenseUsed:false, guardianDefenseActive:false,
       luckyImmuneActive:false,
@@ -2084,8 +2077,8 @@ function undoMovement(){
 function flashMsg(m){ log(`<i class="muted">${m}</i>`); }
 
 /* ===================== ROOM ACTIONS (human) ===================== */
-// 走私客's 熟悉門路 only triggers at these 3 rooms: 金庫, 武器庫, 藥房.
-const SMUGGLER_BONUS_ROOMS=new Set(["B206","B107","B301"]);
+// 走私客's 熟悉門路 only triggers at these 4 rooms: 金庫, 武器庫, 藥房, 垃圾場.
+const SMUGGLER_BONUS_ROOMS=new Set(["B206","B107","B301","B503"]);
 // Draws up to maxDraw items OUT of the room's stock (removed immediately, since they're
 // revealed) with no regard for carry space — the player gets to see everything drawn and
 // choose what to keep afterward, instead of the old behaviour of quietly drawing fewer items
@@ -2127,7 +2120,7 @@ function drawItemsFromStock(p,roomId,maxDraw){
   if(scavengerRolls>0){
     log(p.name+"（拾荒嗅覺）"+(scavengerHits>0?"額外獲得"+scavengerHits+"個垃圾":"本次搜索未觸發")+"。");
   }
-  // 走私客的熟悉門路: at 金庫/武器庫/藥房, 40% chance to pull one extra item from the same
+  // 走私客的熟悉門路: at 金庫/武器庫/藥房/垃圾場, 40% chance to pull one extra item from the same
   // room's stock, once per round — unlike 拾荒嗅覺 above this isn't a free weightless bonus, it
   // just adds another drawn item that goes through the same carry-limit/keep-choice handling as
   // everything else resolveHumanDraw/resolveAIDraw sees from this call.
@@ -3045,8 +3038,7 @@ function useMedSpray(p){
   renderAll();
 }
 // 傳送符: unlike every other item card above, this is usable only BEFORE committing to a room this
-// round (it IS the movement, same free-repositioning shape as 護理師的隨傳隨到) — not after, like
-// the "please move first" items are gated.
+// round (it IS the movement) — not after, like the "please move first" items are gated.
 function openTeleportCharmModal(p){
   if(p.flags.roomCommitted){ flashMsg("本輪已確定停留於此房間，無法再移動。"); return; }
   if(countItem(p,"teleportcharm")<1){ flashMsg("背包內沒有傳送符。"); return; }
@@ -3088,7 +3080,6 @@ const SKILL_USE_LIMITS={
   "diver:1":{flag:"diverHoldBreathUses",max:2},
   "courier:1":{flag:"courierUses",max:3},
   "farmer:1":{flag:"farmerUses",max:2},
-  "caregiver:1":{flag:"caregiverUses",max:2},
   "hunter:0":{flag:"hunterSprintUses",max:2},
   "hunter:1":{flag:"hunterUses",max:2},
   "mediocre:1":{flag:"mediocreSacrificeUses",max:3},
@@ -3253,9 +3244,6 @@ function useProfSkill(p,idx){
     p.flags.farmerUses++; p.flags.skillUsedThisRound=true;
     addItem(p,"water"); addItem(p,"food");
     log(p.name+" 使用綠手指：垃圾轉換成1份水+1份糧。"); speakSkill(p,"farmer:1");
-  } else if(p.prof==="caregiver" && idx===1){
-    if(skillUseCapReached(p,"caregiver:1")){ flashMsg("已用完2次"); return; }
-    openCaregiverRushModal(p);
   } else if(p.prof==="miner" && idx===1){
     if(countItem(p,"gold")<1){ flashMsg("需要1根金條才能發動"); return; }
     const freedByGold=itemRemovalFrees(p,"gold")?1:0;
@@ -3298,7 +3286,7 @@ function useProfSkill(p,idx){
   } else if(p.prof==="guardian" && idx===1){
     if(skillUseCapReached(p,"guardian:1")){ flashMsg("已用完"); return; }
     p.flags.guardianDefenseUsed=true; p.flags.guardianDefenseActive=true; p.flags.skillUsedThisRound=true;
-    log(p.name+" 發動絕對防禦：本輪可不移動、無視任何傷害，並能直接使用房間功能。"); speakSkill(p,"guardian:1");
+    log(p.name+" 發動絕對防禦：本輪可不移動、無視戰鬥/毒氣等傷害（飢餓除外），並能直接使用房間功能。"); speakSkill(p,"guardian:1");
   } else if(p.prof==="lucky" && idx===1){
     // No SKILL_USE_LIMITS entry — unlike guardian's once-per-game 絕對防禦, this can be
     // attempted every round; the 1/6 gate is what keeps it in check instead of a use cap.
@@ -3331,7 +3319,7 @@ function useProfSkill(p,idx){
 // nothing. Every OTHER active skill executes immediately on click, which is risky for a
 // limited-use skill (a stray click permanently burns one of only 1-4 charges) — those get a
 // confirm prompt naming the skill and its effect before anything happens.
-const SKILL_OPENS_OWN_MODAL=new Set(["chemist:0","hacker:1","geneFreak:1","shopper:1","pickpocket:0","courier:1","caregiver:1","mediocre:1","mediocre:2","collector:1","prepper:1","witch:0"]);
+const SKILL_OPENS_OWN_MODAL=new Set(["chemist:0","hacker:1","geneFreak:1","shopper:1","pickpocket:0","courier:1","mediocre:1","mediocre:2","collector:1","prepper:1","witch:0"]);
 function confirmAndUseSkill(p,idx){
   const s=PROFESSIONS[p.prof].skills[idx];
   openModal(`<h3>發動技能：${s.name}</h3><div style="margin-bottom:12px;font-size:13px;line-height:1.6">${s.desc}</div>
@@ -3364,48 +3352,6 @@ function openPickpocketModal(p){
   bindModalClose("pickCancel");
 }
 
-// 護理師的悉心照料: not gated by the once-a-round skillUsedThisRound budget (same pattern as
-// 系統監控/內建回收裝置 above) — its only limiter is having a spare pill to spend. Resolves
-// immediately rather than through the settlement queue, so there's no risk of desyncing with
-// the pill-healing queue the way a second parallel "gifted pill" queue would.
-function useCaregiverPill(p){
-  if(!p.flags.roomCommitted){ flashMsg("請先移動並確定停留在房間後，才能使用道具。"); return; }
-  if(countItem(p,"pill")<1){ flashMsg("背包內沒有藥片。"); return; }
-  const others=playersInRoom(p.room,true).filter(x=>x.id!==p.id);
-  if(!others.length){ flashMsg("這裡沒有其他玩家可以照顧。"); return; }
-  const opts=others.map(o=>`<option value="${o.id}">${o.name}（HP ${o.hp}）</option>`).join("");
-  openModal(`<h3>悉心照料：使用藥片治療隊友</h3><select id="caregiverPillSel">${opts}</select><br><br>
-    <button class="btn small warn" id="caregiverPillOk">治療(立即恢復3點生命)</button> <button class="btn small ghost" id="caregiverPillCancel">取消</button>`);
-  document.getElementById("caregiverPillOk").onclick=()=>{
-    const targetId=+document.getElementById("caregiverPillSel").value;
-    const target=STATE.players.find(x=>x.id===targetId);
-    if(!removeItem(p,"pill")){ closeModal(); return; }
-    STATE.discardPile.push("pill");
-    target.hp=Math.min(target.maxhp,target.hp+3);
-    log(p.name+" 使用悉心照料，立即為 "+target.name+" 治療3點生命（HP→"+target.hp+"）。","heal");
-    closeModal(); renderAll();
-  };
-  bindModalClose("caregiverPillCancel");
-}
-// 護理師的隨傳隨到: teleports straight to the room of any currently-≤3-HP player, no step cost,
-// no distance limit — since HP is only ever updated at settlement, "currently ≤3" here already
-// means "≤3 at the end of last round," so no separate historical snapshot needs to be tracked.
-function openCaregiverRushModal(p){
-  const targets=STATE.players.filter(x=>x.id!==p.id && x.alive && !x.ghost && x.hp<=3 && x.room!==p.room);
-  if(!targets.length){ flashMsg("目前沒有生命值≤3的玩家可以前往。"); return; }
-  const opts=targets.map(t=>`<option value="${t.id}">${t.name}（${t.room} ${ROOMS[t.room].name||""}，HP ${t.hp}）</option>`).join("");
-  openModal(`<h3>隨傳隨到：立即前往瀕危玩家所在房間</h3><select id="caregiverRushSel">${opts}</select><br><br>
-    <button class="btn small warn" id="caregiverRushOk">出發(不消耗步數)</button> <button class="btn small ghost" id="caregiverRushCancel">取消</button>`);
-  document.getElementById("caregiverRushOk").onclick=()=>{
-    if(p.flags.roomCommitted){ flashMsg("本輪已確定停留於此房間，無法再移動。"); closeModal(); return; }
-    const targetId=+document.getElementById("caregiverRushSel").value;
-    const target=STATE.players.find(x=>x.id===targetId);
-    p.flags.caregiverUses++; p.flags.skillUsedThisRound=true;
-    p.room=target.room; closeModal(); renderAll();
-    log(p.name+" 使用隨傳隨到，立即前往「"+p.room+"」照顧 "+target.name+"（HP "+target.hp+"）。"); speakSkill(p,"caregiver:1");
-  };
-  bindModalClose("caregiverRushCancel");
-}
 // 郵差的專人配送: unlike 交易/順手牽羊 this needs no shared room at all — pick any item you're
 // holding and any other living player, and it's delivered straight to them.
 function openCourierDeliverModal(p){
@@ -3806,20 +3752,6 @@ function aiConsiderSkillAfterMove(p){
     }
     return;
   }
-  if(p.prof==="caregiver"){
-    // 隨傳隨到: rush to whichever ≤3-HP ally is available — bypasses the human-only room-picker
-    // modal, same pattern as chemist/hacker above.
-    if(!skillUseCapReached(p,"caregiver:1")){
-      const targets=STATE.players.filter(x=>x.id!==p.id && x.alive && !x.ghost && x.hp<=3 && x.room!==p.room);
-      if(targets.length){
-        const target=targets[Math.floor(Math.random()*targets.length)];
-        p.flags.caregiverUses++; p.flags.skillUsedThisRound=true;
-        p.room=target.room;
-        log(p.name+" 使用隨傳隨到，前往「"+p.room+"」照顧 "+target.name+"（HP "+target.hp+"）。");
-      }
-    }
-    return;
-  }
   if(p.prof==="hunter"){
     // 埋伏: by the time this runs the AI has already moved for the round (see resolveAITurn),
     // so the "可以不移動" waiver is moot for AI — this just takes the free permanent power
@@ -4013,22 +3945,12 @@ function resolveAITurn(p){
       doRecycle(p,bestIdx);
     }
   }
-  // 護理師的悉心照料 — not gated by skillUsedThisRound (see useCaregiverPill), so it lives here
-  // rather than in aiConsiderSkillAfterMove, same reasoning as 工程師's recycle check above.
   // 郵差's 專人配送 is deliberately left unused by AI, same precedent as 賭徒/基因怪人 noted
   // above — sending a card to an arbitrary distant player has no clear heuristic payoff. 收藏家's
   // 以物易物 is left unused for the same reason: "which exact card is worth 2 of mine" is a
   // judgment call the AI's heuristics don't model. 守護者's 絕對防禦 is likewise left unused by
   // AI — "is this round dangerous enough to burn my one whole-game charge" has no clean signal
   // the AI tracks (incoming rocket/ambush declarations aren't visible to it ahead of settlement).
-  if(p.prof==="caregiver" && countItem(p,"pill")>0){
-    const hurtAlly=playersInRoom(p.room,true).find(x=>x.id!==p.id && x.hp<=6);
-    if(hurtAlly && Math.random()<0.7){
-      removeItem(p,"pill"); STATE.discardPile.push("pill");
-      hurtAlly.hp=Math.min(hurtAlly.maxhp,hurtAlly.hp+3);
-      log(p.name+" 使用悉心照料，立即為 "+hurtAlly.name+" 治療3點生命（HP→"+hurtAlly.hp+"）。");
-    }
-  }
   // 節食 (either from 餐廳 or 攀岩者's skill) exempts this round's hunger payment entirely — queuing
   // water/food anyway would just waste the item for no benefit.
   if(STATE.round>=2 && !p.flags.dietThisRound){
@@ -4194,13 +4116,13 @@ function exorcistAutoRevive(p){
 // currently sharing his room. Returns {dmg,note} in the same shape every other profession's
 // inline reduction already uses, so callers just splice the note into their own accumulating
 // note string exactly the same way.
-// opts.hunger excludes 逢凶化吉 specifically — the skill's own wording carves out 飢餓 (仍需要
-// 水糧) as the one damage source it does NOT cover, unlike 絕對防禦 which is unconditional.
+// opts.hunger excludes both 逢凶化吉 and 絕對防禦 — 飢餓（仍需要水糧）is the one damage source
+// neither full-immunity active covers.
 function damageWard(target,dmg,opts){
   if(dmg<=0) return {dmg,note:""};
   const isHunger = opts&&opts.hunger;
   if(!isHunger && target.prof==="lucky" && target.flags.luckyImmuneActive) return {dmg:0,note:"〔逢凶化吉〕"};
-  if(target.prof==="guardian" && target.flags.guardianDefenseActive) return {dmg:0,note:"〔絕對防禦〕"};
+  if(!isHunger && target.prof==="guardian" && target.flags.guardianDefenseActive) return {dmg:0,note:"〔絕對防禦〕"};
   if(target.prof==="guardian" || playersInRoom(target.room,true).some(x=>x.prof==="guardian")){
     return {dmg:Math.max(0,dmg-1),note:"〔守護者庇護 -1〕"};
   }
@@ -4888,10 +4810,6 @@ function renderAll(){
       // 系統監控 above — it's not gated by the once-a-round skillUsedThisRound budget, but by its
       // own recycleUsedThisRound flag (shared with the physical item, so the two can't double-dip).
       btn.onclick=()=>useEngineerRecycle(p);
-    } else if(p.prof==="caregiver" && idx===0){
-      // 悉心照料 is the same "passive that needs a click" shape as 系統監控/內建回收裝置 above —
-      // limited only by having a spare pill, not by the once-a-round skill budget.
-      btn.onclick=()=>useCaregiverPill(p);
     } else if(s.passive){ btn.disabled=true; btn.title="被動技能，自動生效"; }
     else if(p.flags.skillUsedThisRound){ btn.disabled=true; btn.title="本輪已使用過職業技能，下輪才能再使用"; }
     else if(p.prof==="gambler" && idx===0 && p.flags.roomActsUsedThisRound>0){
