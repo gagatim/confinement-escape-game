@@ -129,6 +129,10 @@
   .static-map .bridge-note{font-size:11px;color:var(--muted);margin-top:8px}
   .room-chip .occ{position:absolute;top:-7px;right:-7px;background:var(--ember);color:#fff;border-radius:999px;
     font-size:9px;padding:1px 5px;font-family:"JetBrains Mono",monospace}
+  /* B501 大倉庫: a real two-storey room on the printed map (its box spans the B4+B5 rows), so
+     its chip is given a 2-row grid span rather than being squeezed into the B4 row alone. */
+  .room-chip.tall{font-size:14px;padding:10px 7px}
+  .room-chip.tall small{font-size:11px}
   /* ---- floor-plan: a real staggered grid laid out per the printed 禁閉逃殺 map, so each
      room sits in its true column and empty columns render as real gaps (e.g. the atrium
      chasm cutting through B4/B5), instead of a flat packed list. ---- */
@@ -462,7 +466,7 @@ const ITEMS = {
 // so recomputing it would trade already-verified numbers for worse ones — B201/B202 alone already
 // matched the existing data exactly, which is why the rest of that floor was left untouched.
 // (gaps where there's no room, wide rooms actually wider) instead of an evenly-packed grid.
-function R(id,name,floor,order,opts){ return Object.assign({id,name,floor,order,neighbors:[],draw:0,stock:{},span:1},opts||{}); }
+function R(id,name,floor,order,opts){ return Object.assign({id,name,floor,order,neighbors:[],draw:0,stock:{},span:1,rowSpan:1},opts||{}); }
 const ROOMS = {
   "201":R("201","基因庫",0,8,{special:"gene",span:7}),
   "202":R("202","停機坪",0,25,{special:"helipad",span:9}),
@@ -491,7 +495,7 @@ const ROOMS = {
   "B306":R("B306","",4,25,{span:2}),
   "B307":R("B307","",4,27,{span:4}),
   "B308":R("B308","",4,31,{span:3}),
-  "B501":R("B501","大倉庫",5,0,{draw:3,stock:{water:5,food:5,knife:3,wine:2,pill:2,adrenaline:2,pistol:1,gold:1,shotgun:1},poisonRequires:[5,6],span:9}),
+  "B501":R("B501","大倉庫",5,0,{draw:3,stock:{water:5,food:5,knife:3,wine:2,pill:2,adrenaline:2,pistol:1,gold:1,shotgun:1},poisonRequires:[5,6],span:9,rowSpan:2}),
   "B401":R("B401","",5,9,{span:6}),
   "B402":R("B402","",5,15,{span:3}),
   "B403":R("B403","傳送室",5,25,{special:"teleport",span:3}),
@@ -1758,7 +1762,21 @@ function roomMarkersHtml(r){
   const vlinks=verticalLinkTargets(r).filter(id=>Math.abs(ROOMS[id].floor-r.floor)===1);
   const upLinks=vlinks.filter(id=>ROOMS[id].floor<r.floor);
   const downLinks=vlinks.filter(id=>ROOMS[id].floor>r.floor);
-  const vmark=(links,cls)=>`<span class="vmark${cls?" "+cls:""}" title="樓梯／梯子可通往：${links.map(id=>id+(ROOMS[id].name?" "+ROOMS[id].name:"")).join("、")}">${iconsOff()?"[上下]":"🪜"}</span>`;
+  // Horizontal placement must track WHERE the target actually sits under/over r, not just r's own
+  // center — a wide room (e.g. B305, span7) drawn below two narrower rooms (B204, B205) side by
+  // side would otherwise show its up-ladder dead-center, which lands under B205 even when the real
+  // ADJ link is only to B204, falsely suggesting B205<->B305 connect. Average each target's overlap
+  // with r's column range instead, expressed as a % offset within r's own chip.
+  const vmark=(links,cls)=>{
+    const centers=links.map(id=>{
+      const t=ROOMS[id];
+      const lo=Math.max(r.order,t.order), hi=Math.min(r.order+r.span,t.order+t.span);
+      return hi>lo ? (lo+hi)/2 : t.order+t.span/2;
+    });
+    const avgCol=centers.reduce((a,b)=>a+b,0)/centers.length;
+    const pct=Math.min(92,Math.max(8,((avgCol-r.order)/r.span)*100)).toFixed(1);
+    return `<span class="vmark${cls?" "+cls:""}" style="left:${pct}%" title="樓梯／梯子可通往：${links.map(id=>id+(ROOMS[id].name?" "+ROOMS[id].name:"")).join("、")}">${iconsOff()?"[上下]":"🪜"}</span>`;
+  };
   if(downLinks.length) html+=vmark(downLinks,"");
   if(upLinks.length) html+=vmark(upLinks,"vmark-up");
   if(BRIDGE_SIDE[r.id]) html+=`<span class="hbridge ${BRIDGE_SIDE[r.id]}" title="天橋，花1步可跨越天井">${iconsOff()?"[橋]":"🌉"}</span>`;
@@ -1773,8 +1791,8 @@ function roomMarkersHtml(r){
 // cols 2-35 = measured column 0-33) so gaps render as real empty cells and wide rooms actually
 // render wider — reproducing the staggered shape and atrium gap from the reference photo,
 // instead of a flat evenly-packed list.
-function gridPlace(el, floor, col, span){
-  el.style.gridRow = (Number(floor)+1);
+function gridPlace(el, floor, col, span, rowSpan){
+  el.style.gridRow = (Number(floor)+1)+" / span "+(rowSpan||1);
   el.style.gridColumn = (col+2)+" / span "+(span||1);
 }
 // A handful of underground rooms (e.g. B302, B404) are only 1 column wide on the real floor
@@ -1803,6 +1821,7 @@ function buildGameMapOnce(){
       chip.classList.add(r.id[0]==="B"?"underground":"aboveground");
       if(hasVerticalLink(r)) chip.classList.add("vlink");
       chip.innerHTML=`${roomIdLabel(r.id)}${r.name?("<small>"+r.name+"</small>"):""}`+roomMarkersHtml(r)+`<span class="occ" hidden></span>`;
+      if(r.rowSpan>1) chip.classList.add("tall");
       chip.onclick=()=>onRoomClick(r.id);
       // Clickable but a plain <div> — give it button semantics/keyboard access rather than
       // leaving it reachable only by mouse/touch.
@@ -1810,7 +1829,7 @@ function buildGameMapOnce(){
       chip.tabIndex=0;
       chip.setAttribute("aria-label","房間 "+r.id+(r.name?" "+r.name:""));
       chip.addEventListener("keydown",(e)=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); onRoomClick(r.id); } });
-      gridPlace(chip, r.floor, r.order, r.span);
+      gridPlace(chip, r.floor, r.order, r.span, r.rowSpan);
       mapEl.appendChild(chip);
       GAME_MAP_CHIPS[r.id]=chip;
     });
@@ -1833,7 +1852,8 @@ function renderStaticMap(containerId, highlightIds){
       if(highlightIds && highlightIds.includes(r.id)) chip.classList.add("spawn");
       if(hasVerticalLink(r)) chip.classList.add("vlink");
       chip.innerHTML=`${roomIdLabel(r.id)}${r.name?("<small>"+r.name+"</small>"):""}`+roomMarkersHtml(r);
-      gridPlace(chip, r.floor, r.order, r.span);
+      if(r.rowSpan>1) chip.classList.add("tall");
+      gridPlace(chip, r.floor, r.order, r.span, r.rowSpan);
       mapEl.appendChild(chip);
     });
   });
@@ -1841,6 +1861,7 @@ function renderStaticMap(containerId, highlightIds){
 document.getElementById("confirmSpawnBtn").addEventListener("click",()=>{
   document.getElementById("spawnSelect").classList.add("hidden");
   document.getElementById("game").classList.remove("hidden");
+  spawnSettlement();
   logRound(1);
   log("測試開始！你的職業：<b>"+PROFESSIONS[you().prof].name+"</b>。你秘密選擇了出生點「"+you().spawnRoom+" "+(ROOMS[you().spawnRoom].name||"")+"」。");
   beginRound();
@@ -1950,9 +1971,10 @@ function isMyTurn(){
 // settlement), so a stray post-commit skill click that nudges stepsLeft back up (nothing currently
 // does this, but nothing guards against it either) can't retroactively cost them a heal they
 // already earned by spending every step. The settlement pass just reads this flag instead of
-// re-checking p.stepsLeft===0/room itself. Also requires ending the turn in a 功能房間 (ROOMS[id].special).
+// re-checking p.stepsLeft===0/room itself. "功能房間" means any room with an action to take —
+// same room.draw>0||room.special test the room-action button itself uses — not just special rooms.
 function checkRunnerEndurance(p){
-  if(p.prof==="runner" && p.alive && !p.ghost && p.roundStartSteps>0 && p.stepsLeft===0 && ROOMS[p.room] && ROOMS[p.room].special){
+  if(p.prof==="runner" && p.alive && !p.ghost && p.roundStartSteps>0 && p.stepsLeft===0 && ROOMS[p.room] && (ROOMS[p.room].draw>0 || ROOMS[p.room].special)){
     p.flags.runnerEnduranceReady=true;
   }
 }
@@ -2537,8 +2559,11 @@ document.addEventListener("keydown",(e)=>{
   if(e.key==="Escape" && !MODAL_BG_EL.classList.contains("hidden")) closeModal();
 });
 function openRespecModal(p,cap){
+  // 基因怪人的「先天優勢」把武力上限鎖在5點 — 與創角畫面的 clampAlloc 用同一條規則，
+  // 否則重新分配點數會悄悄繞過這個上限，把全部點數灌進武力值。
+  const powCap = p.prof==="geneFreak" ? 5 : 99;
   openModal(`<h3>操作室：重新分配基因點數（共 ${cap} 點）</h3>
-    <div class="statbar"><label>武力值</label><input type="number" id="rsPower" min="0" max="${cap}" value="${p.power}"></div>
+    <div class="statbar"><label>武力值</label><input type="number" id="rsPower" min="0" max="${Math.min(cap,powCap)}" value="${p.power}"></div>
     <div class="statbar"><label>移動步數</label><input type="number" id="rsSpeed" min="0" max="${cap}" value="${p.speed}"></div>
     <div class="statbar"><label>背包空間</label><input type="number" id="rsCarry" min="0" max="${cap}" value="${p.carry}"></div>
     <div id="rsErr" class="muted" style="color:var(--ember-bright);min-height:1.2em"></div>
@@ -2546,6 +2571,7 @@ function openRespecModal(p,cap){
   document.getElementById("rsOk").onclick=()=>{
     const a=+document.getElementById("rsPower").value,b=+document.getElementById("rsSpeed").value,c=+document.getElementById("rsCarry").value;
     if(a+b+c!==cap){ document.getElementById("rsErr").textContent="點數需剛好分配完（目前共 "+(a+b+c)+" / "+cap+" 點）"; return; }
+    if(a>powCap){ document.getElementById("rsErr").textContent="武力值不可超過上限 "+powCap+" 點"; return; }
     p.power=a; p.speed=b; p.carry=c; closeModal(); renderAll();
     log(p.name+" 於操作室重新分配了基因點數。");
   };
@@ -4017,7 +4043,9 @@ function damagePlayer(p,amount,cause,killerId){
     const henchId=p.flags.bossHenchmenPool.splice(idx,1)[0];
     const h=STATE.players.find(x=>x.id===henchId);
     const letter=(p.flags.bossHenchmen.find(x=>x.id===henchId)||{}).letter||"?";
-    if(h){
+    // 小弟若已死亡（例如死於毒氣/飢餓，尚未被抽中過），不能代老大承受傷害——
+    // 否則這次傷害會在 damagePlayer 對死者的 early return 裡憑空消失，老大等同白撿一次免傷。
+    if(h && h.alive){
       h.power=Math.max(0,h.power-1);
       log(p.name+"（你們先上）強制由小弟"+letter+" "+h.name+" 代為承受傷害，"+h.name+" 武力永久-1（現為"+h.power+"）。");
       speakSkill(p,"boss:1");
@@ -4177,30 +4205,11 @@ function poisonDamageForRound(){
   if(r===4||r===5) return 3;
   return 4;
 }
-function settleRound(){
-  STATE.phase="settlement";
-  log("<b>── 進入結算階段 ──</b>");
-  STATE.__report={combat:[], rocket:[], hunger:[], drain:[], poison:"", poisonDamage:[]};
-
-  // 1) queued item-card effects (水/糧/腎上腺素/酒 — all "結算階段公開使用"；藥片 heals later, see below)
-  STATE.players.forEach(p=>{ if(p.alive) resolvePendingItemUses(p); });
-
-  // surgery healing (triggered earlier when the room was visited; resolves alongside items)
-  STATE.players.forEach(p=>{
-    if(p.flags.__surgeryHeal){ p.hp=Math.min(p.maxhp,p.hp+4); p.flags.__surgeryHeal=false; log(p.name+" 於手術室恢復4點生命。","heal"); }
-  });
-
-  // 馬拉松跑者的耐力訓練: whether they earned this is decided by checkRunnerEndurance the moment
-  // their own turn ended, not re-derived here — this runs BEFORE combat/poison/hunger below, so
-  // the heal still has a chance to cushion this same round's incoming damage.
-  STATE.players.forEach(p=>{
-    if(p.alive && !p.ghost && p.flags.runnerEnduranceReady){
-      p.hp=Math.min(p.maxhp,p.hp+3);
-      log(p.name+"（耐力訓練）本輪步數用盡且身處功能房間，恢復3點生命。","heal");
-    }
-  });
-
-  // 2) combat resolution per room
+// Combat resolution per room, shared by settleRound()'s normal per-round settlement and the
+// one-off spawnSettlement() run right after spawn-point selection — same room-fight rules
+// (outsider/smoke exemptions, free-for-all single-target resolution) either way, just over
+// whatever players/rooms happen to be current when it's called.
+function resolveRoomCombats(){
   const roomGroups={};
   STATE.players.forEach(p=>{ if(p.alive && !p.ghost){ (roomGroups[p.room]=roomGroups[p.room]||[]).push(p); } });
   Object.entries(roomGroups).forEach(([r,group])=>{
@@ -4237,6 +4246,46 @@ function settleRound(){
     });
     outsiders.forEach(p=>{ p.hp=Math.min(p.maxhp,p.hp+1); log(p.name+"（邊緣存在感）自動恢復1點生命。","heal"); });
   });
+}
+// Runs once, right after spawn-point selection and before round 1's positioning phase opens:
+// players who secretly picked the same starting room fight it out (same rules as any other
+// round's room combat) BEFORE anyone gets to move. No poison/hunger/rocket/other settlement
+// steps run here — those all first apply starting with round 1's own settleRound().
+function spawnSettlement(){
+  STATE.players.forEach(p=>{ if(p.spawnRoom) p.room=p.spawnRoom; });
+  STATE.__report={combat:[], rocket:[], hunger:[], drain:[], poison:"", poisonDamage:[]};
+  log("<b>── 出生點結算（同房間戰鬥）──</b>");
+  resolveRoomCombats();
+  if(STATE.__report.combat.length===0){
+    log("無人與他人同房間開局，或本次未觸發戰鬥。");
+  }
+  renderAll();
+}
+function settleRound(){
+  STATE.phase="settlement";
+  log("<b>── 進入結算階段 ──</b>");
+  STATE.__report={combat:[], rocket:[], hunger:[], drain:[], poison:"", poisonDamage:[]};
+
+  // 1) queued item-card effects (水/糧/腎上腺素/酒 — all "結算階段公開使用"；藥片 heals later, see below)
+  STATE.players.forEach(p=>{ if(p.alive) resolvePendingItemUses(p); });
+
+  // surgery healing (triggered earlier when the room was visited; resolves alongside items)
+  STATE.players.forEach(p=>{
+    if(p.flags.__surgeryHeal){ p.hp=Math.min(p.maxhp,p.hp+4); p.flags.__surgeryHeal=false; log(p.name+" 於手術室恢復4點生命。","heal"); }
+  });
+
+  // 馬拉松跑者的耐力訓練: whether they earned this is decided by checkRunnerEndurance the moment
+  // their own turn ended, not re-derived here — this runs BEFORE combat/poison/hunger below, so
+  // the heal still has a chance to cushion this same round's incoming damage.
+  STATE.players.forEach(p=>{
+    if(p.alive && !p.ghost && p.flags.runnerEnduranceReady){
+      p.hp=Math.min(p.maxhp,p.hp+3);
+      log(p.name+"（耐力訓練）本輪步數用盡且身處功能房間，恢復3點生命。","heal");
+    }
+  });
+
+  // 2) combat resolution per room
+  resolveRoomCombats();
 
   // rocket launcher (declared during action phase, resolves as part of this round's violence)
   (STATE.rocketTargets||[]).forEach(({room:r, shooterId})=>{
