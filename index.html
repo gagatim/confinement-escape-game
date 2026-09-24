@@ -800,6 +800,10 @@ const PROFESSIONS = {
   witch:{name:"女巫", skills:[
     {name:"灑毒", desc:"整局限用1次：指定1層樓，直接使其本輪淪為毒氣區域。第1輪與第6輪無法使用。", uses:1},
     {name:"毒氣防護", desc:"（被動）你受到的毒氣傷害：第1~3輪-2，第4~6輪-1。", passive:true}
+  ]},
+  toxic:{name:"毒人", skills:[
+    {name:"以毒為生", desc:"（被動）完全不受一般毒氣傷害規則影響：結算時若身處「已中毒的功能房間」，回復2點生命；身處非毒氣樓層，扣2點生命；身處已中毒但無功能的房間，不扣不補。", passive:true},
+    {name:"淬毒衝刺", desc:"（被動）若本輪移動開始時所在房間為已中毒樓層，本輪移動步數+3（第1輪必定無毒氣樓層，恆不觸發）。", passive:true}
   ]}
 };
 // 擴充模式: these professions are hidden from the setup screen (and never randomly given to
@@ -816,7 +820,7 @@ const PROF_ICON={
   shopper:"🛍️", runner:"🏃", herbalist:"🌿", veteran:"🎖️", pickpocket:"🥷",
   diver:"🤿", courier:"📦", gourmet:"🍽️", farmer:"🌾", miner:"⛏️", hunter:"🏹",
   mediocre:"🤷", boss:"🕴️", collector:"📿", butcher:"🥩", exorcist:"🕯️", guardian:"🛡️", lucky:"🍀",
-  hermit:"🏚️", prepper:"🥫", witch:"🧙"
+  hermit:"🏚️", prepper:"🥫", witch:"🧙", toxic:"☣️"
 };
 // 去圖示模式 (低調模式 companion toggle): when on, every emoji "picture" in the UI is swapped
 // for a plain bracketed-text stand-in instead — unlike 低調模式 (the boss key), this is meant to
@@ -1922,6 +1926,12 @@ function beginRound(){
     // wherever the player physically ended up last round — position is NOT reset to a hub.
     if(STATE.round===1 && p.spawnRoom) p.room=p.spawnRoom;
     p.stepsLeft = p.speed;
+    // 毒人的淬毒衝刺: keyed off wherever they're STARTING this round (before any movement), not
+    // where they end up — so round 1 never qualifies (STATE.poisoned is still empty at that point).
+    if(p.prof==="toxic" && roomIsPoisoned(ROOMS[p.room])){
+      p.stepsLeft += 3;
+      log(p.name+"（淬毒衝刺）本輪出發地為已中毒樓層，移動步數+3（本輪共"+p.stepsLeft+"步）。");
+    }
     p.roundStartRoom = p.room; // lets 回手 undo all movement made so far this round, for free
     p.roundStartSteps = p.stepsLeft;
     p.roundEvents=[]; // cleared for the new round — showRoundSummary already read last round's
@@ -4418,6 +4428,25 @@ function settleRound(){
   const baseDmg=poisonDamageForRound() + (STATE.poisonBoost?2:0);
   STATE.players.forEach(p=>{
     if(!p.alive || p.ghost) return;
+    // 毒人的以毒為生: entirely replaces the normal poison-damage calc above (round-scaling dmg,
+    // 毒性調和/抗毒/女巫's reductions, gasmask/oxygen/lottery immunities — none of it applies to
+    // them) with a 3-way rule of its own: +2 in an already-poisoned FUNCTION room (same
+    // room.draw>0||room.special test 耐力訓練 uses for "功能房間"), -2 on a non-poisoned floor,
+    // and nothing at all in a poisoned room that has no function (neither drain nor heal).
+    if(p.prof==="toxic"){
+      const room=ROOMS[p.room];
+      const isFuncRoom = room.draw>0 || !!room.special;
+      const poisoned = roomIsPoisoned(room);
+      if(poisoned && isFuncRoom){
+        p.hp=Math.min(p.maxhp,p.hp+2);
+        log(p.name+"（以毒為生）身處已中毒的功能房間，回復2點生命（HP→"+p.hp+"）。","heal");
+      } else if(!poisoned){
+        const gc=damageWard(p,2);
+        damagePlayer(p,gc.dmg,"以毒為生：非毒氣樓層");
+        if(gc.dmg>0) log(p.name+"（以毒為生）身處非毒氣樓層，扣"+gc.dmg+"點生命"+gc.note+"。","dmg");
+      }
+      return;
+    }
     if(roomIsPoisoned(ROOMS[p.room])){
       let dmg=baseDmg, note="";
       if(ROOMS[p.room].floor===STATE.poisonReduceFloor){ dmg=Math.max(0,dmg-2); note+="〔毒性調和 -2〕"; }
