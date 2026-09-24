@@ -250,9 +250,11 @@
   <!-- ============ SETUP ============ -->
   <div id="setup">
     <div class="card">
-      <h2 style="font-size:16px;color:var(--cyan-bright)">0. 地圖版本</h2>
-      <label class="muted" style="display:block;font-size:13px">
+      <h2 style="font-size:16px;color:var(--cyan-bright)">0. 特殊規則</h2>
+      <label class="muted" style="display:block;font-size:13px;margin-bottom:8px">
         <input type="checkbox" id="map2Toggle"> 啟用地圖2（B104／B405／B302 變為樂透房：使用時隨機獲得屬性加成、回血、本輪躲避毒氣或永久免疫毒氣其中一種；B102／B602 變為配給站：各有5份水+5份糧，可搜索3次、每次70%機率取得1份，第6輪起各補給1份；B305／B308 變為神秘商店：共用同一份庫存（地雷/麻醉鏢/煙霧彈/神秘骰子/幸運銅板/氧氣瓶/傳送符/急救噴霧各2份），可搜索2次、每次1/3機率取得道具，未取得時改拿1份垃圾）</label>
+      <label class="muted" style="display:block;font-size:13px">
+        <input type="checkbox" id="bountyToggle"> 啟用懸賞機制（第3輪起隨機1名存活玩家成為懸賞目標，全體公告；擊殺者可獲得2枚金條＋1張隨機神秘商店道具〔地雷/麻醉鏢/煙霧彈/神秘骰子/幸運銅板/氧氣瓶/傳送符/急救噴霧其中1張，憑空獲得不佔負重〕；目標死於非戰鬥原因則獎勵作廢，撐過第5輪未被擊殺則懸賞失效；可與地圖2獨立開關，不需同時啟用）</label>
     </div>
     <div class="card" style="margin-top:12px">
       <h2 style="font-size:16px;color:var(--cyan-bright)">1. 選擇職業</h2>
@@ -1244,6 +1246,10 @@ let expansionMode=false;
 // piece of room-rendering/lookup code on a mode flag — the rest of the game never needs to know
 // map2Mode exists, it only ever reads room.special like any other special room.
 let map2Mode=false;
+// 懸賞機制: independent of map2Mode — a player can turn this on without enabling any of the
+// map2 room conversions (lottery/ration/mystery shop), and vice versa. See beginRound() for
+// assignment/expiry and killPlayer() for the payout.
+let bountyMode=false;
 const LOTTERY_ROOMS=["B104","B405","B302"];
 // 配給站 (B102/B602): stocked with 5 water + 5 food, 3 draw attempts per visit at a 70% per-
 // attempt success chance (see drawItemsFromStock's drawSuccessChance check) — a plain, higher-
@@ -1307,6 +1313,7 @@ Object.entries(PROFESSIONS).forEach(([id,p])=>{
   profGrid.appendChild(div);
 });
 document.getElementById("map2Toggle").addEventListener("change",(e)=>{ map2Mode=e.target.checked; });
+document.getElementById("bountyToggle").addEventListener("change",(e)=>{ bountyMode=e.target.checked; });
 document.getElementById("expansionToggle").addEventListener("change",(e)=>{
   expansionMode=e.target.checked;
   document.querySelectorAll(".prof-card.expansion-prof").forEach(c=>c.classList.toggle("hidden",!expansionMode));
@@ -1575,7 +1582,7 @@ function startGame(){
     let carry=cap-power-speed;
     players.push(makePlayer(i,true,pid,{power,speed,carry}));
   }
-  STATE={round:1, phase:"positioning", players, poisoned:new Set(), detoxedRooms:new Set(), voteCounts:{}, voteLog:[], voteBallot:[], discardPile:[], gameOver:false, roundHistory:[]};
+  STATE={round:1, phase:"positioning", players, poisoned:new Set(), detoxedRooms:new Set(), voteCounts:{}, voteLog:[], voteBallot:[], discardPile:[], gameOver:false, roundHistory:[], bountyTargetId:null};
   // profession init effects
   players.forEach(p=>{
     if(p.prof==="tamer"){ p.power+=1; p.carry+=1; }
@@ -1700,13 +1707,40 @@ function renderSpawnGrid(){
 // (The map's later full rebuild — see ADJ's own comment above — re-derived every edge from scratch,
 // so any specific pair cited by an older version of this comment may no longer hold; ADJ itself is
 // the only source of truth, this function and comment included.)
+// A room with rowSpan>1 (currently only B501, drawn spanning the B4+B5 rows) visually occupies
+// the row of any normal room whose own `.floor` falls inside that span — e.g. B502's floor (B5)
+// is inside B501's [B4,B5] range, so despite their differing `.floor` values they're actually
+// side-by-side on the same drawn row, not on different floors. Treating that as a vertical link
+// puts the ladder marker on the row5/row6 boundary at their shared corner, which is also exactly
+// where B401 (a normal B4 room with no real connection to B502) touches — so the marker reads as
+// a false B401<->B502 connection. floorRangeOverlap lets verticalLinkTargets tell the two cases
+// apart and route the former to the same-row connector (ROWSPAN_SIDE_LINKS) instead.
+function effectiveFloorRange(r){ const span=r.rowSpan||1; return [r.floor, r.floor+span-1]; }
+function floorRangeOverlap(r,t){
+  const [r1,r2]=effectiveFloorRange(r), [t1,t2]=effectiveFloorRange(t);
+  return Math.max(r1,t1)<=Math.min(r2,t2);
+}
 function verticalLinkTargets(r){
   return (ADJ[r.id]||[]).filter(nid=>{
     const n=ROOMS[nid];
-    return n && n.floor!==r.floor;
+    return n && n.floor!==r.floor && !floorRangeOverlap(r,n);
   });
 }
 function hasVerticalLink(r){ return verticalLinkTargets(r).length>0; }
+// The one pair caught by floorRangeOverlap above (B501/B502): rendered as a same-row wall
+// connector on B502's side only. Also putting a mirrored marker on B501 would center it on
+// B501's own (double-height) box, landing back on that same row5/row6 corner next to B401 — so
+// this stays one-sided, same as a purple one-way ADJ arrow only being marked on its source room.
+const ROWSPAN_SIDE_LINKS={};
+Object.values(ROOMS).forEach(r=>{
+  if(!(r.rowSpan>1)) return;
+  (ADJ[r.id]||[]).forEach(nid=>{
+    const n=ROOMS[nid];
+    if(n && n.floor!==r.floor && floorRangeOverlap(r,n)){
+      ROWSPAN_SIDE_LINKS[n.id]={side: n.order>=r.order+r.span ? "left" : "right", other:r.id};
+    }
+  });
+});
 // The only two footbridges across the central atrium — everywhere else the atrium blocks
 // horizontal movement outright, so these get their own distinct marker from ordinary ladders.
 const BRIDGE_SIDE={"B105":"right","B106":"left","B305":"right","B306":"left"};
@@ -1780,6 +1814,10 @@ function roomMarkersHtml(r){
   if(downLinks.length) html+=vmark(downLinks,"");
   if(upLinks.length) html+=vmark(upLinks,"vmark-up");
   if(BRIDGE_SIDE[r.id]) html+=`<span class="hbridge ${BRIDGE_SIDE[r.id]}" title="天橋，花1步可跨越天井">${iconsOff()?"[橋]":"🌉"}</span>`;
+  if(ROWSPAN_SIDE_LINKS[r.id]){
+    const c=ROWSPAN_SIDE_LINKS[r.id];
+    html+=`<span class="hbridge ${c.side}" title="牆面直接相通，可移動至 ${c.other}${ROOMS[c.other].name?" "+ROOMS[c.other].name:""}">${c.side==="right"?"▸":"◂"}</span>`;
+  }
   (FLOOR_CONNECTORS_BY_ROOM[r.id]||[]).forEach(c=>{
     html+=c.connected?
       `<span class="hbridge ${c.side}" title="走道相通，可直接橫移至 ${c.other}">${c.side==="right"?"▸":"◂"}</span>` :
@@ -1940,6 +1978,25 @@ function beginRound(){
       r.stock[t]=(r.stock[t]||0)+1;
       log((r.name||id)+"（"+id+"）獲得補給：庫存"+ITEMS[t].name+"+1。");
     });
+  }
+  // 懸賞機制: independently toggled from map2Mode (see bountyMode above) — a random alive player
+  // is marked as the bounty target at the start of round 3, whoever lands the killing PVP blow
+  // (killerId, checked in killPlayer) gets the reward. Deliberately expires unclaimed at the
+  // start of round 6 rather than being reassigned, so the last round doesn't turn into everyone
+  // dogpiling whoever's currently tagged.
+  if(bountyMode){
+    if(STATE.round===3 && !STATE.bountyTargetId){
+      const candidates=alivePlayers();
+      if(candidates.length){
+        const target=candidates[Math.floor(Math.random()*candidates.length)];
+        STATE.bountyTargetId=target.id;
+        log("🎯 懸賞公告："+target.name+" 被標記為懸賞目標！擊殺者可獲得2枚金條與1張神秘商店道具。","heal");
+      }
+    } else if(STATE.round===6 && STATE.bountyTargetId){
+      const target=STATE.players.find(x=>x.id===STATE.bountyTargetId);
+      if(target && target.alive) log("🎯 懸賞失效："+target.name+" 撐過懸賞期限，獎勵撤銷。");
+      STATE.bountyTargetId=null;
+    }
   }
   // Stock this round's airdrop schedule into the shared bag exactly once — collectAirdrop()
   // only draws from it, so several pickups this round don't each re-add the whole schedule.
@@ -4075,6 +4132,24 @@ function killPlayer(p,cause,killerId){
       log(killer.name+"（以血養血）擊殺 "+p.name+"，恢復2點生命（HP→"+killer.hp+"）。","heal");
     }
   }
+  // 懸賞機制: resolves the moment the bounty target dies, whatever the cause — a PVP
+  // kill pays out (gold + item bypass carry entirely, matching 神秘骰子roll6's "憑空獲得" gold),
+  // any other cause of death (poison/mine/etc.) voids the reward. Either way the bounty is spent.
+  if(STATE.bountyTargetId===p.id){
+    if(killerId!==undefined){
+      const killer=STATE.players.find(x=>x.id===killerId);
+      if(killer && killer.alive){
+        killer.inv.push("gold"); killer.inv.push("gold");
+        const shopItems=["mine","dart","smoke","mysterydice","coin","oxygen","teleportcharm","medspray"];
+        const reward=shopItems[Math.floor(Math.random()*shopItems.length)];
+        killer.inv.push(reward);
+        log("🎯 "+killer.name+" 擊殺懸賞目標 "+p.name+"，獲得2枚金條與「"+ITEMS[reward].name+"」（憑空獲得，不佔負重判定）。","heal");
+      }
+    } else {
+      log("🎯 懸賞目標 "+p.name+" 死於非戰鬥原因，懸賞獎勵作廢。");
+    }
+    STATE.bountyTargetId=null;
+  }
   // drop items into mortuary
   const embalmers=STATE.players.filter(x=>x.alive && x.prof==="embalmer");
   const e=embalmers[0];
@@ -4546,7 +4621,7 @@ function showRoundSummary(){
       ? "「"+p.roundStartRoom+"」→「"+displayRoom+" "+(ROOMS[displayRoom].name||"")+"」"
       : "「"+displayRoom+" "+(ROOMS[displayRoom].name||"")+"」（未移動）";
     html+="<div style='margin-bottom:6px;padding-bottom:6px;border-bottom:1px dashed var(--line)'>"+
-      "<b>"+p.name+"</b>（"+profIcon(p.prof)+" "+PROFESSIONS[p.prof].name+"） HP "+p.hp+(p.ghost?" [暗影]":p.alive?"":" 💀")+"<br>"+
+      "<b>"+p.name+"</b>（"+profIcon(p.prof)+" "+PROFESSIONS[p.prof].name+"） HP "+p.hp+(p.ghost?" [暗影]":p.alive?"":" 💀")+(p.id===STATE.bountyTargetId?" 🎯":"")+"<br>"+
       "路徑："+path+"　同房："+companions+"<br>"+
       "本輪扣血："+events+
       "</div>";
@@ -4960,19 +5035,21 @@ function renderAll(){
   // here list
   const hereEl=EL.hereList;
   const others=playersInRoom(p.room,false).filter(x=>x.id!==p.id);
-  hereEl.textContent = others.length? others.map(x=>x.name+(x.ghost?"[暗影]":"")).join("、") : "（無其他玩家）";
+  hereEl.textContent = others.length? others.map(x=>x.name+(x.ghost?"[暗影]":"")+(x.id===STATE.bountyTargetId?"🎯":"")).join("、") : "（無其他玩家）";
 
   // all players
   const apEl=EL.allPlayers; apEl.innerHTML="";
   STATE.players.forEach(pl=>{
     const line=document.createElement("div");
-    line.textContent=pl.name+" ["+profIcon(pl.prof)+" "+PROFESSIONS[pl.prof].name+"] HP:"+pl.hp+(pl.ghost?" 暗影":pl.alive?"":" 💀");
+    line.textContent=pl.name+" ["+profIcon(pl.prof)+" "+PROFESSIONS[pl.prof].name+"] HP:"+pl.hp+(pl.ghost?" 暗影":pl.alive?"":" 💀")+(pl.id===STATE.bountyTargetId?" 🎯懸賞目標":"");
     apEl.appendChild(line);
   });
 
   const turnPos=STATE.turnOrder? STATE.turnOrder.indexOf(p.id)+1 : 0;
+  const bountyTarget=STATE.bountyTargetId!=null? STATE.players.find(x=>x.id===STATE.bountyTargetId) : null;
   EL.topStatus.innerHTML=`<span class="badge">回合 ${STATE.round}/6</span>`+
-    (turnPos>0? `<span class="badge">本輪順序：第 ${turnPos}/${STATE.turnOrder.length} 位行動</span>` : "");
+    (turnPos>0? `<span class="badge">本輪順序：第 ${turnPos}/${STATE.turnOrder.length} 位行動</span>` : "")+
+    (bountyTarget? `<span class="badge">🎯 懸賞：${bountyTarget.name}</span>` : "");
   renderHpHistory();
   saveGame();
 }
