@@ -3660,6 +3660,25 @@ document.getElementById("tradeBtn").addEventListener("click",()=>{
 });
 
 /* ===================== AI ===================== */
+// Full-map BFS distance from `from` to the closest OTHER room matching `predicate`, unbounded by
+// this round's step budget (unlike reachableRooms). aiChooseTarget's own scoring only ever "sees"
+// rooms reachable this turn, so if nothing useful is in range it falls back to pure random
+// wandering — this lets the drift bonus below spot a useful room several turns away and bias
+// movement toward it instead.
+function nearestRoomDistance(from, predicate){
+  let dist={[from]:0}, q=[from], i=0;
+  while(i<q.length){
+    const node=q[i++];
+    for(const n of (ADJ[node]||[])){
+      if(dist[n]===undefined){
+        dist[n]=dist[node]+1;
+        if(predicate(ROOMS[n])) return dist[n];
+        q.push(n);
+      }
+    }
+  }
+  return Infinity;
+}
 function aiChooseTarget(p){
   // aiConsiderTruckerBoost() runs before this and already folds any 卸載加速 doubling into
   // p.stepsLeft, so the reachable-rooms budget is simply the steps actually left this turn.
@@ -3681,6 +3700,16 @@ function aiChooseTarget(p){
     if(!hasGun(p) && (room.stock.pistol||room.stock.shotgun||room.stock.knife)) score+=3;
     if(STATE.round>=2 && (room.stock.water||room.stock.food)) score+=2;
     if(room.draw>0) score+=1.5;
+    // Drift bonuses: same needs as above, but scored by distance-to-nearest-match across the
+    // WHOLE map (not just this round's reachable set) so the AI still leans toward a useful room
+    // even when it's out of range this turn, instead of wandering randomly until it happens to be
+    // in range. Divisor is offset by 2 (not 1) so even an adjacent match scores below the full
+    // in-range bonus above — actually being able to use a room this turn always wins.
+    if(p.hp<=5){ const d=nearestRoomDistance(r,x=>x.stock.pill||x.stock.adrenaline); if(isFinite(d)) score+=5/(d+2); }
+    if(p.prof==="medic" && p.hp<=6){ const d=nearestRoomDistance(r,x=>x.special==="surgery"); if(isFinite(d)) score+=5/(d+2); }
+    if(!hasGun(p)){ const d=nearestRoomDistance(r,x=>x.stock.pistol||x.stock.shotgun||x.stock.knife); if(isFinite(d)) score+=3/(d+2); }
+    if(STATE.round>=2){ const d=nearestRoomDistance(r,x=>x.stock.water||x.stock.food); if(isFinite(d)) score+=2/(d+2); }
+    { const d=nearestRoomDistance(r,x=>x.draw>0); if(isFinite(d)) score+=1.5/(d+2); }
     if(roomIsPoisoned(room)) score-=6;
     if(r==="102") score-=4;
     // 操作室(重新分配點數) is a no-op for the AI — it always keeps its stats as rolled rather
