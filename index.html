@@ -870,7 +870,7 @@ Object.assign(PROFESSIONS, {
     {name:"截糧", desc:"（被動）擊敗玩家後，可取得對方1份水或糧。", passive:true}
   ]},
   zhanghe:{name:"張郃", skills:[
-    {name:"巧變", desc:"主動，整局限用2次：本輪可將1次移動改為橫向移動，不受原本移動限制。", uses:2},
+    {name:"巧變", desc:"主動，整局限用2次：可直接移動至正上方或正下方的房間（無需梯子/電梯），消耗1步。", uses:2},
     {name:"料敵先機", desc:"（被動）進入新房間時，可查看房間內1名玩家的武力值。", passive:true}
   ]},
   // ---- 蜀 Shu (10) ----
@@ -3532,6 +3532,7 @@ const SKILL_USE_LIMITS={
   "zhaoyun:1":{flag:"sgZhaoyunUses",max:2},
   "machao:0":{flag:"sgMachaoUses",max:2},
   "weiyan:0":{flag:"sgWeiyanUses",max:2},
+  "zhanghe:0":{flag:"sgZhangheUses",max:2},
   "jiangwei:0":{flag:"sgJiangweiUses",max:2},
   "pangtong:0":{flag:"sgPangtongUses",max:2},
   "sunce:0":{flag:"sgSunceUses",max:3},
@@ -3667,6 +3668,16 @@ function useSanguoSkill(p,idx){
   if(p.prof==="weiyan" && idx===0){ // 奇襲子午谷
     openSanguoRoomPickerModal("奇襲子午谷：移動至距離3內任意房間",roomTargets(3,false),"出發",(r)=>{
       p.room=r; p.stepsLeft=0; finish(p.name+" 使用奇襲子午谷，瞬間移動至「"+r+"」。");
+    });
+    return;
+  }
+  if(p.prof==="zhanghe" && idx===0){ // 巧變（同 繩索／垂直攀爬 的正上/下方直達，消耗1步）
+    const dests=verticalNeighborRooms(ROOMS[p.room]);
+    if(!dests.length){ flashMsg("此房間正上/下方沒有可直接前往的目標。"); return; }
+    openSanguoRoomPickerModal("巧變：直接移動至正上/下方房間",dests.map(r=>r.id),"移動",(r)=>{
+      if(p.flags.roomCommitted){ flashMsg("本輪已確定停留於此房間，無法再移動。"); return; }
+      if(!carrySpendStep(p)){ return; }
+      p.room=r; finish(p.name+" 使用巧變，直接移動至「"+r+"」。");
     });
     return;
   }
@@ -3992,7 +4003,7 @@ function useProfSkill(p,idx){
 // confirm prompt naming the skill and its effect before anything happens.
 const SKILL_OPENS_OWN_MODAL=new Set(["chemist:0","hacker:1","geneFreak:1","shopper:1","pickpocket:0","courier:1","mediocre:1","mediocre:2","collector:1","prepper:1","witch:0",
   // 三國模式：需要選目標玩家/房間的主動技能，跳過通用確認彈窗，直接進自己的選擇彈窗
-  "zhangfei:0","weiyan:0","zhouyu:0","lusu:1","luxun:0","ganning:0","yuanshao:0","zhangjiao:0","zhangjiao:1"]);
+  "zhangfei:0","weiyan:0","zhouyu:0","lusu:1","luxun:0","ganning:0","yuanshao:0","zhangjiao:0","zhangjiao:1","zhanghe:0"]);
 function confirmAndUseSkill(p,idx){
   const s=PROFESSIONS[p.prof].skills[idx];
   openModal(`<h3>發動技能：${s.name}</h3><div style="margin-bottom:12px;font-size:13px;line-height:1.6">${s.desc}</div>
