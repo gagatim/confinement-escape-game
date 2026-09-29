@@ -261,8 +261,10 @@
       <div class="muted mono" id="profCountInfo" style="font-size:12px;margin-bottom:6px"></div>
       <label class="muted" style="display:block;margin-bottom:6px;font-size:13px">
         <input type="checkbox" id="expansionToggle"> 啟用擴充模式（新增擴充職業，AI也可能隨機選到，實際數量見上方統計）</label>
-      <label class="muted" style="display:block;margin-bottom:10px;font-size:13px">
+      <label class="muted" style="display:block;margin-bottom:6px;font-size:13px">
         <input type="checkbox" id="sanguoToggle"> 啟用三國模式（角色全面替換為40位三國武將〔魏／蜀／吳／群雄各10人〕，AI也只會從這40人中選取；取消勾選則恢復一般職業）</label>
+      <label class="muted" style="display:block;margin-bottom:10px;font-size:13px">
+        <input type="checkbox" id="sanguoTeamToggle"> 啟用三國陣營戰（需先啟用三國模式；限定9或12人，依國家分成3～4隊，每隊3人，同國家不互相傷害，房內混戰只計較國家間的代表武力，結算比較各國總血量）</label>
       <div class="prof-grid" id="profGrid"></div>
     </div>
     <div class="card" style="margin-top:12px">
@@ -383,6 +385,7 @@
   <!-- ============ END ============ -->
   <div id="endScreen" class="hidden card" style="margin-top:14px">
     <h2 style="color:var(--gold);font-family:Orbitron">六輪結束 － 最終排名</h2>
+    <div id="teamRankList"></div>
     <div id="rankList"></div>
     <h2 style="color:var(--gold);font-family:Orbitron;font-size:15px;margin-top:20px">大家的移動路線</h2>
     <div id="routeList" class="mono" style="font-size:12.5px;line-height:1.9"></div>
@@ -1444,6 +1447,12 @@ let bountyMode=false;
 // the AI's random-pick pool in startGame()) to the 40 三國 武將 instead of the normal 45. Unlike
 // 擴充模式 this isn't additive: while it's on, the base/擴充 cards are hidden, not just supplemented.
 let sanguoMode=false;
+// 三國陣營戰: a sub-mode of 三國模式 — off by default. When on, professions are assigned as
+// whole-kingdom teams (see startGame's sanguoTeamMode branch) instead of each AI independently
+// picking a random 武將, player count is locked to 9 or 12, and room combat/poison-vote/endgame
+// scoring all switch to their team-aware variants (resolveRoomCombatsTeam, the kingdom-aware AI
+// vote logic in aiActAfterMove, and renderEndScreen's team ranking block).
+let sanguoTeamMode=false;
 const LOTTERY_ROOMS=["B104","B405","B302"];
 // 配給站 (B102/B602): stocked with 5 water + 5 food, 3 draw attempts per visit at a 70% per-
 // attempt success chance (see drawItemsFromStock's drawSuccessChance check) — a plain, higher-
@@ -1536,6 +1545,30 @@ document.getElementById("sanguoToggle").addEventListener("change",(e)=>{
     document.querySelectorAll(".prof-card").forEach(c=>c.classList.remove("selected"));
     document.getElementById("startHint").textContent="請先選擇職業";
     validateStart();
+  }
+  // 三國陣營戰 needs 三國模式 on to mean anything — turning 三國模式 off underneath it
+  // switches it off too, restoring the normal 4~8人 slider.
+  if(!sanguoMode && sanguoTeamMode){
+    document.getElementById("sanguoTeamToggle").checked=false;
+    document.getElementById("sanguoTeamToggle").dispatchEvent(new Event("change"));
+  }
+});
+// 三國陣營戰: locks 玩家人數 to 9 or 12 (3~4 kingdom-teams of 3) and switches team-formation/
+// combat/poison-vote/scoring to their kingdom-aware variants (see startGame, resolveRoomCombatsTeam,
+// the vote logic in aiActAfterMove, and renderEndScreen).
+document.getElementById("sanguoTeamToggle").addEventListener("change",(e)=>{
+  sanguoTeamMode=e.target.checked;
+  const pc=document.getElementById("playerCount");
+  if(sanguoTeamMode){
+    if(!sanguoMode){
+      document.getElementById("sanguoToggle").checked=true;
+      document.getElementById("sanguoToggle").dispatchEvent(new Event("change"));
+    }
+    pc.min=9; pc.max=12; pc.step=3; pc.value=9;
+    document.getElementById("valPlayers").textContent="9";
+  } else {
+    pc.min=4; pc.max=8; pc.step=1; pc.value=8;
+    document.getElementById("valPlayers").textContent="8";
   }
 });
 
@@ -1800,11 +1833,9 @@ function startGame(){
   const profIds=sanguoMode ? [...SANGUO_PROFS]
     : Object.keys(PROFESSIONS).filter(id=>!SANGUO_PROFS.has(id) && (expansionMode||!EXPANSION_PROFS.has(id)));
   const players=[you];
-  for(let i=1;i<n;i++){
-    let pool=profIds.filter(x=>!usedProfs.has(x));
-    if(pool.length===0){ pool=profIds; usedProfs.clear(); }
-    const pid=pool[Math.floor(Math.random()*pool.length)];
-    usedProfs.add(pid);
+  // rolls the same random power/speed/carry split every AI player gets — pulled out so both the
+  // normal per-player loop below and 三國陣營戰's team-formation branch can share it verbatim.
+  const rollAIStats=(pid)=>{
     const pw=Math.floor(Math.random()*5)+2, sp=Math.floor(Math.random()*4)+1;
     const cap = pid==="geneFreak"?12:10;
     let power=Math.min(pw, pid==="geneFreak"?5:99);
@@ -1812,9 +1843,34 @@ function startGame(){
     // (power maxes at 6, or 5 for geneFreak, so this never has to clamp speed below its own 1 floor).
     let speed=Math.min(sp, cap-power-1);
     let carry=cap-power-speed;
-    players.push(makePlayer(i,true,pid,{power,speed,carry}));
+    return {power,speed,carry};
+  };
+  if(sanguoTeamMode){
+    // 三國陣營戰: teams are whole kingdoms, not individual random picks. n is locked to 9 or 12
+    // by the setup screen (see playerCount's min/max under sanguoTeamToggle), giving exactly
+    // 3 or 4 teams of 3 — your own kingdom is always one of them (with you counted as 1 of its
+    // 3), the rest are picked at random from the remaining kingdoms.
+    const teamCount=n/3;
+    const myKingdom=SANGUO_KINGDOM[selectedProf];
+    const otherKingdoms=shuffleArr(["魏","蜀","吳","群"].filter(k=>k!==myKingdom)).slice(0,teamCount-1);
+    const kingdoms=[myKingdom,...otherKingdoms];
+    let nextId=1;
+    kingdoms.forEach(k=>{
+      const roster=[...SANGUO_PROFS].filter(id=>SANGUO_KINGDOM[id]===k);
+      const need = k===myKingdom ? 2 : 3; // your kingdom already has you as its 3rd member
+      const avail=shuffleArr(roster.filter(id=>id!==selectedProf)).slice(0,need);
+      avail.forEach(pid=>{ players.push(makePlayer(nextId++,true,pid,rollAIStats(pid))); });
+    });
+  } else {
+    for(let i=1;i<n;i++){
+      let pool=profIds.filter(x=>!usedProfs.has(x));
+      if(pool.length===0){ pool=profIds; usedProfs.clear(); }
+      const pid=pool[Math.floor(Math.random()*pool.length)];
+      usedProfs.add(pid);
+      players.push(makePlayer(i,true,pid,rollAIStats(pid)));
+    }
   }
-  STATE={round:1, phase:"positioning", players, poisoned:new Set(), detoxedRooms:new Set(), voteCounts:{}, voteLog:[], voteBallot:[], discardPile:[], gameOver:false, roundHistory:[], bountyTargetId:null, sanguoDisabledRooms:new Set()};
+  STATE={round:1, phase:"positioning", players, poisoned:new Set(), detoxedRooms:new Set(), voteCounts:{}, voteLog:[], voteBallot:[], discardPile:[], gameOver:false, roundHistory:[], bountyTargetId:null, sanguoDisabledRooms:new Set(), sanguoTeamMode};
   // profession init effects
   players.forEach(p=>{
     if(p.prof==="tamer"){ p.power+=1; p.carry+=1; }
@@ -4668,6 +4724,15 @@ function resolveAITurn(p){
   const ballot=(STATE.voteBallot||[]).filter(f=>!STATE.poisoned.has(f));
   let floorOpts=ballot.filter(f=>f!==myFloor);
   if(!floorOpts.length) floorOpts=ballot;
+  // 三國陣營戰: among whatever's left, prefer whichever floor(s) currently hold the FEWEST of
+  // this AI's own kingdom — same protective instinct as avoiding myFloor above, just extended to
+  // teammates scattered elsewhere instead of only the AI's own current room.
+  if(STATE.sanguoTeamMode && floorOpts.length>1){
+    const myKingdom=SANGUO_KINGDOM[p.prof];
+    const countOnFloor=(f)=>STATE.players.filter(x=>x.alive && !x.ghost && SANGUO_KINGDOM[x.prof]===myKingdom && ROOMS[x.room].floor===f).length;
+    const minCount=Math.min(...floorOpts.map(countOnFloor));
+    floorOpts=floorOpts.filter(f=>countOnFloor(f)===minCount);
+  }
   if(floorOpts.length){
     const voteFloor=floorOpts[Math.floor(Math.random()*floorOpts.length)];
     const voteWeight=p.flags.voteWeight||1;
@@ -4935,6 +5000,42 @@ function poisonDamageForRound(){
 // one-off spawnSettlement() run right after spawn-point selection — same room-fight rules
 // (outsider/smoke exemptions, free-for-all single-target resolution) either way, just over
 // whatever players/rooms happen to be current when it's called.
+// 三國陣營戰的房間對戰: replaces the individual free-for-all entirely when STATE.sanguoTeamMode
+// is on. Players are grouped by KINGDOM, not by person — same-kingdom players never damage each
+// other (they're teammates), each kingdom's own combatPower()-strongest member stands in as its
+// "representative", and whichever kingdom's representative has the highest power wins the room:
+// every member of every OTHER kingdom present takes a flat SANGUO_TEAM_DAMAGE, the winning
+// kingdom's members take none. Ties keep whichever kingdom was found first (same convention as
+// aiChooseTarget's own best-score loop elsewhere in this file).
+const SANGUO_TEAM_DAMAGE=2;
+function resolveRoomCombatsTeam(){
+  const roomGroups={};
+  STATE.players.forEach(p=>{ if(p.alive && !p.ghost){ (roomGroups[p.room]=roomGroups[p.room]||[]).push(p); } });
+  Object.entries(roomGroups).forEach(([r,group])=>{
+    if(group.length<2) return;
+    if(r==="B202" && group.length===2) return; // same exemption as the individual path: healing handled elsewhere
+    const byKingdom={};
+    group.forEach(p=>{ const k=SANGUO_KINGDOM[p.prof]; if(k) (byKingdom[k]=byKingdom[k]||[]).push(p); });
+    const kingdoms=Object.keys(byKingdom);
+    if(kingdoms.length<2) return; // everyone here is the same kingdom (or not a 武將) — no fight
+    let winningKingdom=kingdoms[0], winningPower=-Infinity, winningRep=null;
+    kingdoms.forEach(k=>{
+      const rep=byKingdom[k].reduce((best,p)=>combatPower(p)>combatPower(best)?p:best, byKingdom[k][0]);
+      const pw=combatPower(rep);
+      if(pw>winningPower){ winningPower=pw; winningKingdom=k; winningRep=rep; }
+    });
+    log("「"+r+"」陣營對戰："+kingdoms.map(k=>KINGDOM_ICON[k]+k+"（"+byKingdom[k].map(p=>p.name).join("、")+"）").join(" vs ")+
+      "，"+KINGDOM_ICON[winningKingdom]+winningKingdom+"陣營代表 "+winningRep.name+"（武力"+winningPower+"）最高，其餘陣營全員各扣"+SANGUO_TEAM_DAMAGE+"點血。");
+    kingdoms.forEach(k=>{
+      if(k===winningKingdom) return;
+      byKingdom[k].forEach(p=>{
+        damagePlayer(p,SANGUO_TEAM_DAMAGE,"陣營戰敗（負於"+winningKingdom+"）",winningRep.id);
+        log(p.name+"（"+k+"）在「"+r+"」陣營戰落敗，受到 "+SANGUO_TEAM_DAMAGE+" 點傷害。","dmg");
+      });
+    });
+    STATE.__report.combat.push(r+"："+kingdoms.join(" vs ")+" 陣營對戰，"+winningKingdom+" 獲勝");
+  });
+}
 function resolveRoomCombats(){
   const roomGroups={};
   STATE.players.forEach(p=>{ if(p.alive && !p.ghost){ (roomGroups[p.room]=roomGroups[p.room]||[]).push(p); } });
@@ -4981,7 +5082,7 @@ function spawnSettlement(){
   STATE.players.forEach(p=>{ if(p.spawnRoom) p.room=p.spawnRoom; });
   STATE.__report={combat:[], rocket:[], hunger:[], drain:[], poison:"", poisonDamage:[]};
   log("<b>── 出生點結算（同房間戰鬥）──</b>");
-  resolveRoomCombats();
+  if(STATE.sanguoTeamMode) resolveRoomCombatsTeam(); else resolveRoomCombats();
   if(STATE.__report.combat.length===0){
     log("無人與他人同房間開局，或本次未觸發戰鬥。");
   }
@@ -5011,7 +5112,7 @@ function settleRound(){
   });
 
   // 2) combat resolution per room
-  resolveRoomCombats();
+  if(STATE.sanguoTeamMode) resolveRoomCombatsTeam(); else resolveRoomCombats();
 
   // rocket launcher (declared during action phase, resolves as part of this round's violence)
   (STATE.rocketTargets||[]).forEach(({room:r, shooterId})=>{
@@ -5445,6 +5546,26 @@ function endGame(){
 // stat going into death — power is never reduced by dying), and if THAT'S also tied, they share
 // the same rank number (standard competition ranking: 1,2,2,4 — not 1,2,2,3).
 function renderEndScreen(){
+  // 三國陣營戰的隊伍排名: sums each kingdom's players' current HP (dead players contribute 0,
+  // same as their individual HP already sitting at 0 — no separate "is this player alive" check
+  // needed) and ranks kingdoms by that total, above the individual ranking below.
+  const teamListEl=document.getElementById("teamRankList");
+  if(STATE.sanguoTeamMode){
+    const totals={};
+    STATE.players.forEach(p=>{
+      const k=SANGUO_KINGDOM[p.prof]; if(!k) return;
+      totals[k]=(totals[k]||0)+p.hp;
+    });
+    const teamRanked=Object.entries(totals).sort((a,b)=>b[1]-a[1]);
+    let trank=1;
+    teamListEl.innerHTML="<h2 style='color:var(--gold);font-family:Orbitron;font-size:15px'>陣營總血量排名</h2>"+
+      teamRanked.map(([k,hp],i)=>{
+        if(i>0 && teamRanked[i-1][1]!==hp) trank=i+1;
+        return "<div class='rank-row'><span>#"+trank+" "+KINGDOM_ICON[k]+" "+k+"</span><span class='mono'>總HP "+hp+"</span></div>";
+      }).join("");
+  } else {
+    teamListEl.innerHTML="";
+  }
   const ranked=[...STATE.players].sort((a,b)=>(b.hp-a.hp)||(b.power-a.power));
   const list=document.getElementById("rankList");
   list.innerHTML="";
