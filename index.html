@@ -846,7 +846,7 @@ Object.assign(PROFESSIONS, {
     {name:"反制之策", desc:"主動，整局限用1次：成為其他玩家技能目標時，可取消該技能，對方受到2點傷害。", uses:1}
   ]},
   xiahoudun:{name:"夏侯惇", skills:[
-    {name:"拔矢啖睛", desc:"（被動）單次受到5點以上傷害時，傷害-3。", passive:true},
+    {name:"拔矢啖睛", desc:"（被動）單次受到4點以上傷害時，傷害-3。", passive:true},
     {name:"剛烈", desc:"（被動）受到近戰傷害後，攻擊者受到1點傷害。", passive:true}
   ]},
   xiahouyuan:{name:"夏侯淵", skills:[
@@ -5367,7 +5367,7 @@ function resolveCombat(a,b,roomId,frozenA){
     // alone" can never actually be true here — this branch is a structural no-op.
     if(hermitAlone(p) && d>0){ const before=d; d=Math.max(0,d-1); note+="〔離群索居 -"+(before-d)+"〕"; }
     // ---- 三國模式：受傷減免類被動／限定回合主動 ----
-    if(p.prof==="xiahoudun" && dmg>=5 && d>0){ const before=d; d=Math.max(0,d-3); note+="〔拔矢啖睛 -"+(before-d)+"〕"; } // 判定用原始 dmg，避免被前面減免拉到5以下就失效
+    if(p.prof==="xiahoudun" && dmg>=4 && d>0){ const before=d; d=Math.max(0,d-3); note+="〔拔矢啖睛 -"+(before-d)+"〕"; } // 判定用原始 dmg，避免被前面減免拉到閾值以下就失效
     if(p.prof==="zhaoyun" && !p.flags.zhaoyunUsedThisRound && d>0){ const before=d; d=Math.max(0,d-2); note+="〔七進七出 -"+(before-d)+"〕"; p.flags.zhaoyunUsedThisRound=true; }
     if(p.prof==="zhuge" && p.flags.zhugeShieldActive && d>0){ const before=d; d=Math.max(0,d-3); note+="〔八卦陣 -"+(before-d)+"〕"; }
     if(p.prof==="guanyu" && p.flags.guanyuDuelActive && d>0){ const before=d; d=Math.max(0,d-3); note+="〔單刀赴會 -"+(before-d)+"〕"; }
