@@ -875,8 +875,8 @@ Object.assign(PROFESSIONS, {
   ]},
   // ---- 蜀 Shu (10) ----
   liubei:{name:"劉備", skills:[
-    {name:"仁德", desc:"（被動）每輪可免費給同房間玩家1張水、糧或藥片，自己恢復1生命。", passive:true},
-    {name:"桃園結義", desc:"主動，整局限用2次：與同房間1名玩家結盟，本輪雙方戰鬥傷害-2。", uses:2}
+    {name:"仁德", desc:"（被動，強制發動，整局限3次）每當與同勢力隊友同房間，回合結算前：同勢力隊友武力各+1，自己武力-1（最低0，即使已是0也照樣發動並消耗次數）。", passive:true},
+    {name:"桃園結義", desc:"（被動，強制發動，六輪皆有效，無次數限制）回合結算前判斷：若同房間內同勢力有2人以上、且其中有人這輪會受到傷害（毒氣／火箭筒／混戰落敗），則同房間同勢力全員恢復1點生命。", passive:true}
   ]},
   zhuge:{name:"諸葛亮", skills:[
     {name:"神機妙算", desc:"（被動）每輪查看任意1個房間的「人數、庫存、危險」其中一項。", passive:true},
@@ -3533,6 +3533,7 @@ const SKILL_USE_LIMITS={
   "machao:0":{flag:"sgMachaoUses",max:2},
   "weiyan:0":{flag:"sgWeiyanUses",max:2},
   "zhanghe:0":{flag:"sgZhangheUses",max:2},
+  "liubei:0":{flag:"sgLiubeiRenDeUses",max:3},
   "jiangwei:0":{flag:"sgJiangweiUses",max:2},
   "pangtong:0":{flag:"sgPangtongUses",max:2},
   "sunce:0":{flag:"sgSunceUses",max:3},
@@ -4709,6 +4710,8 @@ function resolveAITurn(p){
       doRecycle(p,bestIdx);
     }
   }
+  // 劉備的仁德 is no longer an AI decision at all — it's a forced automatic trigger resolved in
+  // settleRound() for every 劉備 (human or AI) alike, so there's nothing to consider here.
   // 郵差's 專人配送 is deliberately left unused by AI, same precedent as 賭徒/基因怪人 noted
   // above — sending a card to an arbitrary distant player has no clear heuristic payoff. 收藏家's
   // 以物易物 is left unused for the same reason: "which exact card is worth 2 of mine" is a
@@ -5103,6 +5106,46 @@ function settleRound(){
   STATE.phase="settlement";
   log("<b>── 進入結算階段 ──</b>");
   STATE.__report={combat:[], rocket:[], hunger:[], drain:[], poison:"", poisonDamage:[]};
+
+  // 0) 劉備的仁德（三國模式，強制被動，整局限3次）: the very first thing settlement does, before
+  // anything else this round resolves — if 劉備 shares a room with at least one 同勢力(同國家)
+  // 隊友, every such teammate present gets +1 permanent 武力 and 劉備 himself takes -1 (floored at
+  // 0). This is NOT a choice: it fires automatically for both human and AI 劉備 alike, whenever the
+  // condition is met and the 3-per-game charge isn't already spent — even a charge that only takes
+  // him from 0 to 0 still counts against the cap, per its own wording.
+  STATE.players.forEach(p=>{
+    if(p.prof!=="liubei" || !p.alive || p.ghost) return;
+    if(skillUseCapReached(p,"liubei:0")) return;
+    const kingdom=SANGUO_KINGDOM[p.prof];
+    const teammates=playersInRoom(p.room,true).filter(x=>x.id!==p.id && SANGUO_KINGDOM[x.prof]===kingdom);
+    if(!teammates.length) return;
+    teammates.forEach(t=>{ t.power+=1; });
+    p.power=Math.max(0,p.power-1);
+    p.flags.sgLiubeiRenDeUses=(p.flags.sgLiubeiRenDeUses||0)+1;
+    log(p.name+"（仁德）與隊友「"+teammates.map(t=>t.name).join("、")+"」相遇：同勢力武力各+1，自己武力-1（現"+p.power+"）。（"+p.flags.sgLiubeiRenDeUses+"/3次）");
+  });
+
+  // 0b) 劉備的桃園結義（三國模式，強制被動，六輪皆有效、無次數上限）: same room as 劉備, 2+ of
+  // his own kingdom present (himself included), AND that room is at risk of damage this very
+  // settlement — predicted the same way the actual damage steps below will judge it (poisoned
+  // floor, a declared rocket target, or 2+ people/kingdoms meaning combat is about to happen) —
+  // heals every one of his kingdom present 1 HP apiece, before any of that damage actually lands.
+  STATE.players.forEach(p=>{
+    if(p.prof!=="liubei" || !p.alive || p.ghost) return;
+    const r=p.room, group=playersInRoom(r,true);
+    const kingdom=SANGUO_KINGDOM[p.prof];
+    const sameKingdomHere=group.filter(x=>SANGUO_KINGDOM[x.prof]===kingdom);
+    if(sameKingdomHere.length<2) return; // needs 劉備 + at least 1 more of his own kingdom
+    const poisonRisk=roomIsPoisoned(ROOMS[r]);
+    const rocketRisk=(STATE.rocketTargets||[]).some(rt=>rt.room===r);
+    const combatRisk=STATE.sanguoTeamMode
+      ? new Set(group.map(x=>SANGUO_KINGDOM[x.prof]).filter(Boolean)).size>=2
+      : group.length>=2;
+    if(!poisonRisk && !rocketRisk && !combatRisk) return;
+    sameKingdomHere.forEach(x=>{ x.hp=Math.min(x.maxhp,x.hp+1); });
+    const riskTags=[poisonRisk&&"毒氣",rocketRisk&&"火箭筒",combatRisk&&"混戰"].filter(Boolean).join("／");
+    log(p.name+"（桃園結義）與同勢力隊友「"+sameKingdomHere.filter(x=>x.id!==p.id).map(x=>x.name).join("、")+"」同房，本輪有受傷風險（"+riskTags+"），全員恢復1點生命。","heal");
+  });
 
   // 1) queued item-card effects (水/糧/腎上腺素/酒 — all "結算階段公開使用"；藥片 heals later, see below)
   STATE.players.forEach(p=>{ if(p.alive) resolvePendingItemUses(p); });
