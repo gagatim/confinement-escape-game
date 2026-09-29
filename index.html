@@ -767,7 +767,7 @@ const PROFESSIONS = {
   ]},
   boss:{name:"黑社會老大", skills:[
     {name:"一呼百應", desc:"（被動）遊戲開始時指定3名其他玩家為小弟（A／B／C），三人的武力值各永久+1。", passive:true},
-    {name:"你們先上", desc:"（被動）你每次即將扣血時強制發動：隨機抽取尚未使用過的小弟其中一人（每人只會被抽中1次），改由該小弟代替你承受這次傷害，事後該小弟武力永久-1。三名小弟皆用完後，扣血才會恢復由你自己承受。", passive:true}
+    {name:"你們先上", desc:"（被動）你每次即將扣血時強制發動（飢餓傷害不受影響，仍全額由你自己承受）：隨機抽取尚未使用過的小弟其中一人（每人只會被抽中1次），改由該小弟代為承受這次傷害的一半（無條件進位），你自己承受剩餘一半；事後該小弟武力永久-1。三名小弟皆用完後，扣血才會完全恢復由你自己承受。", passive:true}
   ]},
   collector:{name:"收藏家", skills:[
     {name:"貪婪囤積", desc:"（被動）背包內同一種道具持有數量達3張以上時，第3張起不佔負重。", passive:true},
@@ -2582,6 +2582,11 @@ function hackerRemoteRoomIds(){
     return r.draw>0 || !!r.special;
   });
 }
+// A room has no function if it neither offers a search (draw>0) nor has any special mechanic —
+// shared by 傳送室's destination list (below) and the AI's teleport-escape heuristic.
+function isFunctionlessRoom(room){
+  return !room.special && !(room.draw>0);
+}
 // 操作室(respec)/控制室(control) open their own follow-up modal (openRespecModal/openControlModal)
 // — the caller must NOT also close/re-render around them, or the just-opened modal gets covered
 // up immediately by the caller's own cleanup.
@@ -2673,8 +2678,11 @@ function openScavengerModal(p){
   bindModalClose("swCancel");
 }
 function openTeleportModal(p){
-  const opts=Object.keys(ROOMS).map(id=>`<option value="${id}">${id} ${ROOMS[id].name||""}</option>`).join("");
-  openModal(`<h3>傳送室：選擇目的地</h3><select id="tpSel">${opts}</select><br><br>
+  // 傳送室功能修正: only reaches a no-function room — it's a repositioning/escape tool, not a
+  // free ride straight to loot (that's what made the old any-room version overpowered).
+  const dests=Object.keys(ROOMS).filter(id=>isFunctionlessRoom(ROOMS[id]));
+  const opts=dests.map(id=>`<option value="${id}">${id} ${ROOMS[id].name||""}</option>`).join("");
+  openModal(`<h3>傳送室：選擇目的地（僅限無功能房間）</h3><select id="tpSel">${opts}</select><br><br>
     <button class="btn small" id="tpOk">傳送(消耗1步)</button> <button class="btn small ghost" id="tpCancel">取消</button>`);
   document.getElementById("tpOk").onclick=()=>{
     if(!carrySpendStep(p)){ closeModal(); return; }
@@ -3997,6 +4005,16 @@ function resolveAITurn(p){
       p.room=dests[Math.floor(Math.random()*dests.length)]; p.stepsLeft--;
     }
   }
+  // 傳送室 (since its rule change only reaches a no-function room, it's an escape valve rather
+  // than a loot shortcut): same shape as 攀岩者's poison escape above — only worth the step when
+  // actually standing in poison gas right now, teleporting straight to a clean no-function room.
+  if(room.special==="teleport" && roomIsPoisoned(room) && p.stepsLeft>=1){
+    const tpDests=Object.keys(ROOMS).filter(id=>isFunctionlessRoom(ROOMS[id]) && !roomIsPoisoned(ROOMS[id]));
+    if(tpDests.length){
+      p.room=tpDests[Math.floor(Math.random()*tpDests.length)]; p.stepsLeft--;
+      log(p.name+" 使用傳送室逃離毒氣樓層，傳送至 "+p.room+"。");
+    }
+  }
   p.flags.roomCommitted=true; // final destination for this round — no further movement
   aiConsiderSkillAfterMove(p);
   // simple item usage: declare now, effect resolves at settlement (same as the human path)
@@ -4130,11 +4148,14 @@ function screenShake(){
 function damagePlayer(p,amount,cause,killerId){
   if(amount<=0) return;
   p.roundEvents=p.roundEvents||[];
-  // 黑社會老大的你們先上: forced substitution, checked before anything else (including his own
-  // adrenaline) — a still-alive boss with an unused 小弟 in the pool never takes this hit at all;
-  // the drawn 小弟 does instead, then loses 1 power for it. Each 小弟 can only ever be drawn once
-  // (spliced out of the pool here), so after all 3 are used damage goes back to hitting the boss.
-  if(p.prof==="boss" && p.alive && p.flags.bossHenchmenPool && p.flags.bossHenchmenPool.length){
+  // 黑社會老大的你們先上: forced partial substitution, checked before anything else (including
+  // his own adrenaline) — a still-alive boss with an unused 小弟 in the pool only takes HALF of
+  // this hit himself; the drawn 小弟 absorbs the other half (rounded up, so an odd amount always
+  // costs the henchman the bigger share) and loses 1 power for it. Each 小弟 can only ever be
+  // drawn once (spliced out of the pool here), so after all 3 are used damage goes back to fully
+  // hitting the boss. 飢餓 is excluded — that's a fixed upkeep cost the boss must pay himself,
+  // not a hit his men can take a bullet for.
+  if(p.prof==="boss" && p.alive && cause!=="飢餓" && p.flags.bossHenchmenPool && p.flags.bossHenchmenPool.length){
     const idx=Math.floor(Math.random()*p.flags.bossHenchmenPool.length);
     const henchId=p.flags.bossHenchmenPool.splice(idx,1)[0];
     const h=STATE.players.find(x=>x.id===henchId);
@@ -4142,11 +4163,14 @@ function damagePlayer(p,amount,cause,killerId){
     // 小弟若已死亡（例如死於毒氣/飢餓，尚未被抽中過），不能代老大承受傷害——
     // 否則這次傷害會在 damagePlayer 對死者的 early return 裡憑空消失，老大等同白撿一次免傷。
     if(h && h.alive){
+      const henchShare=Math.ceil(amount/2);
+      const bossShare=amount-henchShare;
       h.power=Math.max(0,h.power-1);
-      log(p.name+"（你們先上）強制由小弟"+letter+" "+h.name+" 代為承受傷害，"+h.name+" 武力永久-1（現為"+h.power+"）。");
+      log(p.name+"（你們先上）小弟"+letter+" "+h.name+" 代為承受一半傷害("+henchShare+"點)，"+h.name+" 武力永久-1（現為"+h.power+"）；"+p.name+" 自己仍承受剩餘"+bossShare+"點。");
       speakSkill(p,"boss:1");
-      damagePlayer(h,amount,cause+"〔老大轉嫁〕",killerId);
-      return;
+      if(henchShare>0) damagePlayer(h,henchShare,cause+"〔老大轉嫁〕",killerId);
+      if(bossShare<=0) return;
+      amount=bossShare; // fall through below to apply the boss's own remaining share as normal
     }
   }
   if(p.flags.adrenalineActive){ p.hp=Math.max(1,p.hp-amount); p.roundEvents.push({cause,amount}); return; }
