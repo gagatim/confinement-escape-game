@@ -202,6 +202,20 @@
     90%{transform:translate(-1px,1px)}
   }
   body.laser-shake{animation:laserShake .45s ease}
+  /* ---- 技能特效 (opt-in, setup-screen toggle): a full-screen tinted flash plus a centered
+     skill-name banner whenever an active skill fires. pointer-events:none so it never blocks clicks. ---- */
+  #fxLayer{position:fixed;inset:0;pointer-events:none;z-index:9999;display:flex;align-items:center;justify-content:center}
+  .fx-flash{position:absolute;inset:0;opacity:0;animation:fxFlash 1s ease-out forwards}
+  .fx-flash.dmg{background:radial-gradient(circle,rgba(255,80,40,.55),rgba(120,0,0,.25) 70%,transparent)}
+  .fx-flash.speed{background:repeating-linear-gradient(100deg,rgba(80,200,255,.0) 0 40px,rgba(80,200,255,.35) 40px 44px)}
+  .fx-flash.shield{background:radial-gradient(circle,rgba(255,215,90,.45),rgba(60,120,255,.25) 70%,transparent)}
+  .fx-flash.heal{background:radial-gradient(circle,rgba(90,255,150,.45),transparent 70%)}
+  .fx-flash.gold{background:radial-gradient(circle,rgba(255,225,140,.4),transparent 70%)}
+  .fx-title{position:relative;font-size:clamp(26px,6vw,54px);font-weight:900;letter-spacing:.08em;color:#fff;
+    text-shadow:0 0 12px #000,0 0 28px var(--gold,#e8c36a);opacity:0;animation:fxTitle 1s ease-out forwards;text-align:center}
+  .fx-title small{display:block;font-size:.4em;font-weight:600;letter-spacing:.2em;opacity:.85}
+  @keyframes fxFlash{0%{opacity:0}15%{opacity:1}100%{opacity:0}}
+  @keyframes fxTitle{0%{opacity:0;transform:scale(.6)}20%{opacity:1;transform:scale(1.08)}70%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(1.15)}}
   .tag{display:inline-block;font-size:10px;padding:1px 6px;border-radius:4px;background:var(--panel-2);border:1px solid var(--line);margin-left:4px}
 
   /* ---- 低調模式 (boss key): a fake spreadsheet that covers the whole viewport above
@@ -259,6 +273,8 @@
     <div class="card" style="margin-top:12px">
       <h2 style="font-size:16px;color:var(--cyan-bright)">1. 選擇職業</h2>
       <div class="muted mono" id="profCountInfo" style="font-size:12px;margin-bottom:6px"></div>
+      <label class="muted" style="display:block;margin-bottom:6px;font-size:13px">
+        <input type="checkbox" id="fxToggle"> 啟用技能特效版（一般職業與擴充職業的主動技能發動時，出現全螢幕光效與技能名稱；不勾選就是基本版；三國模式暫不支援）</label>
       <label class="muted" style="display:block;margin-bottom:6px;font-size:13px">
         <input type="checkbox" id="expansionToggle"> 啟用擴充模式（新增擴充職業，AI也可能隨機選到，實際數量見上方統計）</label>
       <label class="muted" style="display:block;margin-bottom:6px;font-size:13px">
@@ -1357,7 +1373,29 @@ const VOICE=(()=>{
     speak
   };
 })();
-function speakSkill(p,key){ VOICE.speak(SKILL_QUOTES[key],p.prof,{queue:true,hype:true}); }
+function speakSkill(p,key){ VOICE.speak(SKILL_QUOTES[key],p.prof,{queue:true,hype:true}); skillFX(p,key); }
+// 技能特效版: off by default (see #fxToggle on the setup screen). Active skills only — passives
+// that happen to call speakSkill are skipped. Effect style is picked from the skill's own
+// description text, so every profession (一般職業 and 三國 alike) gets one without per-skill wiring.
+let fxMode=false;
+try{ fxMode=localStorage.getItem("skillFx")==="1"; }catch(e){}
+let fxStamp=0; // bumps on every skillFX call, so the useProfSkill wrapper below can tell whether a skill already showed its own effect
+function skillFX(p,key){
+  fxStamp++;
+  if(!fxMode || !p) return;
+  if(SANGUO_PROFS.has(p.prof)) return; // 目前只做一般職業／擴充職業，三國模式之後再加
+  const sk=PROFESSIONS[p.prof] && PROFESSIONS[p.prof].skills[parseInt(String(key).split(":")[1],10)];
+  if(!sk || sk.passive) return;
+  const d=sk.desc||"";
+  const type=/傷害|攻擊|擊|炸|火/.test(d)?"dmg":/速度|步|移動|跳|傳送/.test(d)?"speed":/減|免疫|無法|歸零|防|不會|護/.test(d)?"shield":/恢復|生命|回復/.test(d)?"heal":"gold";
+  let layer=document.getElementById("fxLayer");
+  if(!layer){ layer=document.createElement("div"); layer.id="fxLayer"; document.body.appendChild(layer); }
+  const el=document.createElement("div");
+  el.innerHTML=`<div class="fx-flash ${type}"></div><div class="fx-title"><small>${p.name}</small>${sk.name}</div>`;
+  layer.appendChild(el);
+  if(type==="dmg" && typeof screenShake==="function") screenShake();
+  setTimeout(()=>el.remove(),1100);
+}
 // Self-introduction line spoken when a profession card is clicked on the setup screen —
 // separate from SKILL_QUOTES since there's no player object yet at that point (VOICE.speak
 // is called directly with the profession id instead of going through speakSkill(p,key)).
@@ -1535,6 +1573,11 @@ document.getElementById("expansionToggle").addEventListener("change",(e)=>{
 });
 // 三國模式: swaps the ENTIRE roster (not additive like 擴充模式) — only these 40 武將 are
 // selectable, for both the human player and AI, while it's on.
+{
+  const fxEl=document.getElementById("fxToggle");
+  fxEl.checked=fxMode;
+  fxEl.addEventListener("change",()=>{ fxMode=fxEl.checked; try{ localStorage.setItem("skillFx",fxMode?"1":"0"); }catch(e){} });
+}
 document.getElementById("sanguoToggle").addEventListener("change",(e)=>{
   sanguoMode=e.target.checked;
   document.querySelectorAll(".prof-card.sanguo-prof").forEach(c=>c.classList.toggle("hidden",!sanguoMode));
@@ -3654,7 +3697,7 @@ function useSanguoSkill(p,idx){
     const lim=SKILL_USE_LIMITS[key];
     if(lim) p.flags[lim.flag]=(p.flags[lim.flag]||0)+1;
   };
-  const finish=(msg)=>{ markUsed(); log(msg); closeModal(); renderAll(); };
+  const finish=(msg)=>{ markUsed(); log(msg); skillFX(p,key); closeModal(); renderAll(); };
   const roomTargets=(maxDist,includeSelf)=>{
     const dist=reachableRooms(p.room,maxDist);
     return Object.keys(dist).filter(id=>includeSelf||id!==p.room);
@@ -4108,6 +4151,17 @@ function useProfSkill(p,idx){
 const SKILL_OPENS_OWN_MODAL=new Set(["chemist:0","hacker:1","geneFreak:1","shopper:1","pickpocket:0","courier:1","mediocre:1","mediocre:2","collector:1","prepper:1","witch:0",
   // 三國模式：需要選目標玩家/房間的主動技能，跳過通用確認彈窗，直接進自己的選擇彈窗
   "zhangfei:0","weiyan:0","zhouyu:0","lusu:1","luxun:0","ganning:0","yuanshao:0","zhangjiao:0","zhangjiao:1","zhanghe:0","huanggai:1","huaxiong:0","sunquan:0","caopi:0"]);
+// 技能特效版 fallback: most skills already call speakSkill (which shows the effect), but a few
+// never do — if a use succeeded (skillUsedThisRound flipped on) and no effect fired during the
+// call, show it here so every active skill is covered.
+{
+  const _useProfSkill=useProfSkill;
+  useProfSkill=function(p,idx){
+    const before=!!p.flags.skillUsedThisRound, stamp=fxStamp;
+    _useProfSkill(p,idx);
+    if(!before && p.flags.skillUsedThisRound && fxStamp===stamp) skillFX(p,p.prof+":"+idx);
+  };
+}
 function confirmAndUseSkill(p,idx){
   const s=PROFESSIONS[p.prof].skills[idx];
   openModal(`<h3>發動技能：${s.name}</h3><div style="margin-bottom:12px;font-size:13px;line-height:1.6">${s.desc}</div>
