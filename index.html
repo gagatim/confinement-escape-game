@@ -834,16 +834,16 @@ const PROF_ICON={
 Object.assign(PROFESSIONS, {
   // ---- 魏 Wei (10) ----
   caocao:{name:"曹操", skills:[
-    {name:"唯才是用", desc:"（被動）每輪第一次從房間獲得道具時，額外抽1張，2選1。", passive:true},
-    {name:"挾天子令", desc:"主動，整局限用2次：指定同房間1名玩家，本輪無法對你使用主動技能。", uses:2}
+    {name:"唯才是用", desc:"（被動）抽道具的時候，可以多抽一張道具可以選擇，一樣要丟棄1張。", passive:true},
+    {name:"挾天子令", desc:"（被動）同房間的同勢力武將，戰鬥結算時視為武力+1（曹操自己也算在內）。", passive:true}
   ]},
   caopi:{name:"曹丕", skills:[
-    {name:"篡漢登基", desc:"主動，整局限用1次：指定1名玩家，本輪其無法使用被動技能。", uses:1},
+    {name:"篡漢登基", desc:"主動，整局限用1次：指定1名玩家，本輪其無法使用主動技能。", uses:1},
     {name:"魏國繼承", desc:"（被動）每當同房間有玩家死亡，你永久獲得+1武力，最多+2。", passive:true}
   ]},
   simayi:{name:"司馬懿", skills:[
-    {name:"韜光養晦", desc:"（被動）生命≤4時，其他玩家無法查看你的武力值。", passive:true},
-    {name:"反制之策", desc:"主動，整局限用1次：成為其他玩家技能目標時，可取消該技能，對方受到2點傷害。", uses:1}
+    {name:"韜光養晦", desc:"（被動）生命≤4時，移動步數+2。", passive:true},
+    {name:"反制之策", desc:"主動，整局限用1次：本輪第一次受到其他玩家的戰鬥傷害時，對方受到2點傷害。", uses:1}
   ]},
   xiahoudun:{name:"夏侯惇", skills:[
     {name:"拔矢啖睛", desc:"（被動）單次受到4點以上傷害時，傷害-3。", passive:true},
@@ -892,14 +892,14 @@ Object.assign(PROFESSIONS, {
   ]},
   zhaoyun:{name:"趙雲", skills:[
     {name:"七進七出", desc:"（被動）每輪第一次受到戰鬥傷害-2。", passive:true},
-    {name:"龍膽", desc:"主動，整局限用2次：本回合速度+3，且可無視玩家封鎖進入房間。", uses:2}
+    {name:"龍膽", desc:"主動，整局限用2次：本回合速度+3。", uses:2}
   ]},
   machao:{name:"馬超", skills:[
-    {name:"鐵騎突襲", desc:"主動，整局限用2次：本回合速度+3，抵達房間後指定1人受到2點傷害。", uses:2},
+    {name:"鐵騎突襲", desc:"主動，整局限用2次：本回合速度+3，且本輪武力+2。", uses:2},
     {name:"西涼血脈", desc:"（被動）生命低於50%時，速度+1。", passive:true}
   ]},
   huangzhong:{name:"黃忠", skills:[
-    {name:"百步穿楊", desc:"（被動）槍械攻擊距離+1。", passive:true},
+    {name:"百步穿楊", desc:"（被動）持有槍械時，武力+1。", passive:true},
     {name:"老當益壯", desc:"（被動）生命≤5時，槍械傷害+2。", passive:true}
   ]},
   weiyan:{name:"魏延", skills:[
@@ -921,7 +921,7 @@ Object.assign(PROFESSIONS, {
   ]},
   sunce:{name:"孫策", skills:[
     {name:"霸王突擊", desc:"主動，整局限用3次：移動結束後可立即攻擊，武力+2。", uses:3},
-    {name:"小霸王", desc:"（被動）第一次進入每個房間時，額外獲得1步。", passive:true}
+    {name:"小霸王", desc:"（被動）每輪移動步數+1。", passive:true}
   ]},
   zhouyu:{name:"周瑜", skills:[
     {name:"火攻", desc:"主動，整局限用2次：指定1個房間，房內所有玩家受到2點傷害。", uses:2},
@@ -932,7 +932,7 @@ Object.assign(PROFESSIONS, {
     {name:"借糧", desc:"主動，整局限用2次：指定距離3內玩家，取得其1份水或糧。", uses:2}
   ]},
   lumeng:{name:"呂蒙", skills:[
-    {name:"白衣渡江", desc:"主動，整局限用2次：本輪可無視1個房間的特殊進入限制。", uses:2},
+    {name:"白衣渡江", desc:"主動，整局限用2次：本輪速度+2。", uses:2},
     {name:"士別三日", desc:"（被動）第一次與玩家戰鬥時，武力+2。", passive:true}
   ]},
   luxun:{name:"陸遜", skills:[
@@ -940,7 +940,7 @@ Object.assign(PROFESSIONS, {
     {name:"夷陵奇謀", desc:"（被動）火焰／爆炸傷害+1。", passive:true}
   ]},
   taishici:{name:"太史慈", skills:[
-    {name:"神射", desc:"（被動）槍械攻擊距離+1。", passive:true},
+    {name:"神射", desc:"（被動）持有槍械時，武力+1。", passive:true},
     {name:"酣戰", desc:"主動，整局限用2次：本輪第一次戰鬥可連續攻擊2次，第二次武力-2。", uses:2}
   ]},
   ganning:{name:"甘寧", skills:[
@@ -977,7 +977,7 @@ Object.assign(PROFESSIONS, {
     {name:"白馬突襲", desc:"主動，整局限用2次：移動後可立即對同房間玩家造成2點傷害。", uses:2}
   ]},
   mateng:{name:"馬騰", skills:[
-    {name:"西涼鐵騎", desc:"（被動）進入其他樓層時，額外減少1步移動消耗。", passive:true},
+    {name:"西涼鐵騎", desc:"（被動）每輪移動步數+1。", passive:true},
     {name:"鐵騎衝鋒", desc:"主動，整局限用2次：本回合速度+3。", uses:2}
   ]},
   yanliang:{name:"顏良", skills:[
@@ -1802,7 +1802,14 @@ function combatPower(p){
   if(p.prof==="guanyu" && p.flags.guanyuDuelActive) base+=3; // 單刀赴會（主動，下次攻擊限定）
   if(p.flags.zhangfeiDebuffActive) base-=2; // 張飛的怒喝：施加在「目標」身上，不分職業
   if(p.prof==="sunce" && p.flags.sunceActive) base+=2; // 霸王突擊（主動，本輪限定）
+  if((p.prof==="huangzhong" || p.prof==="taishici") && hasGun(p)) base+=1; // 百步穿楊／神射（簡化：持槍武力+1）
+  if(p.prof==="machao" && p.flags.machaoActive) base+=2; // 鐵騎突襲（本輪限定）
   if(p.prof==="huanggai" && p.flags.huangGaiActive) base+=4; // 苦肉計（主動，本輪限定）
+  // 曹操的挾天子令: every 同勢力 武將 sharing a room with an alive 曹操 (himself included) is
+  // treated as +1 武力 for combat purposes — a room-wide command bonus, not a per-player pick.
+  if(SANGUO_KINGDOM[p.prof] && STATE && STATE.players && STATE.players.some(x=>
+    x.alive && !x.ghost && x.prof==="caocao" && x.room===p.room && SANGUO_KINGDOM[x.prof]===SANGUO_KINGDOM[p.prof]
+  )) base+=1;
   return base;
 }
 // 黑社會老大的一呼百應: registers exactly 3 other players as A/B/C 小弟, each getting a permanent
@@ -2229,6 +2236,8 @@ function beginRound(){
     if(p.prof==="xiahouyuan") p.stepsLeft+=1; // 神速
     if(p.prof==="gongsunzan") p.stepsLeft+=2; // 白馬義從
     if(p.prof==="machao" && p.hp<p.maxhp/2) p.stepsLeft+=1; // 西涼血脈
+    if(p.prof==="simayi" && p.hp<=4) p.stepsLeft+=2; // 韜光養晦
+    if(p.prof==="sunce" || p.prof==="mateng") p.stepsLeft+=1; // 小霸王／西涼鐵騎（簡化：每輪速度+1）
     p.roundStartRoom = p.room; // lets 回手 undo all movement made so far this round, for free
     p.roundStartSteps = p.stepsLeft;
     p.roundEvents=[]; // cleared for the new round — showRoundSummary already read last round's
@@ -2285,9 +2294,15 @@ function beginRound(){
     p.flags.huangGaiActive=false; // 苦肉計：本輪限定
     p.flags.pangtongVulnerable=false; // 連環計目標：本輪限定
     p.flags.chengpuGuardActive=false; // 老將持重：本輪限定
+    p.flags.guanyuDuelActive=false; // 單刀赴會：本輪沒打到就作廢，不跨輪囤積
+    p.flags.zhangliaoRaidUsed=false; // 張遼的突襲：每輪第一次攻擊
+    p.flags.sgSilenced=false; p.flags.simayiCounter=false; p.flags.machaoActive=false;
+    p.flags.taishiciActive=false; p.flags.taishiciDoubleUsed=false;
+    p.flags.yanliangActive=false; p.flags.huaxiongDuelTarget=null; p.flags.zhaxiangTarget=null; p.flags.yuanshuNoTrade=false;
+    if(p.flags.dongzhuoMaxBonus){ p.maxhp-=p.flags.dongzhuoMaxBonus; p.hp=Math.min(p.hp,p.maxhp); p.flags.dongzhuoMaxBonus=0; } // 酒池肉林：生命上限+3 只限發動的那一輪
     // 袁術的奢靡（三國模式）: judged at the START of each round, before any of this round's
     // actions change his food count.
-    if(p.alive && !p.ghost && p.prof==="yuanshu"){
+    if(p.alive && !p.ghost && p.prof==="yuanshu" && STATE.round>=2){ // 第1輪還沒機會取得糧食，不判定
       if(countItem(p,"food")>=3){ p.hp=Math.min(p.maxhp,p.hp+2); log(p.name+"（奢靡）擁有充足糧食，恢復2點生命。","heal"); }
       else if(countItem(p,"food")===0){ damagePlayer(p,1,"奢靡缺糧"); log(p.name+"（奢靡）沒有糧食，額外失去1點生命。","dmg"); }
     }
@@ -2642,9 +2657,10 @@ function rollLuckyBonus(p){
 }
 function resolveHumanDraw(p,roomId,maxDraw){
   const room=ROOMS[roomId];
-  // 購物大媽的精挑細選: see 1 extra item, but must put exactly 1 of the reveal back — actual
-  // kept amount stays maxDraw either way, so this only ever improves WHICH ones you keep.
-  const extra = p.prof==="shopper" ? 1 : 0;
+  // 購物大媽的精挑細選／曹操的唯才是用: see 1 extra item, but must put exactly 1 of the reveal
+  // back — actual kept amount stays maxDraw either way, so this only ever improves WHICH ones
+  // you keep. Same shared mechanic, just two different profession triggers for it.
+  const extra = (p.prof==="shopper" || p.prof==="caocao") ? 1 : 0;
   // 庸才的以命換命 (抽卡選項): a genuine extra draw that's actually kept, not a see-then-return
   // like 精挑細選 above — folded into keepCap instead of `extra` so it never triggers the
   // shopper-only return-1 modal below. One-shot: consumed the instant a search happens.
@@ -2676,12 +2692,13 @@ function resolveHumanKeep(p,drawnItems,roomId){
     openDrawSelectionModal(p,drawnItems,roomId);
   }
 }
-// 精挑細選's own modal: pick exactly 1 of the extra-revealed items to put back into the room's
-// stock before the normal keep/carry-limit flow (resolveHumanKeep) runs on what's left.
+// 精挑細選／唯才是用's shared modal: pick exactly 1 of the extra-revealed items to put back into
+// the room's stock before the normal keep/carry-limit flow (resolveHumanKeep) runs on what's left.
 function openShopperReturnModal(p,drawnItems,roomId,maxDraw){
+  const skillName = p.prof==="caocao" ? "唯才是用" : "精挑細選";
   const names=drawnItems.map(g=>ITEMS[g].name).join("、");
   const opts=drawnItems.map((item,idx)=>`<option value="${idx}">${ITEMS[item].name}</option>`).join("");
-  openModal(`<h3>精挑細選：多看了1張，選1張放回房間</h3>
+  openModal(`<h3>${skillName}：多看了1張，選1張放回房間</h3>
     <div class="muted" style="margin-bottom:8px">搜索到: ${names}</div>
     <select id="shopperReturnSel">${opts}</select><br><br>
     <button class="btn small" id="shopperReturnOk">放回選中的道具</button>`);
@@ -2690,7 +2707,7 @@ function openShopperReturnModal(p,drawnItems,roomId,maxDraw){
     const returned=drawnItems[idx];
     ROOMS[roomId].stock[returned]=(ROOMS[roomId].stock[returned]||0)+1;
     const kept=drawnItems.filter((_,i)=>i!==idx);
-    log(p.name+"（精挑細選）放回了「"+ITEMS[returned].name+"」。");
+    log(p.name+"（"+skillName+"）放回了「"+ITEMS[returned].name+"」。");
     closeModal();
     resolveHumanKeep(p,kept,roomId);
     renderAll();
@@ -2745,7 +2762,7 @@ function openDrawSelectionModal(p,drawnItems,roomId){
 // (weapons and meds first), returning whatever doesn't fit to the room's stock.
 function resolveAIDraw(p,roomId,maxDraw){
   const priority=(it)=>(ITEMS[it].weapon?0:(it==="pill"||it==="adrenaline")?1:(it==="water"||it==="food")?2:3);
-  const extra = p.prof==="shopper" ? 1 : 0;
+  const extra = (p.prof==="shopper" || p.prof==="caocao") ? 1 : 0;
   // 庸才的以命換命 (抽卡選項): see resolveHumanDraw's matching comment.
   const mediocreExtra = (p.prof==="mediocre" && p.flags.mediocreExtraDraw) ? 1 : 0;
   if(mediocreExtra) p.flags.mediocreExtraDraw=false;
@@ -3551,6 +3568,15 @@ const SKILL_USE_LIMITS={
   "wenchou:1":{flag:"sgWenchouUses",max:2},
   "zhangjiao:0":{flag:"sgZhangjiao0Uses",max:2},
   "zhangjiao:1":{flag:"sgZhangjiao1Uses",max:1},
+  "yanliang:1":{flag:"sgYanliangUses",max:2},
+  "huanggai:1":{flag:"sgHuanggai1Uses",max:1},
+  "huaxiong:0":{flag:"sgHuaxiongUses",max:2},
+  "yuanshu:0":{flag:"sgYuanshuUses",max:1},
+  "sunquan:0":{flag:"sgSunquanUses",max:2},
+  "caopi:0":{flag:"sgCaopiUses",max:1},
+  "simayi:1":{flag:"sgSimayiUses",max:1},
+  "lumeng:0":{flag:"sgLumengUses",max:2},
+  "taishici:1":{flag:"sgTaishiciUses",max:2},
 };
 function skillUsedCount(p,key){
   const lim=SKILL_USE_LIMITS[key];
@@ -3571,10 +3597,16 @@ function sanguoDamageOthersInRoom(p,amount,cause){
     log(x.name+" 在「"+p.room+"」受到 "+p.name+"（"+cause+"）"+amount+" 點傷害。","dmg");
   });
 }
-function sanguoDamageRoomOccupants(roomId,amount,cause,sourceId){
+// 火攻／火燒連營 are 火焰 damage: 陸遜的夷陵奇謀 (+1, when HE is the source) and 周瑜的赤壁奇謀 (-2,
+// when the victim is 周瑜) apply to them exactly like they do to 火箭筒 — see settleRound's rocket step.
+function sanguoDamageRoomOccupants(roomId,amount,cause,sourceId,isFire){
+  const src=STATE.players.find(x=>x.id===sourceId);
   playersInRoom(roomId,true).forEach(x=>{
-    damagePlayer(x,amount,cause,sourceId);
-    log(x.name+" 在「"+roomId+"」受到「"+cause+"」"+amount+" 點傷害。","dmg");
+    let dmg=amount, note="";
+    if(isFire && src && src.prof==="luxun"){ dmg+=1; note+="〔夷陵奇謀 +1〕"; }
+    if(isFire && x.prof==="zhouyu"){ dmg=Math.max(0,dmg-2); note+="〔赤壁奇謀 -2〕"; }
+    damagePlayer(x,dmg,cause,sourceId);
+    log(x.name+" 在「"+roomId+"」受到「"+cause+"」"+dmg+" 點傷害"+note+"。","dmg");
   });
 }
 function sanguoStealRation(p,target){
@@ -3663,10 +3695,8 @@ function useSanguoSkill(p,idx){
   if(p.prof==="zhaoyun" && idx===1){ // 龍膽
     p.stepsLeft+=3; finish(p.name+" 使用龍膽：本輪速度+3。"); return;
   }
-  if(p.prof==="machao" && idx===0){ // 鐵騎突襲（僅實作加速部分，見角色卡）
-    p.stepsLeft+=3; finish(p.name+" 使用鐵騎突襲：本輪速度+3。"); return;
-  }
   if(p.prof==="weiyan" && idx===0){ // 奇襲子午谷
+    if(p.flags.roomCommitted){ flashMsg("本輪已確定停留於此房間，無法再移動。"); return; }
     openSanguoRoomPickerModal("奇襲子午谷：移動至距離3內任意房間",roomTargets(3,false),"出發",(r)=>{
       p.room=r; p.stepsLeft=0; finish(p.name+" 使用奇襲子午谷，瞬間移動至「"+r+"」。");
     });
@@ -3697,7 +3727,7 @@ function useSanguoSkill(p,idx){
   }
   if(p.prof==="zhouyu" && idx===0){ // 火攻
     openSanguoRoomPickerModal("火攻：指定1個房間",Object.keys(ROOMS),"開火",(r)=>{
-      sanguoDamageRoomOccupants(r,2,"火攻",p.id); finish(p.name+" 對「"+r+"」使用火攻！");
+      sanguoDamageRoomOccupants(r,2,"火攻",p.id,true); finish(p.name+" 對「"+r+"」使用火攻！");
     });
     return;
   }
@@ -3708,12 +3738,20 @@ function useSanguoSkill(p,idx){
     return;
   }
   if(p.prof==="luxun" && idx===0){ // 火燒連營（簡化：單一房間，非「相鄰2個」）
-    openSanguoRoomPickerModal("火燒連營：指定1個房間",Object.keys(ROOMS),"點火",(r)=>{
-      sanguoDamageRoomOccupants(r,3,"火燒連營",p.id); finish(p.name+" 對「"+r+"」使用火燒連營！");
+    // 先選第1個房間，再從它「相鄰」的房間挑第2個——兩個房間各受3點火焰傷害。
+    openSanguoRoomPickerModal("火燒連營：指定第1個房間",Object.keys(ROOMS),"下一步",(r1)=>{
+      const adj=Object.keys(reachableRooms(r1,1)).filter(id=>id!==r1);
+      if(!adj.length){ flashMsg("該房間沒有相鄰房間"); return; }
+      openSanguoRoomPickerModal("火燒連營：指定與「"+r1+"」相鄰的第2個房間",adj,"點火",(r2)=>{
+        sanguoDamageRoomOccupants(r1,3,"火燒連營",p.id,true);
+        sanguoDamageRoomOccupants(r2,3,"火燒連營",p.id,true);
+        finish(p.name+" 對「"+r1+"」與「"+r2+"」使用火燒連營！");
+      });
     });
     return;
   }
   if(p.prof==="ganning" && idx===0){ // 百騎劫營
+    if(p.flags.roomCommitted){ flashMsg("本輪已確定停留於此房間，無法再移動。"); return; }
     openSanguoRoomPickerModal("百騎劫營：瞬間移動至距離4內房間",roomTargets(4,false),"出發",(r)=>{
       p.room=r; p.stepsLeft=0;
       const room=ROOMS[r];
@@ -3744,8 +3782,8 @@ function useSanguoSkill(p,idx){
   if(p.prof==="dongzhuo" && idx===1){ // 酒池肉林
     if(countItem(p,"food")<2){ flashMsg("需要至少2份糧食"); return; }
     removeItem(p,"food"); removeItem(p,"food");
-    p.maxhp+=3; p.hp=Math.min(p.maxhp,p.hp+2);
-    finish(p.name+" 使用酒池肉林：消耗2份糧，生命上限+3並恢復2點生命。");
+    p.maxhp+=3; p.flags.dongzhuoMaxBonus=(p.flags.dongzhuoMaxBonus||0)+3; p.hp=Math.min(p.maxhp,p.hp+2);
+    finish(p.name+" 使用酒池肉林：消耗2份糧，本輪生命上限+3並恢復2點生命。");
     return;
   }
   if(p.prof==="yuanshao" && idx===0){ // 號令天下
@@ -3776,7 +3814,71 @@ function useSanguoSkill(p,idx){
     });
     return;
   }
-  // 其餘主動技能（如反制之策／篡漢登基／挾天子令／連環結盟／制衡／酣戰等）需要更深入的規則
+  if(p.prof==="yanliang" && idx===1){ // 斬將
+    p.flags.yanliangActive=true; finish(p.name+" 使用斬將：本輪對生命高於自己的玩家攻擊時，武力+3。"); return;
+  }
+  if(p.prof==="huanggai" && idx===1){ // 詐降
+    openSanguoPlayerPickerModal("詐降：指定1名玩家",STATE.players.filter(x=>x.alive && !x.ghost && x.id!==p.id),"詐降",(t)=>{
+      p.flags.zhaxiangTarget=t.id; finish(p.name+" 對 "+t.name+" 使用詐降：本輪其無法對自己造成戰鬥傷害，回合結束後可能奪取其1張道具。");
+    });
+    return;
+  }
+  if(p.prof==="huaxiong" && idx===0){ // 關前挑戰
+    openSanguoPlayerPickerModal("關前挑戰：指定同房間1名玩家單挑",othersInRoom(),"挑戰",(t)=>{
+      p.flags.huaxiongDuelTarget=t.id; finish(p.name+" 向 "+t.name+" 發起關前挑戰：兩人本輪戰鬥只比武力（槍械無效）。");
+    });
+    return;
+  }
+  if(p.prof==="caopi" && idx===0){ // 篡漢登基
+    openSanguoPlayerPickerModal("篡漢登基：指定1名玩家",STATE.players.filter(x=>x.alive && !x.ghost && x.id!==p.id),"指定",(t)=>{
+      t.flags.sgSilenced=true; finish(p.name+" 使用篡漢登基：「"+t.name+"」本輪無法使用主動技能。");
+    });
+    return;
+  }
+  if(p.prof==="simayi" && idx===1){ // 反制之策
+    p.flags.simayiCounter=true; finish(p.name+" 使用反制之策：本輪第一次受到戰鬥傷害時，對方受到2點傷害。"); return;
+  }
+  if(p.prof==="lumeng" && idx===0){ // 白衣渡江
+    p.stepsLeft+=2; finish(p.name+" 使用白衣渡江：本輪速度+2。"); return;
+  }
+  if(p.prof==="machao" && idx===0){ // 鐵騎突襲
+    p.stepsLeft+=3; p.flags.machaoActive=true; finish(p.name+" 使用鐵騎突襲：本輪速度+3，武力+2。"); return;
+  }
+  if(p.prof==="taishici" && idx===1){ // 酣戰
+    p.flags.taishiciActive=true; p.flags.taishiciDoubleUsed=false;
+    finish(p.name+" 使用酣戰：本輪第一次戰鬥連續攻擊2次，第二次武力-2。"); return;
+  }
+  if(p.prof==="sunquan" && idx===0){ // 制衡
+    if(!p.inv.length){ flashMsg("背包沒有道具可丟棄"); return; }
+    if(!STATE.discardPile.length){ flashMsg("棄牌堆目前是空的"); return; }
+    const opts=[...new Set(p.inv)].map(i=>`<option value="${i}">${ITEMS[i].name}</option>`).join("");
+    openModal(`<h3>制衡：丟棄1張道具</h3><select id="zhiHengSel">${opts}</select><br><br>
+      <button class="btn small warn" id="zhiHengOk">丟棄並抽2張</button> <button class="btn small ghost" id="zhiHengCancel">取消</button>`);
+    document.getElementById("zhiHengOk").onclick=()=>{
+      const give=document.getElementById("zhiHengSel").value;
+      // 先從「原有」棄牌堆抽，再放入剛丟的牌，避免抽回自己剛丟的那張
+      const pile=STATE.discardPile, drawn=[];
+      for(let i=0;i<2 && pile.length;i++) drawn.push(pile.splice(Math.floor(Math.random()*pile.length),1)[0]);
+      removeItem(p,give); pile.push(give);
+      markUsed(); log(p.name+" 使用制衡：丟棄「"+ITEMS[give].name+"」，從棄牌堆抽到 "+drawn.map(g=>ITEMS[g].name).join("、")+"。");
+      const pick=(item)=>{
+        const rest=drawn.slice(); rest.splice(rest.indexOf(item),1);
+        rest.forEach(g=>pile.push(g));
+        if(itemCostsCarry(p,item) && carryRoom(p)<=0){ pile.push(item); log(p.name+" 背包已滿，選中的「"+ITEMS[item].name+"」放回棄牌堆。"); }
+        else { p.inv.push(item); log(p.name+"（制衡）選擇了「"+ITEMS[item].name+"」。"); }
+        closeModal(); renderAll();
+      };
+      if(drawn.length===1){ pick(drawn[0]); return; }
+      openModal(`<h3>制衡：從抽到的牌中選1張</h3>`+drawn.map((g,i)=>`<button class="btn small" id="zhPick${i}">${ITEMS[g].name}</button> `).join(""));
+      drawn.forEach((g,i)=>{ document.getElementById("zhPick"+i).onclick=()=>pick(g); });
+    };
+    bindModalClose("zhiHengCancel");
+    return;
+  }
+  if(p.prof==="yuanshu" && idx===0){ // 僭號稱帝
+    p.flags.yuanshuNoTrade=true; finish(p.name+" 僭號稱帝：本輪其他玩家無法與其交易。"); return;
+  }
+  // 其餘主動技能（如反制之策／篡漢登基／制衡／酣戰／白衣渡江等）需要更深入的規則
   // 攔截才能真正還原效果，這次先不做——需要時請明確說「修正三國版本」指名要補上哪一個。
   flashMsg("「"+PROFESSIONS[p.prof].skills[idx].name+"」尚未實作完整效果，先僅供顯示技能說明。");
 }
@@ -3786,6 +3888,7 @@ function useProfSkill(p,idx){
   // Active profession skills are a once-per-round action (the "技能使用階段" from the rulebook),
   // shared across a player's own skill slots — using one locks out the other for the rest of the round.
   if(p.flags.skillUsedThisRound){ flashMsg("本輪已使用過職業技能，請下輪再使用。"); return; }
+  if(p.flags.sgSilenced){ flashMsg("你本輪被篡漢登基封印，無法使用主動技能。"); return; }
   if(SANGUO_PROFS.has(p.prof)){ useSanguoSkill(p,idx); return; }
   if(p.prof==="gambler" && idx===0){
     if(skillUseCapReached(p,"gambler:0")){ flashMsg("已用完3次"); return; }
@@ -4004,7 +4107,7 @@ function useProfSkill(p,idx){
 // confirm prompt naming the skill and its effect before anything happens.
 const SKILL_OPENS_OWN_MODAL=new Set(["chemist:0","hacker:1","geneFreak:1","shopper:1","pickpocket:0","courier:1","mediocre:1","mediocre:2","collector:1","prepper:1","witch:0",
   // 三國模式：需要選目標玩家/房間的主動技能，跳過通用確認彈窗，直接進自己的選擇彈窗
-  "zhangfei:0","weiyan:0","zhouyu:0","lusu:1","luxun:0","ganning:0","yuanshao:0","zhangjiao:0","zhangjiao:1","zhanghe:0"]);
+  "zhangfei:0","weiyan:0","zhouyu:0","lusu:1","luxun:0","ganning:0","yuanshao:0","zhangjiao:0","zhangjiao:1","zhanghe:0","huanggai:1","huaxiong:0","sunquan:0","caopi:0"]);
 function confirmAndUseSkill(p,idx){
   const s=PROFESSIONS[p.prof].skills[idx];
   openModal(`<h3>發動技能：${s.name}</h3><div style="margin-bottom:12px;font-size:13px;line-height:1.6">${s.desc}</div>
@@ -4215,6 +4318,7 @@ document.getElementById("tradeBtn").addEventListener("click",()=>{
   const others=playersInRoom(p.room,true).filter(x=>x.id!==p.id && x.isAI);
   if(others.length===0){ flashMsg("這裡沒有其他玩家可交易"); return; }
   const target=others[0];
+  if(target.flags.yuanshuNoTrade){ flashMsg(target.name+" 已僭號稱帝，本輪拒絕所有交易。"); return; }
   const myItems=[...new Set(p.inv)];
   if(myItems.length===0){ flashMsg("你沒有道具可交易"); return; }
   openModal(`<h3>與 ${target.name} 交易</h3>選擇你要給出的道具：
@@ -4369,6 +4473,20 @@ function aiConsiderSanguoSkill(p){
   if(p.prof==="dongzhuo" && canUse("dongzhuo:1") && countItem(p,"food")>=2 && p.hp<p.maxhp){ useSanguoSkill(p,1); return; }
   if(p.prof==="gongsunzan" && canUse("gongsunzan:1") && others.length){ useSanguoSkill(p,1); return; }
   if(p.prof==="wenchou" && canUse("wenchou:1") && playersInRoom(p.room,true).length>=3){ useSanguoSkill(p,1); return; }
+  if(p.prof==="yanliang" && canUse("yanliang:1") && others.some(x=>x.hp>p.hp)){ useSanguoSkill(p,1); return; }
+  if(p.prof==="yuanshu" && canUse("yuanshu:0") && others.length){ useSanguoSkill(p,0); return; }
+  if(p.prof==="huaxiong" && canUse("huaxiong:0") && others.length){
+    const t=others[Math.floor(Math.random()*others.length)];
+    p.flags.huaxiongDuelTarget=t.id; p.flags.skillUsedThisRound=true; p.flags.sgHuaxiongUses=(p.flags.sgHuaxiongUses||0)+1;
+    log(p.name+" 向 "+t.name+" 發起關前挑戰：兩人本輪戰鬥只比武力（槍械無效）。");
+    return;
+  }
+  if(p.prof==="huanggai" && canUse("huanggai:1") && others.length){
+    const t=others[Math.floor(Math.random()*others.length)];
+    p.flags.zhaxiangTarget=t.id; p.flags.skillUsedThisRound=true; p.flags.sgHuanggai1Uses=(p.flags.sgHuanggai1Uses||0)+1;
+    log(p.name+" 對 "+t.name+" 使用詐降：本輪其無法對自己造成戰鬥傷害。");
+    return;
+  }
   // 妖術／連環計等需要挑目標的技能：AI 直接隨機挑一個合法對象，不開彈窗。
   if(p.prof==="zhangjiao" && canUse("zhangjiao:1")){
     const cands=STATE.players.filter(x=>x.alive && x.id!==p.id);
@@ -4389,7 +4507,7 @@ function aiConsiderSanguoSkill(p){
   }
 }
 function aiConsiderSkillAfterMove(p){
-  if(p.flags.skillUsedThisRound) return;
+  if(p.flags.skillUsedThisRound || p.flags.sgSilenced) return;
   const room=ROOMS[p.room];
   if(SANGUO_PROFS.has(p.prof)){ aiConsiderSanguoSkill(p); return; }
   if(p.prof==="climber"){
@@ -5338,6 +5456,16 @@ function settleRound(){
   // 7) 藥片 healing resolves LAST — after combat/poison/hunger/laser/暗影吸血 — so it reflects
   // this round's final HP instead of being overwritten by damage that comes later in settlement.
   STATE.players.forEach(p=>resolvePillHealing(p));
+  // 黃蓋的詐降: after the round, take 1 random item from the named target (if any, and if it fits).
+  STATE.players.forEach(p=>{
+    if(p.prof!=="huanggai" || !p.alive || p.flags.zhaxiangTarget==null) return;
+    const t=STATE.players.find(x=>x.id===p.flags.zhaxiangTarget);
+    if(!t || !t.alive || !t.inv.length) return;
+    const it=t.inv[Math.floor(Math.random()*t.inv.length)];
+    if(itemCostsCarry(p,it) && carryRoom(p)<=0){ log(p.name+"（詐降）背包已滿，沒能奪取 "+t.name+" 的道具。"); return; }
+    removeItem(t,it); p.inv.push(it);
+    log(p.name+"（詐降）奪取了 "+t.name+" 的1張道具「"+ITEMS[it].name+"」。");
+  });
 
   // adrenaline: apply next-round speed, then clear
   STATE.players.forEach(p=>{
@@ -5399,15 +5527,30 @@ function settleRound(){
 // frozenA (optional) overrides a's gun/power reads — used by the 3+-fighter free-for-all so every
 // fighter fights the SAME target stats regardless of resolution order (see settleRound above).
 function resolveCombat(a,b,roomId,frozenA){
-  const aGun=frozenA?frozenA.aGun:hasGun(a), bGun=hasGun(b);
-  const aPower=frozenA?frozenA.aPower:combatPower(a);
+  // 華雄的關前挑戰: a declared duel strips both sides' guns — only 武力 counts.
+  const duel=(a.flags.huaxiongDuelTarget===b.id) || (b.flags.huaxiongDuelTarget===a.id);
+  const aGun=duel?false:(frozenA?frozenA.aGun:hasGun(a)), bGun=duel?false:hasGun(b);
+  // 顏良的斬將 (+3 vs 生命較高者)、張遼的突襲 (+2, 本輪第一次攻擊且本輪有進入新房間).
+  const sgBonus=(p,opp)=>{
+    let x=0;
+    if(p.prof==="yanliang" && p.flags.yanliangActive && opp.hp>p.hp) x+=3;
+    if(p.prof==="zhangliao" && !p.flags.zhangliaoRaidUsed && p.roundStartRoom!==p.room) x+=2;
+    return x;
+  };
+  const aBonus=sgBonus(a,b), bBonus=sgBonus(b,a);
+  const aPower=(frozenA?frozenA.aPower:combatPower(a))+aBonus, bPower=combatPower(b)+bBonus;
+  if(a.prof==="zhangliao" && aBonus>=2) a.flags.zhangliaoRaidUsed=true;
+  if(b.prof==="zhangliao" && bBonus>=2) b.flags.zhangliaoRaidUsed=true;
   let dmgToA=0, dmgToB=0;
-  if(bGun && !aGun){ dmgToA=combatPower(b); }
+  if(bGun && !aGun){ dmgToA=bPower; }
   else if(aGun && !bGun){ dmgToB=aPower; }
   else {
-    const diff=aPower-combatPower(b);
+    const diff=aPower-bPower;
     if(diff>0) dmgToB=diff; else if(diff<0) dmgToA=-diff;
   }
+  // 黃蓋的詐降: the named target can't hurt 黃蓋 this round (he can still hurt them).
+  if(a.prof==="huanggai" && a.flags.zhaxiangTarget===b.id) dmgToA=0;
+  if(b.prof==="huanggai" && b.flags.zhaxiangTarget===a.id) dmgToB=0;
   // profession damage reduction (肥宅, 防爆小組 vs gun) — note WHICH skill reduced it, not just
   // the already-reduced final number, so the combat log explains itself instead of looking arbitrary.
   const reduce=(p,dmg,attackerHasGun)=>{
@@ -5425,10 +5568,10 @@ function resolveCombat(a,b,roomId,frozenA){
     if(p.prof==="zhaoyun" && !p.flags.zhaoyunUsedThisRound && d>0){ const before=d; d=Math.max(0,d-2); note+="〔七進七出 -"+(before-d)+"〕"; p.flags.zhaoyunUsedThisRound=true; }
     if(p.prof==="zhuge" && p.flags.zhugeShieldActive && d>0){ const before=d; d=Math.max(0,d-3); note+="〔八卦陣 -"+(before-d)+"〕"; }
     if(p.prof==="guanyu" && p.flags.guanyuDuelActive && d>0){ const before=d; d=Math.max(0,d-3); note+="〔單刀赴會 -"+(before-d)+"〕"; }
-    if(p.prof==="dianwei" && p.flags.dianweiDeathStandActive && d>0){ const before=d; d=Math.max(0,d-5); note+="〔死戰 -"+(before-d)+"〕"; }
+    // 死戰（-5）已在 damagePlayer 對全傷害來源統一結算，這裡不再重複扣一次。
     if(p.prof==="chengpu" && p.flags.chengpuGuardActive && d>0){ const before=d; d=Math.max(0,d-3); note+="〔老將持重 -"+(before-d)+"〕"; }
     if(p.flags.pangtongVulnerable && d>0){ d+=2; note+="〔連環計 +2〕"; }
-    if(p.prof==="xuchu" && p.flags.xuchuActive) d+=1; // 裸衣惡戰：受到傷害+1
+    if(p.prof==="xuchu" && p.flags.xuchuActive && d>0){ d+=1; note+="〔裸衣惡戰 +1〕"; } // 裸衣惡戰：受到傷害+1（沒受傷就不加）
     const gc=damageWard(p,d); d=gc.dmg; note+=gc.note;
     return {d,note};
   };
@@ -5440,11 +5583,34 @@ function resolveCombat(a,b,roomId,frozenA){
   // ---- 三國模式：戰鬥後結算的一次性被動 ----
   if(a.prof==="xiahoudun" && dmgToA>0 && !bGun && b.alive){ damagePlayer(b,1,"剛烈反擊",a.id); log(b.name+" 近戰打中 "+a.name+"（剛烈），反被打回 1 點傷害。","dmg"); }
   if(b.prof==="xiahoudun" && dmgToB>0 && !aGun && a.alive){ damagePlayer(a,1,"剛烈反擊",b.id); log(a.name+" 近戰打中 "+b.name+"（剛烈），反被打回 1 點傷害。","dmg"); }
+  // 司馬懿的反制之策: first combat damage he takes this round bounces 2 back at the attacker.
+  [[a,dmgToA,b],[b,dmgToB,a]].forEach(([h,took,foe])=>{
+    if(h.prof==="simayi" && h.flags.simayiCounter && took>0 && foe.alive){
+      h.flags.simayiCounter=false; damagePlayer(foe,2,"反制之策",h.id);
+      log(h.name+"（反制之策）反擊，"+foe.name+" 受到2點傷害。","dmg");
+    }
+  });
+  // 華雄的威震汜水關: winning his own declared duel heals 2.
+  if(duel){
+    [[a,dmgToB,b],[b,dmgToA,a]].forEach(([h,dealt,foe])=>{
+      if(h.prof==="huaxiong" && h.flags.huaxiongDuelTarget===foe.id && dealt>0 && h.alive){
+        h.hp=Math.min(h.maxhp,h.hp+2); log(h.name+"（威震汜水關）單挑獲勝，恢復2點生命。","heal");
+      }
+    });
+  }
   if(a.prof==="lumeng") a.flags.lumengFirstFightUsed=true;
   if(b.prof==="lumeng") b.flags.lumengFirstFightUsed=true;
   if(a.prof==="guanyu") a.flags.guanyuDuelActive=false;
   if(b.prof==="guanyu") b.flags.guanyuDuelActive=false;
   STATE.__report.combat.push(a.name+" vs "+b.name+" @"+roomId+"（"+a.name+" -"+dmgToA+" / "+b.name+" -"+dmgToB+"）");
+  // 太史慈的酣戰: his first fight this round is immediately repeated once, with his 武力 -2.
+  const tsc=[a,b].find(x=>x.prof==="taishici" && x.flags.taishiciActive && !x.flags.taishiciDoubleUsed);
+  if(tsc && a.alive && b.alive){
+    tsc.flags.taishiciDoubleUsed=true;
+    log(tsc.name+"（酣戰）再攻擊一次，武力-2。");
+    if(tsc===a && frozenA){ resolveCombat(a,b,roomId,{aGun:frozenA.aGun,aPower:frozenA.aPower-2}); }
+    else { tsc.power-=2; resolveCombat(a,b,roomId,frozenA); tsc.power+=2; }
+  }
 }
 
 function showRoundSummary(){
