@@ -280,6 +280,8 @@
         <input type="checkbox" id="expansionToggle"> 啟用擴充模式（新增擴充職業，AI也可能隨機選到，實際數量見上方統計）</label>
       <label class="muted" style="display:block;margin-bottom:6px;font-size:13px">
         <input type="checkbox" id="sanguoToggle"> 啟用三國模式（角色全面替換為40位三國武將〔魏／蜀／吳／群雄各10人〕，AI也只會從這40人中選取；取消勾選則恢復一般職業）</label>
+      <label class="muted" style="display:block;margin-bottom:6px;font-size:13px">
+        <input type="checkbox" id="physicalToggle"> 啟用實體模式（遊戲方式與一般版本相同，但職業只開放精選的16位，AI也只會從這16位中選取；與擴充模式、三國模式互斥）</label>
       <label class="muted" style="display:block;margin-bottom:10px;font-size:13px">
         <input type="checkbox" id="sanguoTeamToggle"> 啟用三國陣營戰（需先啟用三國模式；限定9或12人，依國家分成3～4隊，每隊3人，同國家不互相傷害，房內混戰只計較國家間的代表武力，結算比較各國總血量）</label>
       <div class="prof-grid" id="profGrid"></div>
@@ -736,14 +738,14 @@ const PROFESSIONS = {
   ]},
   survivor:{name:"求生教官", skills:[
     {name:"強健體魄", desc:"（被動）生命上限永久+2（初始12血）。", passive:true},
-    {name:"野戰急救", desc:"整局限用1次：憑空製作1張藥片放入背包。", uses:1}
+    {name:"野戰急救", desc:"整局限用2次：本回合毒氣傷害-1。", uses:2}
   ]},
   shopper:{name:"購物大媽", skills:[
     {name:"精挑細選", desc:"（被動）抽取道具時多看1張，選1張放回房間（實際獲得數量不變）。", passive:true},
     {name:"跳樓大拍賣", desc:"可消耗1步直接跳到下一層樓（只能往下）。整局限用3次，用完後速度永久-2。", uses:3}
   ]},
   runner:{name:"馬拉松跑者", skills:[
-    {name:"耐力訓練", desc:"（被動）若本輪步數剛好用完，且回合結束時身處功能房間，結算時恢復3點生命。", passive:true},
+    {name:"耐力訓練", desc:"（被動）若本輪步數剛好用完，且回合結束時身處功能房間，結算時恢復1點生命。", passive:true},
     {name:"長跑", desc:"本回合速度+2。整局限用3次。", uses:3}
   ]},
   herbalist:{name:"草藥師", skills:[
@@ -795,7 +797,7 @@ const PROFESSIONS = {
     {name:"以物易物", desc:"整局限用2次：查看任意1名玩家的完整背包，以你背包中任意2張道具，強制換取對方1張指定道具（不需同房，無視對方意願）。", uses:2}
   ]},
   butcher:{name:"屠夫", skills:[
-    {name:"屠宰專精", desc:"（被動）手持刀時，武力額外+2。", passive:true},
+    {name:"屠宰專精", desc:"（被動）手持刀時，武力額外+2；刀不佔負重。", passive:true},
     {name:"以血養血", desc:"（被動）擊殺其他玩家後，恢復2點生命。", passive:true}
   ]},
   exorcist:{name:"超度師", skills:[
@@ -1647,6 +1649,11 @@ let bountyMode=false;
 // the AI's random-pick pool in startGame()) to the 40 三國 武將 instead of the normal 45. Unlike
 // 擴充模式 this isn't additive: while it's on, the base/擴充 cards are hidden, not just supplemented.
 let sanguoMode=false;
+// 實體模式: gameplay identical to the normal game, but the roster (the human's card grid AND the
+// AI's random-pick pool) is narrowed to 16 hand-picked professions that are practical to run at a
+// physical table. Mutually exclusive with 三國模式; overrides 擴充模式's additive card visibility.
+let physicalMode=false;
+const PHYSICAL_PROFS=new Set(["vampire","scavenger","embalmer","tycoon","tamer","geneFreak","engineer","shopper","butcher","bartender","detective","shade","merc","climber","mediocre","lucky"]);
 // 三國陣營戰: a sub-mode of 三國模式 — off by default. When on, professions are assigned as
 // whole-kingdom teams (see startGame's sanguoTeamMode branch) instead of each AI independently
 // picking a random 武將, player count is locked to 9 or 12, and room combat/poison-vote/endgame
@@ -1721,17 +1728,30 @@ Object.entries(PROFESSIONS).forEach(([id,p])=>{
 });
 document.getElementById("map2Toggle").addEventListener("change",(e)=>{ map2Mode=e.target.checked; });
 document.getElementById("bountyToggle").addEventListener("change",(e)=>{ bountyMode=e.target.checked; });
-document.getElementById("expansionToggle").addEventListener("change",(e)=>{
-  expansionMode=e.target.checked;
-  if(sanguoMode) return; // 三國模式 already has every non-三國 card hidden; nothing to resync
-  document.querySelectorAll(".prof-card.expansion-prof").forEach(c=>c.classList.toggle("hidden",!expansionMode));
-  // a selected expansion profession that just got hidden can't stay chosen
-  if(!expansionMode && selectedProf && EXPANSION_PROFS.has(selectedProf)){
+// Single source of truth for which profession cards show, given sanguoMode / physicalMode /
+// expansionMode — and drops the current selection if it just got hidden.
+function syncProfCards(){
+  const visible=id=>sanguoMode ? SANGUO_PROFS.has(id)
+    : physicalMode ? PHYSICAL_PROFS.has(id)
+    : (!SANGUO_PROFS.has(id) && (expansionMode || !EXPANSION_PROFS.has(id)));
+  document.querySelectorAll(".prof-card").forEach(c=>c.classList.toggle("hidden",!visible(c.dataset.id)));
+  if(selectedProf && !visible(selectedProf)){
     selectedProf=null;
     document.querySelectorAll(".prof-card").forEach(c=>c.classList.remove("selected"));
     document.getElementById("startHint").textContent="請先選擇職業";
     validateStart();
   }
+}
+document.getElementById("expansionToggle").addEventListener("change",(e)=>{
+  expansionMode=e.target.checked;
+  syncProfCards();
+});
+document.getElementById("physicalToggle").addEventListener("change",(e)=>{
+  physicalMode=e.target.checked;
+  if(physicalMode && sanguoMode){ // mutually exclusive with 三國模式 (which also drops 三國陣營戰)
+    document.getElementById("sanguoToggle").checked=false;
+    document.getElementById("sanguoToggle").dispatchEvent(new Event("change"));
+  } else syncProfCards();
 });
 // 三國模式: swaps the ENTIRE roster (not additive like 擴充模式) — only these 40 武將 are
 // selectable, for both the human player and AI, while it's on.
@@ -1742,15 +1762,8 @@ document.getElementById("expansionToggle").addEventListener("change",(e)=>{
 }
 document.getElementById("sanguoToggle").addEventListener("change",(e)=>{
   sanguoMode=e.target.checked;
-  document.querySelectorAll(".prof-card.sanguo-prof").forEach(c=>c.classList.toggle("hidden",!sanguoMode));
-  document.querySelectorAll(".prof-card:not(.sanguo-prof)").forEach(c=>c.classList.toggle("hidden", sanguoMode || (c.classList.contains("expansion-prof") && !expansionMode)));
-  // a selection from the roster that just got hidden can't stay chosen
-  if(selectedProf && (sanguoMode!==SANGUO_PROFS.has(selectedProf))){
-    selectedProf=null;
-    document.querySelectorAll(".prof-card").forEach(c=>c.classList.remove("selected"));
-    document.getElementById("startHint").textContent="請先選擇職業";
-    validateStart();
-  }
+  if(sanguoMode && physicalMode){ physicalMode=false; document.getElementById("physicalToggle").checked=false; } // 互斥
+  syncProfCards();
   // 三國陣營戰 needs 三國模式 on to mean anything — turning 三國模式 off underneath it
   // switches it off too, restoring the normal 4~8人 slider.
   if(!sanguoMode && sanguoTeamMode){
@@ -1908,7 +1921,7 @@ function makePlayer(id,isAI,profId,stats,name){
       chemistUses:0, embalmerUses:0, hackerUses:0, hackerUsedRooms:[],
       tamerUses:0, geneUses:0, climberDietUsed:false, dietThisRound:false,
       goldUsedThisRound:false, visited102:false, remoteRoomOverride:null,
-      survivorFirstAidUsed:false, shopperJumpUses:0, shopperSpeedPenaltyApplied:false,
+      survivorFirstAidUses:0, survivorFirstAidActive:false, shopperJumpUses:0, shopperSpeedPenaltyApplied:false,
       runnerSprintUses:0, runnerEnduranceReady:false, pickpocketUses:0,
       diverHoldBreathUses:0, diverHoldBreathActive:false, courierUses:0,
       farmerUses:0, minerUses:0,
@@ -1954,6 +1967,7 @@ function usedCarry(p,invOverride){
     if(it==="gold" && p.prof==="miner"){ minerGold++; continue; }
     if(it==="wine" && p.weightlessWine) continue;
     if(ITEMS[it].weapon && p.weaponWeightless) continue;
+    if(it==="knife" && p.prof==="butcher") continue; // 屠夫的屠宰專精: 刀不佔負重
     if((it==="pill"||it==="adrenaline") && p.weightlessMedical) continue;
     if((it==="water"||it==="food"||it==="waterfood") && p.weightlessRation) continue;
     if(it==="pill" && p.weightlessPill) continue;
@@ -2047,6 +2061,7 @@ function startGame(){
   // 三國模式 replaces the pool entirely (AI only ever picks from the 40 武將 while it's on),
   // matching the card grid's own full-swap behaviour rather than 擴充模式's additive one.
   const profIds=sanguoMode ? [...SANGUO_PROFS]
+    : physicalMode ? [...PHYSICAL_PROFS]
     : Object.keys(PROFESSIONS).filter(id=>!SANGUO_PROFS.has(id) && (expansionMode||!EXPANSION_PROFS.has(id)));
   const players=[you];
   // rolls the same random power/speed/carry split every AI player gets — pulled out so both the
@@ -2460,6 +2475,7 @@ function beginRound(){
     p.flags.rocketRoomsThisRound=[]; // 拆彈教官's 2 shots must hit 2 different rooms
     p.flags.recycleUsedThisRound=false; // 循環回收裝置 is a durable item too — limited to once per round
     p.flags.smugglerBonusUsedThisRound=false; // 走私客的熟悉門路: once per round
+    p.flags.survivorFirstAidActive=false; // 求生教官的野戰急救: only covers the round it's used
     p.flags.diverHoldBreathActive=false; // 潛水員的憋氣術: declared fresh each round it's used
     p.flags.vampireHealRound=0; // 吸血鬼的吸血: per-round heal cap
     p.flags.hunterAmbushActive=false; // 獵人的埋伏: the must-move waiver only covers the round it's used
@@ -2823,6 +2839,7 @@ function itemCostsCarry(p,item){
   if(item==="gold" && p.prof==="miner") return countItem(p,"gold")%2===0;
   if(item==="wine" && p.weightlessWine) return false;
   if(ITEMS[item].weapon && p.weaponWeightless) return false;
+  if(item==="knife" && p.prof==="butcher") return false; // 屠夫的屠宰專精
   if((item==="pill"||item==="adrenaline") && p.weightlessMedical) return false;
   if((item==="water"||item==="food"||item==="waterfood") && p.weightlessRation) return false;
   if(item==="pill" && p.weightlessPill) return false;
@@ -2852,6 +2869,7 @@ function isFlatWeightless(p,item){
   if(item==="gold" && p.weightlessGold) return true;
   if(item==="wine" && p.weightlessWine) return true;
   if(ITEMS[item].weapon && p.weaponWeightless) return true;
+  if(item==="knife" && p.prof==="butcher") return true; // 屠夫的屠宰專精
   if((item==="pill"||item==="adrenaline") && p.weightlessMedical) return true;
   if((item==="water"||item==="food"||item==="waterfood") && p.weightlessRation) return true;
   if(item==="pill" && p.weightlessPill) return true;
@@ -3737,7 +3755,7 @@ const SKILL_USE_LIMITS={
   "geneFreak:1":{flag:"geneUses",max:2},
   "climber:1":{flag:"climberDietUsed",max:1,bool:true},
   "embalmer:1":{flag:"embalmerUses",max:1},
-  "survivor:1":{flag:"survivorFirstAidUsed",max:1,bool:true},
+  "survivor:1":{flag:"survivorFirstAidUses",max:2},
   "shopper:1":{flag:"shopperJumpUses",max:3},
   "runner:1":{flag:"runnerSprintUses",max:3},
   "pickpocket:0":{flag:"pickpocketUses",max:3},
@@ -4221,11 +4239,10 @@ function useProfSkill(p,idx){
     p.flags.embalmerChoiceMode=true;
     log(p.name+" 啟用亡者遺贈：下次道具進入停屍間時可自行選擇。"); speakSkill(p,"embalmer:1");
   } else if(p.prof==="survivor" && idx===1){
-    if(skillUseCapReached(p,"survivor:1")){ flashMsg("已用完"); return; }
-    if(carryRoom(p)<=0){ flashMsg("背包空間不足，無法容納藥片"); return; }
-    p.flags.survivorFirstAidUsed=true; p.flags.skillUsedThisRound=true;
-    addItem(p,"pill");
-    log(p.name+" 使用野戰急救：無中生有做出1張藥片。"); speakSkill(p,"survivor:1");
+    if(skillUseCapReached(p,"survivor:1")){ flashMsg("已用完2次"); return; }
+    p.flags.survivorFirstAidUses++; p.flags.skillUsedThisRound=true;
+    p.flags.survivorFirstAidActive=true;
+    log(p.name+" 使用野戰急救：本回合毒氣傷害-1。"); speakSkill(p,"survivor:1");
   } else if(p.prof==="shopper" && idx===1){
     if(skillUseCapReached(p,"shopper:1")){ flashMsg("已用完3次"); return; }
     openShopperJumpModal(p);
@@ -4845,8 +4862,8 @@ function aiConsiderSkillAfterMove(p){
   // gamble with no downside and nothing to reserve it for — always worth trying every round.
   if(p.prof==="lucky"){ useProfSkill(p,1); return; }
   if(p.prof==="survivor"){
-    // 野戰急救: only worth its one-per-game use when actually hurt and not already carrying a cure.
-    if(!skillUseCapReached(p,"survivor:1") && p.hp<=6 && countItem(p,"pill")===0 && carryRoom(p)>0) useProfSkill(p,1);
+    // 野戰急救: only worth a limited charge when actually standing in a poisoned room this round.
+    if(!skillUseCapReached(p,"survivor:1") && roomIsPoisoned(ROOMS[p.room])) useProfSkill(p,1);
     return;
   }
   if(p.prof==="shopper"){
@@ -5628,8 +5645,8 @@ function settleRound(){
   // the heal still has a chance to cushion this same round's incoming damage.
   STATE.players.forEach(p=>{
     if(p.alive && !p.ghost && p.flags.runnerEnduranceReady){
-      p.hp=Math.min(p.maxhp,p.hp+3);
-      log(p.name+"（耐力訓練）本輪步數用盡且身處功能房間，恢復3點生命。","heal");
+      p.hp=Math.min(p.maxhp,p.hp+1);
+      log(p.name+"（耐力訓練）本輪步數用盡且身處功能房間，恢復1點生命。","heal");
     }
   });
 
@@ -5752,6 +5769,7 @@ function settleRound(){
       if(p.prof==="oracle" && dmg>0){ dmg=Math.max(0,dmg-1); note+="〔毒氣適應 -1〕"; }
       if(p.prof==="oracle" && p.flags.oracleHit && dmg>0){ dmg=Math.max(0,dmg-2); note+="〔精準預測 -2〕"; }
       if(p.prof==="witch" && dmg>0){ const before=dmg; const cut=STATE.round<=3?2:1; dmg=Math.max(0,dmg-cut); note+="〔毒氣防護 -"+(before-dmg)+"〕"; }
+      if(p.prof==="survivor" && p.flags.survivorFirstAidActive && dmg>0){ dmg=Math.max(0,dmg-1); note+="〔野戰急救 -1〕"; }
       if(p.prof==="diver" && p.flags.diverHoldBreathActive){ dmg=0; note+="〔憋氣術〕"; }
       if(p.inv.includes("gasmask")){ dmg=0; note+="〔防毒面具〕"; }
       if(p.flags.oxygenImmuneActive){ dmg=0; note+="〔氧氣瓶〕"; }
