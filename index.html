@@ -841,7 +841,7 @@ const PROFESSIONS = {
   ]},
   vampire:{name:"吸血鬼", skills:[
     {name:"吸血", desc:"（被動）戰鬥中對其他玩家造成傷害時，恢復傷害值一半（無條件捨去）的生命，每輪最多2點。", passive:true},
-    {name:"嗜血", desc:"（被動）生命≤5時，武力+2。", passive:true}
+    {name:"畏光", desc:"（被動）結算時若停留在頂樓房間（基因庫／停機坪），生命-2。", passive:true}
   ]},
   assassin:{name:"刺客", skills:[
     {name:"背刺", desc:"（被動）結算時，若你所在房間只有你和另1名存活玩家，直接對他造成2點傷害（不比武力、不受反擊），無次數限制。", passive:true},
@@ -2008,7 +2008,6 @@ function combatPower(p){
   // 屠夫的屠宰專精: flat +2 while a (single-bladed) 刀 is in the backpack — 雙刀 is its own
   // separate item with its own power value, so it doesn't trigger this bonus.
   if(p.prof==="butcher" && p.inv.includes("knife")) base+=2;
-  if(p.prof==="vampire" && p.hp<=5) base+=2; // 吸血鬼的嗜血
   // ---- 三國模式：武力相關被動 ----
   if(p.prof==="guanyu" && p.inv.includes("knife")) base+=2; // 青龍偃月刀
   if(p.prof==="zhangfei" && p.hp<=5) base+=2; // 燕人之勇
@@ -5773,6 +5772,15 @@ function settleRound(){
   });
   STATE.players.forEach(p=>{ p.flags.oracleHit=false; p.flags.oraclePredict=null; });
   STATE.poisonReduceFloor=null; STATE.poisonBoost=false;
+
+  // 吸血鬼的畏光: ending the round in a top-floor room (floor 0: 基因庫／停機坪) costs 2 HP,
+  // run through the same damage ward as other non-combat sources.
+  STATE.players.forEach(p=>{
+    if(p.prof!=="vampire" || !p.alive || p.ghost || !ROOMS[p.room] || ROOMS[p.room].floor!==0) return;
+    const gc=damageWard(p,2);
+    damagePlayer(p,gc.dmg,"畏光");
+    log(p.name+"（畏光）停留在頂樓房間，受到 "+gc.dmg+" 點傷害"+(gc.note||"")+"。","dmg");
+  });
 
   // 4) hunger (round>=2)
   if(STATE.round>=2){
