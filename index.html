@@ -797,7 +797,7 @@ const PROFESSIONS = {
   ]},
   butcher:{name:"屠夫", skills:[
     {name:"屠宰專精", desc:"（被動）手持刀時，武力額外+2；刀不佔負重。", passive:true},
-    {name:"以血養血", desc:"（被動）擊殺其他玩家後，恢復2點生命。", passive:true}
+    {name:"鮮血盛宴", desc:"（被動）擊殺其他玩家後，恢復2點生命。", passive:true}
   ]},
   exorcist:{name:"超度師", skills:[
     {name:"臨終祝禱", desc:"（被動）死亡成為暗影時，吸血所需總量降為1點即可復活（整局只發動一次，復活後血量為3）。", passive:true},
@@ -5195,7 +5195,7 @@ function screenShake(){
 }
 // killerId is optional and only ever passed from resolveCombat's two 1v1 hits — every other
 // damage source (rocket, poison, hunger, ambush, ...) has no single clean "who gets credit"
-// answer, so it's left undefined there and 屠夫's 以血養血 simply never triggers off them.
+// answer, so it's left undefined there and 屠夫's 鮮血盛宴 simply never triggers off them.
 function damagePlayer(p,amount,cause,killerId){
   if(amount<=0) return;
   p.roundEvents=p.roundEvents||[];
@@ -5264,14 +5264,14 @@ function killPlayer(p,cause,killerId){
   if(killerId!==undefined){ const k=STATE.players.find(x=>x.id===killerId); if(k) k.kills=(k.kills||0)+1; }
   log(p.name+" 死亡（"+cause+"），於停屍間化為暗影...","dmg");
   SFX.death();
-  // 屠夫的以血養血: only fires off the two direct combat hits in resolveCombat (see killerId's
+  // 屠夫的鮮血盛宴: only fires off the two direct combat hits in resolveCombat (see killerId's
   // doc comment on damagePlayer above) — killer must still be alive to benefit.
   if(killerId!==undefined){
     const killer=STATE.players.find(x=>x.id===killerId);
     if(killer && killer.alive && killer.prof==="assassin") killer.flags.assassinSpeedNext=true; // 無聲離場
     if(killer && killer.alive && killer.prof==="butcher"){
       killer.hp=Math.min(killer.maxhp,killer.hp+2);
-      log(killer.name+"（以血養血）擊殺 "+p.name+"，恢復2點生命（HP→"+killer.hp+"）。","heal");
+      log(killer.name+"（鮮血盛宴）擊殺 "+p.name+"，恢復2點生命（HP→"+killer.hp+"）。","heal");
     }
     // 姜維的繼志北伐: +1 永久武力／每次由自己擊殺，上限+2 — combatPower() reads the累積值.
     if(killer && killer.alive && killer.prof==="jiangwei"){
