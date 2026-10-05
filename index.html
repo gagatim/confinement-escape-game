@@ -799,8 +799,8 @@ const PROFESSIONS = {
     {name:"以血養血", desc:"（被動）擊殺其他玩家後，恢復2點生命。", passive:true}
   ]},
   exorcist:{name:"超度師", skills:[
-    {name:"臨終祝禱", desc:"（被動）你死亡成為暗影時，吸血所需總量降為1點即可復活。", passive:true},
-    {name:"安魂儀式", desc:"（被動）你死亡的瞬間自動發動：立刻復活，恢復生命上限一半的生命值。整局限用1次，第6輪（最後一輪）死亡不會觸發。", passive:true}
+    {name:"臨終祝禱", desc:"（被動）你死亡成為暗影時，吸血所需總量降為1點即可復活。(整場遊戲只會發動一次，該次復活後血量為3)", passive:true},
+    {name:"安魂儀式", desc:"（被動）你死亡的瞬間自動發動：立刻復活，恢復至5血。整局限用1次，第6輪（最後一輪）死亡不會觸發。", passive:true}
   ]},
   guardian:{name:"守護者", skills:[
     {name:"庇護結界", desc:"（被動）所處房間內，所有戰鬥傷害永遠-1（含你自己與同房間的所有人）。", passive:true},
@@ -1915,7 +1915,7 @@ function makePlayer(id,isAI,profId,stats,name){
       hunterSprintUses:0, hunterUses:0, hunterAmbushActive:false, mediocreSacrificeUses:0,
       detectiveUses:0, detectiveTarget:null, detectiveTracked:[],
       oracleUses:0, oracleReverse:false, oraclePredict:null, oracleHit:false,
-      collectorTradeUses:0, exorcistRiteUsed:false, guardianDefenseUsed:false, guardianDefenseActive:false,
+      collectorTradeUses:0, exorcistRiteUsed:false, exorcistGhostUsed:false, guardianDefenseUsed:false, guardianDefenseActive:false,
       luckyImmuneActive:false,
       hermitCloakUses:0, hermitCloakActive:false, prepperCopyUses:0, witchSprinkleUsed:false,
       poisonImmune:false, lotteryDodgeActive:false,
@@ -5380,7 +5380,7 @@ function killPlayer(p,cause,killerId){
 // 超度師的臨終祝禱: only ever lowers the THREATENED player's own revival bar (their prof at the
 // moment they died), not whoever's asking — used both by the drain-settlement check and the
 // live progress bar/skill-list text, so all three stay in sync automatically.
-function ghostDrainNeeded(p){ return p.prof==="exorcist" ? 1 : 2; }
+function ghostDrainNeeded(p){ return (p.prof==="exorcist" && !p.flags.exorcistGhostUsed) ? 1 : 2; }
 // 超度師的安魂儀式: a death-triggered auto-passive, called from killPlayer below — the exorcist
 // always revives only THEMSELVES, the instant they die, once per game. No renderAll() here since
 // this runs mid-settlement (same as 你們先上/破釜沉舟 etc.) — the eventual round-end render
@@ -5388,7 +5388,7 @@ function ghostDrainNeeded(p){ return p.prof==="exorcist" ? 1 : 2; }
 function exorcistAutoRevive(p){
   p.flags.exorcistRiteUsed=true;
   p.ghost=false; p.alive=true;
-  p.hp=Math.min(p.maxhp, Math.ceil(p.maxhp/2));
+  p.hp=Math.min(p.maxhp, 5);
   log(p.name+"（安魂儀式）死而復生，立即恢復至 "+p.hp+" 點生命！","heal");
   speakSkill(p,"exorcist:1");
 }
@@ -5830,8 +5830,10 @@ function settleRound(){
       STATE.players.forEach(sh=>{ if(sh.prof==="shade" && sh.alive && !sh.ghost){ sh.hp=Math.min(sh.maxhp,sh.hp+1); log(sh.name+"（暗影共鳴）恢復1點生命。","heal"); } });
     });
     if(g.ghostDrainTotal>=ghostDrainNeeded(g)){
+      const needN=ghostDrainNeeded(g);
+      if(g.prof==="exorcist" && needN===1) g.flags.exorcistGhostUsed=true; // 臨終祝禱 only once per game
       g.ghost=false; g.alive=true; g.hp=Math.min(g.maxhp, Math.max(3,g.ghostDrainTotal));
-      log(g.name+" 吸滿"+ghostDrainNeeded(g)+"點生命，於「"+g.room+"」復活！(HP "+g.hp+")","heal");
+      log(g.name+" 吸滿"+needN+"點生命，於「"+g.room+"」復活！(HP "+g.hp+")","heal");
     }
   });
 
