@@ -281,7 +281,7 @@
       <label class="muted" style="display:block;margin-bottom:6px;font-size:13px">
         <input type="checkbox" id="sanguoToggle"> 啟用三國模式（角色全面替換為40位三國武將〔魏／蜀／吳／群雄各10人〕，AI也只會從這40人中選取；取消勾選則恢復一般職業）</label>
       <label class="muted" style="display:block;margin-bottom:6px;font-size:13px">
-        <input type="checkbox" id="physicalToggle"> 啟用實體模式（遊戲方式與一般版本相同，但職業只開放精選的16位，AI也只會從這16位中選取；與擴充模式、三國模式互斥）</label>
+        <input type="checkbox" id="physicalToggle"> 啟用實體模式（遊戲方式與一般版本相同，但職業只開放精選的16位，AI也只會從這16位中選取；玩家人數改為8~12人，可重複選同一個出生點；與擴充模式、三國模式互斥）</label>
       <label class="muted" style="display:block;margin-bottom:10px;font-size:13px">
         <input type="checkbox" id="sanguoTeamToggle"> 啟用三國陣營戰（需先啟用三國模式；限定9或12人，依國家分成3～4隊，每隊3人，同國家不互相傷害，房內混戰只計較國家間的代表武力，結算比較各國總血量）</label>
       <div class="prof-grid" id="profGrid"></div>
@@ -1745,12 +1745,24 @@ document.getElementById("expansionToggle").addEventListener("change",(e)=>{
   expansionMode=e.target.checked;
   syncProfCards();
 });
+// 實體模式 plays at a real table's normal headcount (8~12), everything else keeps the 4~8 slider
+// (三國陣營戰 owns its own 9/12 lock, see sanguoTeamToggle). Players may share a spawn point —
+// same-room spawns already resolve through the existing spawn combat, nothing extra needed.
+function syncPlayerRange(){
+  if(sanguoTeamMode) return;
+  const pc=document.getElementById("playerCount");
+  const lo=physicalMode?8:4, hi=physicalMode?12:8;
+  pc.min=lo; pc.max=hi; pc.step=1;
+  pc.value=Math.min(hi,Math.max(lo,+pc.value||8));
+  document.getElementById("valPlayers").textContent=pc.value;
+}
 document.getElementById("physicalToggle").addEventListener("change",(e)=>{
   physicalMode=e.target.checked;
   if(physicalMode && sanguoMode){ // mutually exclusive with 三國模式 (which also drops 三國陣營戰)
     document.getElementById("sanguoToggle").checked=false;
     document.getElementById("sanguoToggle").dispatchEvent(new Event("change"));
   } else syncProfCards();
+  syncPlayerRange();
 });
 // 三國模式: swaps the ENTIRE roster (not additive like 擴充模式) — only these 40 武將 are
 // selectable, for both the human player and AI, while it's on.
@@ -1786,6 +1798,7 @@ document.getElementById("sanguoTeamToggle").addEventListener("change",(e)=>{
   } else {
     pc.min=4; pc.max=8; pc.step=1; pc.value=8;
     document.getElementById("valPlayers").textContent="8";
+    if(physicalMode) syncPlayerRange();
   }
 });
 
@@ -1895,7 +1908,7 @@ document.getElementById("abandonBtn").addEventListener("click",()=>{
 });
 
 /* ---------- player factory ---------- */
-const AI_NAMES=["阿凱","小美","老周","阿德","阿珍","小胖","阿宏","阿玲"];
+const AI_NAMES=["阿凱","小美","老周","阿德","阿珍","小胖","阿宏","阿玲","阿傑","小琪","老馬","阿芬"]; // 12 names so a 12-player 實體模式 game never repeats one
 function makePlayer(id,isAI,profId,stats,name){
   const prof=PROFESSIONS[profId];
   const startHp = profId==="survivor" ? 12 : 10; // 求生教官的強健體魄: +2 生命上限
