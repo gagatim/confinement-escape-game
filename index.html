@@ -833,7 +833,7 @@ const PROFESSIONS = {
     {name:"毒氣適應", desc:"（被動）自身受到的毒氣傷害永遠-1（最低0）。", passive:true}
   ]},
   detective:{name:"私家偵探", skills:[
-    {name:"情報位移", desc:"行動階段可放棄移動，指定1名存活玩家：結算開始時你直接出現在其當時所在的房間（本輪不能使用房間功能）。整局限用3次，同一名玩家最多被跟蹤1次。", uses:3}
+    {name:"情報位移", desc:"行動階段可放棄移動，指定1名存活玩家：結算開始時你直接出現在其當時所在的房間，並可使用該房間的功能（自動執行）。整局限用3次，同一名玩家最多被跟蹤1次。", uses:3}
   ]},
   arsonist:{name:"縱火犯", skills:[
     {name:"點火", desc:"（被動）結算時，若你所在房間（含你）有3名以上存活玩家，房內其他玩家各-1血，你恢復1點生命。", passive:true},
@@ -4404,7 +4404,7 @@ function openDetectiveModal(p){
   if(!targets.length){ flashMsg("沒有可跟蹤的玩家（每人只能被跟蹤1次）。"); return; }
   const opts=targets.map(o=>`<option value="${o.id}">${o.name}</option>`).join("");
   openModal(`<h3>情報位移：放棄移動，跟蹤一名玩家</h3>
-    <div class="muted" style="font-size:12px;margin-bottom:6px">結算開始時，你會出現在他當時所在的房間；本輪不能使用房間功能。</div>
+    <div class="muted" style="font-size:12px;margin-bottom:6px">結算開始時，你會出現在他當時所在的房間，並自動使用該房間的功能。</div>
     <select id="detSel">${opts}</select><br><br>
     <button class="btn small warn" id="detOk">跟蹤</button> <button class="btn small ghost" id="detCancel">取消</button>`);
   document.getElementById("detOk").onclick=()=>{
@@ -5574,6 +5574,18 @@ function settleRound(){
     if(t && t.alive && !t.ghost){
       p.room=t.room;
       log(p.name+"（情報位移）出現在被跟蹤者 "+t.name+" 所在的「"+t.room+"」。");
+      // The jump leaves the detective free to use the landing room's function (e.g. 水塔 water,
+      // 手術室's 2-person heal when exactly 2 end up here, 基因庫/餐廳...). Runs at settlement
+      // time, so it's resolved automatically: draws use the same best-first auto pick the AI uses
+      // (no picker modal mid-settlement), and rooms that open their own modal (操作室/控制室) or
+      // are pure movement/trap mechanics (回收站/傳送室/激光室) are skipped.
+      const lr=ROOMS[p.room];
+      const blocked=["slide","teleport","laser"].includes(lr.special) || HACKER_OWN_MODAL_SPECIALS.has(lr.special)
+        || (STATE.sanguoDisabledRooms && STATE.sanguoDisabledRooms.has(p.room)) || p.flags.hermitCloakActive;
+      if(!blocked){
+        if(lr.draw>0) resolveAIDraw(p,p.room,lr.draw);
+        if(lr.special) doSpecialRoom(p,lr);
+      }
     } else {
       log(p.name+"（情報位移）跟蹤的目標已不在，原地不動。");
     }
