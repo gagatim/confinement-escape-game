@@ -255,7 +255,8 @@
     <div id="topStatus" class="row"></div>
     <button class="btn small ghost" id="stealthBtn" title="老闆鍵：一鍵偽裝成報表（快捷鍵：按住 Alt 再按 ` 鍵可隨時觸發，不用把滑鼠移過來）">🥷 低調模式</button>
     <button class="btn small ghost" id="iconsBtn" title="常駐低調：把介面上的 emoji 圖示換成純文字，平時看起來更像內部系統">🖼 去圖示模式</button>
-    <button class="btn small ghost" id="themeBtn" title="切換明亮/暗黑介面">🌙 暗色介面</button>
+    <button class="btn small ghost" id="statsBtn" title="查看各職業的對局數據與強弱分析">📊 職業數據</button>
+    <button class="btn small ghost" id="themeBtn"title="切換明亮/暗黑介面">🌙 暗色介面</button>
     <button class="btn small ghost" id="muteBtn" title="開關音效">🔊 音效</button>
     <button class="btn small ghost" id="voiceMuteBtn" title="開關角色語音">🗣 語音</button>
     <button class="btn small warn hidden" id="abandonBtn">放棄測試，重新開始</button>
@@ -691,7 +692,7 @@ const PROFESSIONS = {
     {name:"暗影親和", desc:"（被動）成為暗影時，移動速度永久+2。", passive:true}
   ]},
   tamer:{name:"馴獸師", skills:[
-    {name:"巡迴獵犬", desc:"武力和負重永久+1。移動階段可使用，派遣獵犬至距離5以內有庫存的房間隨機抽1張道具(不可超過負重)。整局限用4次。", uses:4}
+    {name:"巡迴獵犬", desc:"武力和負重永久+1。行動結束後（做完房間行動後；所在房間無功能可做時不受此限）才可使用，派遣獵犬至距離5以內有庫存的房間隨機抽1張道具(不可超過負重)。整局限用4次。", uses:4}
   ]},
   merc:{name:"雇傭兵", skills:[
     {name:"武器精通", desc:"你的武器(刀/雙刀/手槍/霰彈槍)不佔負重，等於背包多2格空間。", passive:true},
@@ -706,8 +707,7 @@ const PROFESSIONS = {
   ]},
   climber:{name:"攀岩者", skills:[
     {name:"垂直攀爬", desc:"發動技能後，該回合可直接上下移動樓層，移動仍需消耗步數。", uses:99},
-    {name:"節食", desc:"整局限用1次，該回合不需支付水/糧。", uses:1},
-    {name:"剛硬意志", desc:"（被動）任何傷害（含毒氣、飢餓、戰鬥等所有來源）最終減少1點（最低0）。", passive:true}
+    {name:"節食", desc:"整局限用1次，該回合不需支付水/糧。", uses:1}
   ]},
   engineer:{name:"工程師", skills:[
     {name:"內建回收裝置", desc:"（被動）不需持有循環回收裝置道具卡，每輪可直接使用一次回收功能，從棄牌堆中取得1張道具（與持有該道具卡共用每輪1次的限制）。", passive:true},
@@ -731,7 +731,7 @@ const PROFESSIONS = {
     {name:"儲糧有道", desc:"（被動）水與糧食永久不佔負重。", passive:true}
   ]},
   smuggler:{name:"走私客", skills:[
-    {name:"暗格夾層", desc:"（被動）背包容量永久+3。", passive:true},
+    {name:"暗格夾層", desc:"（被動）背包容量永久+3；但武力上限為5點（創角與重新分配點數時適用）。", passive:true},
     {name:"熟悉門路", desc:"（被動）在金庫／武器庫／藥房／垃圾場抽取道具時，40%機率額外多抽1張，每輪最多觸發1次。", passive:true}
   ]},
   survivor:{name:"求生教官", skills:[
@@ -803,12 +803,12 @@ const PROFESSIONS = {
     {name:"安魂儀式", desc:"（被動）你死亡的瞬間自動發動：立刻復活，恢復生命上限一半的生命值。整局限用1次，第6輪（最後一輪）死亡不會觸發。", passive:true}
   ]},
   guardian:{name:"守護者", skills:[
-    {name:"庇護結界", desc:"（被動）自身所有傷害-1；同房間的其他玩家所有傷害也-1。", passive:true},
-    {name:"絕對防禦", desc:"整局限用1次：本回合可以不移動，無視戰鬥、毒氣、火箭筒等任何傷害，且可直接使用房間功能，但飢餓仍需正常繳交水/糧。", uses:1}
+    {name:"庇護結界", desc:"（被動）所處房間內，所有戰鬥傷害永遠-1（含你自己與同房間的所有人）。", passive:true},
+    {name:"絕對防禦", desc:"整局限用1次：本回合可以選擇不移動，自身無視戰鬥、毒氣、火箭筒等任何傷害，且可直接使用房間功能，但飢餓仍需正常繳交水/糧。", uses:1}
   ]},
   lucky:{name:"幸運兒", skills:[
     {name:"吉星高照", desc:"（被動）每次抽取道具前自動擲骰，骰到1或4時，本次額外多抽1張。", passive:true},
-    {name:"逢凶化吉", desc:"主動，每輪可發動：判定1/6機率成功，成功則本回合免疫所有傷害（戰鬥、毒氣、火箭筒等），但飢餓仍需正常繳交水/糧。", uses:99}
+    {name:"逢凶化吉", desc:"主動，每輪可發動：擲骰子，擲到1才發動成功（1/6機率），成功則本回合免疫所有傷害（戰鬥、毒氣、火箭筒等），但飢餓仍需正常繳交水/糧。", uses:99}
   ]},
   hermit:{name:"隱士", skills:[
     {name:"離群索居", desc:"（被動）房間內只有你1人（無其他玩家、無暗影）時，戰鬥／中毒／飢餓傷害各-1。", passive:true},
@@ -825,12 +825,32 @@ const PROFESSIONS = {
   toxic:{name:"毒人", skills:[
     {name:"以毒為生", desc:"（被動）完全不受一般毒氣傷害規則影響：結算時若身處「已中毒的功能房間」，回復2點生命；身處非毒氣樓層，扣2點生命；身處已中毒但無功能的房間，不扣不補。", passive:true},
     {name:"淬毒衝刺", desc:"（被動）若本輪移動開始時所在房間為已中毒樓層，本輪移動步數+3（第1輪必定無毒氣樓層，恆不觸發）。", passive:true}
+  ]},
+  oracle:{name:"毒域先知", skills:[
+    {name:"邪惡反轉", desc:"整局限用2次，第6輪不可使用：本輪毒氣樓層改為票數第二高的樓層；若第一、二名同票，則同票的樓層都成為毒氣樓層。（只有1層有人投票時，維持原結果。）", uses:2},
+    {name:"精準預測", desc:"使用「邪惡反轉」時，可以猜測最終的毒氣樓層。若猜中，當輪自身受到的毒氣傷害-2，並回復1點生命。（隨邪惡反轉發動，整局最多2次）", passive:true},
+    {name:"毒氣適應", desc:"（被動）自身受到的毒氣傷害永遠-1，最低降至0。", passive:true}
+  ]},
+  detective:{name:"私家偵探", skills:[
+    {name:"情報位移", desc:"行動階段可放棄移動，指定1名存活玩家：結算開始時，你會直接出現在該玩家當時所在的房間（本輪不能使用房間功能）。整局限用3次，同一名玩家最多只能被你跟蹤1次。", uses:3}
+  ]},
+  arsonist:{name:"縱火犯", skills:[
+    {name:"點火", desc:"（被動）結算階段，若你所在的房間連同你有3名以上存活玩家，房內其他玩家各扣1點生命，你恢復1點生命。", passive:true},
+    {name:"火場老手", desc:"（被動）你所在的房間連同你有3名以上存活玩家時，你受到的戰鬥傷害-3。", passive:true}
+  ]},
+  vampire:{name:"吸血鬼", skills:[
+    {name:"吸血", desc:"（被動）戰鬥中對其他玩家造成傷害時，恢復傷害值一半的生命（無條件捨去），每輪最多恢復2點。", passive:true},
+    {name:"嗜血", desc:"（被動）自身生命≤5時，武力+2。", passive:true}
+  ]},
+  assassin:{name:"刺客", skills:[
+    {name:"背刺", desc:"（被動）結算階段，若你所在的房間只有你和另1名存活玩家，直接對他造成2點傷害（不比較武力、不受反擊）。無使用次數限制。", passive:true},
+    {name:"無聲離場", desc:"（被動）擊殺玩家後，下一輪移動步數+3。", passive:true}
   ]}
 };
 // 擴充模式: these professions are hidden from the setup screen (and never randomly given to
 // AI) unless the player opts into 擴充模式 — keeps a first game to the base roster, while letting
 // anyone who wants the larger expansion roster turn it on.
-const EXPANSION_PROFS=new Set(["fatty","trucker","bartender","chemist","hacker","shade","merc","outsider","climber","pilot","chef","diver","courier","gourmet","farmer","mediocre","collector","guardian","hunter","pickpocket","lucky","hermit","prepper"]);
+const EXPANSION_PROFS=new Set(["fatty","trucker","bartender","chemist","hacker","shade","merc","outsider","climber","pilot","chef","diver","courier","gourmet","farmer","mediocre","collector","guardian","hunter","pickpocket","lucky","hermit","prepper","vampire","assassin"]);
 // One small emoji "portrait" per profession — shown on the selection card and anywhere a player's
 // profession is listed in-game, so each of the 16 is visually distinct at a glance, not just by name.
 const PROF_ICON={
@@ -841,7 +861,7 @@ const PROF_ICON={
   shopper:"🛍️", runner:"🏃", herbalist:"🌿", veteran:"🎖️", pickpocket:"🥷",
   diver:"🤿", courier:"📦", gourmet:"🍽️", farmer:"🌾", miner:"⛏️", hunter:"🏹",
   mediocre:"🤷", boss:"🕴️", collector:"📿", butcher:"🥩", exorcist:"🕯️", guardian:"🛡️", lucky:"🍀",
-  hermit:"🏚️", prepper:"🥫", witch:"🧙", toxic:"☣️"
+  hermit:"🏚️", prepper:"🥫", witch:"🧙", toxic:"☣️", arsonist:"🔥", vampire:"🧛", assassin:"🗡️", detective:"🕵️", oracle:"☠️"
 };
 // ===================== 三國模式 (SANGUO_MODE) =====================
 // 40 characters across 4 kingdoms. Added directly into PROFESSIONS (not a separate object) so
@@ -1067,6 +1087,143 @@ function saveGame(){
   }catch(e){ /* storage unavailable/full — game still playable, just unsaved */ }
 }
 function clearSavedGame(){ try{ localStorage.removeItem(SAVE_KEY); }catch(e){} }
+
+/* ---------- 對局紀錄 & 職業數據分析: one row per game, kept across games in its own key ---------- */
+const STATS_KEY="confinement_escape_stats_v1";
+const STATS_MAX_GAMES=500;
+function loadGameRecords(){
+  try{ const a=JSON.parse(localStorage.getItem(STATS_KEY)||"[]"); return Array.isArray(a)?a:[]; }catch(e){ return []; }
+}
+function saveGameRecords(arr){
+  try{ localStorage.setItem(STATS_KEY, JSON.stringify(arr.slice(-STATS_MAX_GAMES))); }catch(e){}
+}
+// Same ordering/tie rule as renderEndScreen (hp desc, then power; equal on both shares a rank).
+function computeRanks(players){
+  const ranked=[...players].sort((a,b)=>(b.hp-a.hp)||(b.power-a.power));
+  const ranks={}; let rank=1;
+  ranked.forEach((p,i)=>{
+    if(i>0 && !(p.hp===ranked[i-1].hp && p.power===ranked[i-1].power)) rank=i+1;
+    ranks[p.id]=rank;
+  });
+  return ranks;
+}
+function recordGameResult(){
+  if(!STATE || STATE.statsRecorded) return;
+  STATE.statsRecorded=true;
+  const ranks=computeRanks(STATE.players);
+  const mode = STATE.sanguoTeamMode ? "三國陣營戰" : (STATE.players.some(p=>SANGUO_PROFS.has(p.prof)) ? "三國模式" : "一般");
+  const rec={
+    ts:Date.now(), n:STATE.players.length, rounds:STATE.round, mode,
+    map2:!!(document.getElementById("map2Toggle")||{}).checked,
+    bounty:!!(document.getElementById("bountyToggle")||{}).checked,
+    players:STATE.players.map(p=>({
+      prof:p.prof, name:PROFESSIONS[p.prof].name, ai:!!p.isAI, rank:ranks[p.id],
+      hp:p.hp, alive:!!p.alive, deathRound:p.deathRound||null,
+      kills:p.kills||0, dealt:p.dmgDealt||0, taken:p.dmgTaken||0,
+      power:p.power, speed:p.speed, carry:p.carry
+    }))
+  };
+  const all=loadGameRecords(); all.push(rec); saveGameRecords(all);
+}
+function downloadFile(name,text,type){
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob([text],{type}));
+  a.download=name; document.body.appendChild(a); a.click();
+  setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },500);
+}
+function exportRecordsJSON(){ downloadFile("對局紀錄.json", JSON.stringify(loadGameRecords(),null,1), "application/json"); }
+function exportRecordsCSV(){
+  const rows=["時間,模式,人數,輪數,地圖2,懸賞,職業,玩家類型,名次,最終血量,存活,死亡輪,擊殺,造成傷害,承受傷害,武力,移動,負重"];
+  loadGameRecords().forEach(g=>g.players.forEach(p=>rows.push([
+    new Date(g.ts).toLocaleString("zh-TW",{hour12:false}).replace(/,/g," "), g.mode, g.n, g.rounds, g.map2?1:0, g.bounty?1:0,
+    p.name, p.ai?"AI":"玩家", p.rank, p.hp, p.alive?1:0, p.deathRound||"", p.kills, p.dealt, p.taken, p.power, p.speed, p.carry
+  ].join(","))));
+  downloadFile("對局紀錄.csv", "﻿"+rows.join("\n"), "text/csv");
+}
+function importRecordsJSON(file){
+  const r=new FileReader();
+  r.onload=()=>{
+    try{
+      const incoming=JSON.parse(r.result);
+      if(!Array.isArray(incoming)) throw 0;
+      const have=new Set(loadGameRecords().map(g=>g.ts));
+      const merged=loadGameRecords().concat(incoming.filter(g=>g && g.ts && Array.isArray(g.players) && !have.has(g.ts)));
+      merged.sort((a,b)=>a.ts-b.ts); saveGameRecords(merged);
+      openStatsModal();
+    }catch(e){ alert("匯入失敗：不是有效的對局紀錄 JSON。"); }
+  };
+  r.readAsText(file);
+}
+const STATS_MIN_SAMPLE=8;
+// 強弱以「平均名次百分位」為主: (名次-1)/(人數-1)，0=永遠第一、1=永遠墊底、0.5=中庸，
+// 這樣不同人數的對局可以混在一起比；勝率則另列供參考。
+function buildProfStats(records,filter){
+  const by={};
+  records.forEach(g=>{
+    if(filter.mode!=="all" && g.mode!==filter.mode) return;
+    g.players.forEach(p=>{
+      if(filter.who==="human" && p.ai) return;
+      const s=by[p.prof]||(by[p.prof]={prof:p.prof,name:p.name,games:0,wins:0,top3:0,pctSum:0,alive:0,deathSum:0,deaths:0,kills:0,dealt:0,taken:0,expWin:0});
+      s.games++; if(p.rank===1) s.wins++; if(p.rank<=3) s.top3++;
+      s.pctSum+= g.n>1 ? (p.rank-1)/(g.n-1) : 0.5;
+      s.expWin+=1/g.n;
+      if(p.alive) s.alive++; else if(p.deathRound){ s.deaths++; s.deathSum+=p.deathRound; }
+      s.kills+=p.kills; s.dealt+=p.dealt; s.taken+=p.taken;
+    });
+  });
+  return Object.values(by).map(s=>{
+    s.pct=s.pctSum/s.games;
+    s.tier = s.games<STATS_MIN_SAMPLE ? "樣本不足" : s.pct<0.35?"強勢" : s.pct<0.45?"偏強" : s.pct<=0.55?"均衡" : s.pct<=0.65?"偏弱":"弱勢";
+    return s;
+  });
+}
+const STATS_SORTS={
+  pct:(a,b)=>a.pct-b.pct, win:(a,b)=>b.wins/b.games-a.wins/a.games, games:(a,b)=>b.games-a.games,
+  kills:(a,b)=>b.kills/b.games-a.kills/a.games, taken:(a,b)=>a.taken/a.games-b.taken/b.games
+};
+function openStatsModal(opts){
+  const f=Object.assign({mode:"all",who:"all",sort:"pct"},opts||{});
+  const records=loadGameRecords();
+  const stats=buildProfStats(records,f).sort((a,b)=>{
+    const ea=a.games<STATS_MIN_SAMPLE, eb=b.games<STATS_MIN_SAMPLE;
+    return ea!==eb ? ea-eb : STATS_SORTS[f.sort](a,b);   // 樣本不足的排在最後
+  });
+  const tierColor={"強勢":"#ff6b6b","偏強":"#ffa94d","均衡":"#8ce99a","偏弱":"#74c0fc","弱勢":"#9775fa","樣本不足":"#888"};
+  const f1=(x)=>x.toFixed(1), pc=(x)=>(x*100).toFixed(0)+"%";
+  const sel=(id,cur,arr)=>`<select id="${id}">`+arr.map(([v,t])=>`<option value="${v}"${v===cur?" selected":""}>${t}</option>`).join("")+`</select>`;
+  const body=stats.map(s=>`<tr>
+    <td>${s.name}</td><td>${s.games}</td><td>${pc(s.wins/s.games)}<span class="muted">（期望${pc(s.expWin/s.games)}）</span></td>
+    <td>${pc(s.top3/s.games)}</td><td>${f1(s.pct*100)}</td><td>${pc(s.alive/s.games)}</td>
+    <td>${s.deaths?f1(s.deathSum/s.deaths):"-"}</td><td>${f1(s.kills/s.games)}</td><td>${f1(s.dealt/s.games)}</td><td>${f1(s.taken/s.games)}</td>
+    <td style="color:${tierColor[s.tier]};font-weight:bold">${s.tier}</td></tr>`).join("");
+  openModal(`<h3>📊 職業數據分析</h3>
+    <div class="muted" style="font-size:12px;margin-bottom:6px">已記錄 ${records.length} 局（最多保留 ${STATS_MAX_GAMES} 局）。每局結束時自動記錄，資料存在這個瀏覽器裡。</div>
+    <div class="row" style="gap:8px;margin-bottom:8px">
+      模式 ${sel("stMode",f.mode,[["all","全部"],["一般","一般"],["三國模式","三國模式"],["三國陣營戰","三國陣營戰"]])}
+      對象 ${sel("stWho",f.who,[["all","所有玩家（含AI）"],["human","只看我的職業"]])}
+      排序 ${sel("stSort",f.sort,[["pct","強弱（平均名次）"],["win","勝率"],["games","出場數"],["kills","場均擊殺"],["taken","場均承傷（低→高）"]])}
+    </div>
+    <div style="overflow-x:auto;max-height:55vh;overflow-y:auto"><table class="mono" style="font-size:12px;border-collapse:collapse;width:100%;white-space:nowrap">
+      <thead><tr><th>職業</th><th>出場</th><th>勝率</th><th>前3名</th><th title="0=永遠第一，50=中庸，100=永遠墊底">名次指數↓好</th><th>存活率</th><th>平均死亡輪</th><th>場均擊殺</th><th>場均輸出</th><th>場均承傷</th><th>評級</th></tr></thead>
+      <tbody>${body||`<tr><td colspan="11" class="muted" style="padding:14px">尚無資料，玩完一局後就會出現。</td></tr>`}</tbody></table></div>
+    <div class="muted" style="font-size:11px;margin:6px 0">評級依「名次指數」：&lt;35 強勢、&lt;45 偏強、45–55 均衡、≤65 偏弱、&gt;65 弱勢；出場少於 ${STATS_MIN_SAMPLE} 局不評級。AI 的操作遠比真人簡單，建議同時參考「只看我的職業」。輸出僅含 PVP 戰鬥傷害。</div>
+    <div class="row" style="gap:6px">
+      <button class="btn small" id="stExportJson">匯出 JSON</button>
+      <button class="btn small" id="stExportCsv">匯出 CSV</button>
+      <button class="btn small ghost" id="stImport">匯入 JSON</button>
+      <input type="file" id="stImportFile" accept=".json" class="hidden">
+      <button class="btn small warn" id="stClear">清除全部紀錄</button>
+      <button class="btn small ghost" id="stClose">關閉</button>
+    </div>`);
+  const reopen=()=>openStatsModal({mode:document.getElementById("stMode").value,who:document.getElementById("stWho").value,sort:document.getElementById("stSort").value});
+  ["stMode","stWho","stSort"].forEach(id=>document.getElementById(id).onchange=reopen);
+  document.getElementById("stExportJson").onclick=exportRecordsJSON;
+  document.getElementById("stExportCsv").onclick=exportRecordsCSV;
+  document.getElementById("stImport").onclick=()=>document.getElementById("stImportFile").click();
+  document.getElementById("stImportFile").onchange=e=>{ if(e.target.files[0]) importRecordsJSON(e.target.files[0]); };
+  document.getElementById("stClear").onclick=()=>{ if(confirm("確定清除全部 "+records.length+" 局紀錄？此動作無法復原。")){ saveGameRecords([]); openStatsModal(f); } };
+  document.getElementById("stClose").onclick=closeModal;
+}
 // Abandon button is only meaningful once a game exists to abandon (spawn-select or in-progress
 // game) — hidden on the setup screen (nothing started yet) and the end screen (already has its
 // own 重新開始 button).
@@ -1440,7 +1597,12 @@ const SELECT_QUOTES={
   butcher:"刀在我手上，才叫刀。",
   exorcist:"就算死了，我也能把你請回來。",
   guardian:"站在我旁邊，我會扛下這一切。",
-  lucky:"我這個人，運氣一向不差。"
+  lucky:"我這個人，運氣一向不差。",
+  oracle:"毒往哪裡流，我比誰都先知道。",
+  detective:"每個人的行蹤，我都有辦法查到。",
+  arsonist:"火一點著，誰都別想全身而退。",
+  vampire:"你流的每一滴血，都會變成我的力量。",
+  assassin:"你不會看到我，只會感覺到我。"
 };
 (()=>{
   const voiceBtn=document.getElementById("voiceMuteBtn");
@@ -1688,7 +1850,7 @@ function updateAllocMax(){
 }
 function clampAlloc(){
   const max = selectedProf==="geneFreak" ? 12 : 10;
-  const powCap = selectedProf==="geneFreak" ? 5 : 99;
+  const powCap = (selectedProf==="geneFreak"||selectedProf==="smuggler") ? 5 : 99;
   let p=+document.getElementById("allocPower").value, s=+document.getElementById("allocSpeed").value, c=+document.getElementById("allocCarry").value;
   if(p>powCap){ p=powCap; document.getElementById("allocPower").value=p; }
   document.getElementById("valPower").textContent=p;
@@ -1710,6 +1872,7 @@ function validateStart(){
   document.getElementById("startHint").textContent = !selectedProf ? "請先選擇職業" : (p+s+c!==max ? "請把點數剛好分配完" : "");
 }
 document.getElementById("startBtn").addEventListener("click",startGame);
+document.getElementById("statsBtn").addEventListener("click",()=>openStatsModal());
 document.getElementById("replayBtn").addEventListener("click",()=>{ clearSavedGame(); location.reload(); });
 document.getElementById("abandonBtn").addEventListener("click",()=>{
   openModal(`<h3>放棄本局測試？</h3>
@@ -1750,6 +1913,8 @@ function makePlayer(id,isAI,profId,stats,name){
       diverHoldBreathUses:0, diverHoldBreathActive:false, courierUses:0,
       farmerUses:0, minerUses:0,
       hunterSprintUses:0, hunterUses:0, hunterAmbushActive:false, mediocreSacrificeUses:0,
+      detectiveUses:0, detectiveTarget:null, detectiveTracked:[],
+      oracleUses:0, oracleReverse:false, oraclePredict:null, oracleHit:false,
       collectorTradeUses:0, exorcistRiteUsed:false, guardianDefenseUsed:false, guardianDefenseActive:false,
       luckyImmuneActive:false,
       hermitCloakUses:0, hermitCloakActive:false, prepperCopyUses:0, witchSprinkleUsed:false,
@@ -1830,6 +1995,7 @@ function combatPower(p){
   // 屠夫的屠宰專精: flat +2 while a (single-bladed) 刀 is in the backpack — 雙刀 is its own
   // separate item with its own power value, so it doesn't trigger this bonus.
   if(p.prof==="butcher" && p.inv.includes("knife")) base+=2;
+  if(p.prof==="vampire" && p.hp<=5) base+=2; // 吸血鬼的嗜血
   // ---- 三國模式：武力相關被動 ----
   if(p.prof==="guanyu" && p.inv.includes("knife")) base+=2; // 青龍偃月刀
   if(p.prof==="zhangfei" && p.hp<=5) base+=2; // 燕人之勇
@@ -1888,7 +2054,7 @@ function startGame(){
   const rollAIStats=(pid)=>{
     const pw=Math.floor(Math.random()*5)+2, sp=Math.floor(Math.random()*4)+1;
     const cap = pid==="geneFreak"?12:10;
-    let power=Math.min(pw, pid==="geneFreak"?5:99);
+    let power=Math.min(pw, (pid==="geneFreak"||pid==="smuggler")?5:99);
     // speed is capped to leave at least 1 point for carry, so the 3 stats never add up past cap
     // (power maxes at 6, or 5 for geneFreak, so this never has to clamp speed below its own 1 floor).
     let speed=Math.min(sp, cap-power-1);
@@ -2275,6 +2441,11 @@ function beginRound(){
       p.stepsLeft += 3;
       log(p.name+"（淬毒衝刺）本輪出發地為已中毒樓層，移動步數+3（本輪共"+p.stepsLeft+"步）。");
     }
+    // 刺客的無聲離場: the +3 steps earned by last round's kill, spent at the start of this round.
+    if(p.prof==="assassin" && p.flags.assassinSpeedNext){
+      p.flags.assassinSpeedNext=false; p.stepsLeft+=3;
+      log(p.name+"（無聲離場）上輪擊殺了玩家，本輪移動步數+3（共"+p.stepsLeft+"步）。");
+    }
     // ---- 三國模式：每輪開局固定/條件式速度加成 ----
     if(p.prof==="xiahouyuan") p.stepsLeft+=1; // 神速
     if(p.prof==="gongsunzan") p.stepsLeft+=2; // 白馬義從
@@ -2290,6 +2461,7 @@ function beginRound(){
     p.flags.recycleUsedThisRound=false; // 循環回收裝置 is a durable item too — limited to once per round
     p.flags.smugglerBonusUsedThisRound=false; // 走私客的熟悉門路: once per round
     p.flags.diverHoldBreathActive=false; // 潛水員的憋氣術: declared fresh each round it's used
+    p.flags.vampireHealRound=0; // 吸血鬼的吸血: per-round heal cap
     p.flags.hunterAmbushActive=false; // 獵人的埋伏: the must-move waiver only covers the round it's used
     p.flags.guardianDefenseActive=false; // 守護者的絕對防禦: the must-move waiver + damage immunity only covers the round it's used
     p.flags.luckyImmuneActive=false; // 幸運兒的逢凶化吉: the damage immunity only covers the round it's used
@@ -2495,7 +2667,7 @@ function tryMove(p,target){
 // 暗影 is NOT exempt — it can reach literally any room for free (see onRoomClick), so it's checked
 // against every room in the game instead of the step/adjacency-limited reach a living player uses.
 function mustMoveThisRound(p){
-  if(p.flags.hunterAmbushActive || p.flags.guardianDefenseActive) return false;
+  if(p.flags.hunterAmbushActive || p.flags.guardianDefenseActive || p.flags.detectiveTarget!=null) return false;
   if(p.ghost) return Object.keys(ROOMS).some(r=>r!==p.roundStartRoom);
   const reach=reachableRooms(p.roundStartRoom, p.roundStartSteps);
   return Object.keys(reach).some(r=>r!==p.roundStartRoom);
@@ -3013,7 +3185,7 @@ document.addEventListener("keydown",(e)=>{
 function openRespecModal(p,cap){
   // 基因怪人的「先天優勢」把武力上限鎖在5點 — 與創角畫面的 clampAlloc 用同一條規則，
   // 否則重新分配點數會悄悄繞過這個上限，把全部點數灌進武力值。
-  const powCap = p.prof==="geneFreak" ? 5 : 99;
+  const powCap = (p.prof==="geneFreak"||p.prof==="smuggler") ? 5 : 99;
   openModal(`<h3>操作室：重新分配基因點數（共 ${cap} 點）</h3>
     <div class="statbar"><label>武力值</label><input type="number" id="rsPower" min="0" max="${Math.min(cap,powCap)}" value="${p.power}"></div>
     <div class="statbar"><label>移動步數</label><input type="number" id="rsSpeed" min="0" max="${cap}" value="${p.speed}"></div>
@@ -3574,7 +3746,8 @@ const SKILL_USE_LIMITS={
   "farmer:1":{flag:"farmerUses",max:2},
   "hunter:0":{flag:"hunterSprintUses",max:2},
   "hunter:1":{flag:"hunterUses",max:2},
-  "mediocre:1":{flag:"mediocreSacrificeUses",max:3},
+  "detective:0":{flag:"detectiveUses",max:3},
+  "oracle:0":{flag:"oracleUses",max:2},  "mediocre:1":{flag:"mediocreSacrificeUses",max:3},
   "collector:1":{flag:"collectorTradeUses",max:2},
   "guardian:1":{flag:"guardianDefenseUsed",max:1,bool:true},
   "hermit:1":{flag:"hermitCloakUses",max:2},
@@ -3925,6 +4098,13 @@ function useSanguoSkill(p,idx){
   // 攔截才能真正還原效果，這次先不做——需要時請明確說「修正三國版本」指名要補上哪一個。
   flashMsg("「"+PROFESSIONS[p.prof].skills[idx].name+"」尚未實作完整效果，先僅供顯示技能說明。");
 }
+// 馴獸師的巡迴獵犬: only after this round's room action is done. A room with no function at all
+// (nothing to act on) or a locked/sealed one doesn't make the player wait for an action that can't happen.
+function tamerReady(p){
+  const room=ROOMS[p.room];
+  const noAction = !room || (!room.special && !(room.draw>0)) || p.flags.roomLocked;
+  return (p.flags.roomActsUsedThisRound||0)>0 || noAction;
+}
 function useProfSkill(p,idx){
   const prof=PROFESSIONS[p.prof];
   const sk=prof.skills[idx];
@@ -4011,6 +4191,7 @@ function useProfSkill(p,idx){
     bindModalClose("hackCancel");
   } else if(p.prof==="tamer" && idx===0){
     if(skillUseCapReached(p,"tamer:0")){ flashMsg("已用完4次"); return; }
+    if(!tamerReady(p)){ flashMsg("巡迴獵犬必須在做完房間行動後才能使用。"); return; }
     p.flags.skillUsedThisRound=true; speakSkill(p,"tamer:0");
     const cands=Object.keys(ROOMS).filter(r=> bfsDist(p.room,r)<=5 && bfsDist(p.room,r)>0 && (Object.values(ROOMS[r].stock).some(v=>v>0)||r==="202"));
     if(cands.length===0){ log(p.name+" 派遣巡迴獵犬：附近沒有可搜索的庫存房間，無功而返。"); p.flags.tamerUses++; return; }
@@ -4093,15 +4274,23 @@ function useProfSkill(p,idx){
     p.flags.hunterAmbushActive=true;
     p.power++;
     const ambushTargets=playersInRoom(p.room,true).filter(x=>x.id!==p.id);
-    // 攀岩者的剛硬意志／守護者的庇護或絕對防禦 can each reduce a target's share of this —
+    // 守護者的絕對防禦（或幸運兒的逢凶化吉）can each reduce a target's share of this —
     // computed per-target up front since the room may hold a mix of protected players.
     const ambushHits=ambushTargets.map(t=>{
-      const gc=damageWard(t, t.prof==="climber"?1:2);
-      return {t, dmg:gc.dmg, tag:t.prof==="climber"?"(剛硬意志-1)":(gc.note?"("+gc.note+")":"")};
+      const gc=damageWard(t, 2);
+      return {t, dmg:gc.dmg, tag:(gc.note?"("+gc.note+")":"")};
     });
     ambushHits.forEach(h=>damagePlayer(h.t,h.dmg,"獵人埋伏"));
     log(p.name+" 使用埋伏：武力永久+1"+(ambushHits.length?"，"+ambushHits.map(h=>h.t.name+h.tag).join("、")+" 各受到傷害":"（房內無其他玩家）")+"。","dmg");
     speakSkill(p,"hunter:1");
+  } else if(p.prof==="oracle" && idx===0){
+    if(skillUseCapReached(p,"oracle:0")){ flashMsg("已用完2次"); return; }
+    if(STATE.round>=6){ flashMsg("第6輪不可使用邪惡反轉。"); return; }
+    openOracleModal(p);
+  } else if(p.prof==="detective" && idx===0){
+    if(skillUseCapReached(p,"detective:0")){ flashMsg("已用完3次"); return; }
+    if(p.room!==p.roundStartRoom || p.flags.roomCommitted){ flashMsg("情報位移必須在移動之前使用（放棄移動）。"); return; }
+    openDetectiveModal(p);
   } else if(p.prof==="mediocre" && idx===1){
     if(skillUseCapReached(p,"mediocre:1")){ flashMsg("已用完3次"); return; }
     openMediocreSacrificeModal(p);
@@ -4148,7 +4337,7 @@ function useProfSkill(p,idx){
 // nothing. Every OTHER active skill executes immediately on click, which is risky for a
 // limited-use skill (a stray click permanently burns one of only 1-4 charges) — those get a
 // confirm prompt naming the skill and its effect before anything happens.
-const SKILL_OPENS_OWN_MODAL=new Set(["chemist:0","hacker:1","geneFreak:1","shopper:1","pickpocket:0","courier:1","mediocre:1","mediocre:2","collector:1","prepper:1","witch:0",
+const SKILL_OPENS_OWN_MODAL=new Set(["oracle:0","detective:0","chemist:0","hacker:1","geneFreak:1","shopper:1","pickpocket:0","courier:1","mediocre:1","mediocre:2","collector:1","prepper:1","witch:0",
   // 三國模式：需要選目標玩家/房間的主動技能，跳過通用確認彈窗，直接進自己的選擇彈窗
   "zhangfei:0","weiyan:0","zhouyu:0","lusu:1","luxun:0","ganning:0","yuanshao:0","zhangjiao:0","zhangjiao:1","zhanghe:0","huanggai:1","huaxiong:0","sunquan:0","caopi:0"]);
 // 技能特效版 fallback: most skills already call speakSkill (which shows the effect), but a few
@@ -4172,6 +4361,57 @@ function confirmAndUseSkill(p,idx){
 
 // 神偷的順手牽羊: unlike 交易 below, this needs no consent from the target and isn't limited to
 // items they'd willingly trade — picks a random item straight out of their inventory.
+// 私家偵探的情報位移: declare-only — the actual relocation happens at the very start of
+// settleRound(), once everyone else has finished moving, so the detective lands wherever the
+// target really ended up. Giving up movement = steps zeroed + room function locked this round.
+// 毒域先知的邪惡反轉 + 精準預測: declare-only — resolvePoisonVote() applies the reversal at
+// settlement (it needs the round's final vote counts) and marks each oracle's guess hit/miss.
+function declareOracleReverse(p,guessFloor){
+  p.flags.oracleUses++; p.flags.skillUsedThisRound=true;
+  p.flags.oracleReverse=true;
+  p.flags.oraclePredict=(guessFloor==null||guessFloor==="")?null:+guessFloor;
+}
+function openOracleModal(p){
+  const ballot=(STATE.voteBallot||[]).filter(f=>!STATE.poisoned.has(f));
+  const opts=`<option value="">不預測</option>`+ballot.map(f=>`<option value="${f}">${FLOOR_LABEL[f]}</option>`).join("");
+  openModal(`<h3>邪惡反轉：本輪毒氣改為票數第二高的樓層</h3>
+    <div class="muted" style="font-size:12px;margin-bottom:6px">可同時使用精準預測：猜最終的毒氣樓層，猜中則本輪毒氣傷害-2並回復1點生命。（本輪可投票的樓層：${ballot.map(f=>FLOOR_LABEL[f]).join("、")||"無"}）</div>
+    <select id="oracleSel">${opts}</select><br><br>
+    <button class="btn small warn" id="oracleOk">發動</button> <button class="btn small ghost" id="oracleCancel">取消</button>`);
+  document.getElementById("oracleOk").onclick=()=>{
+    const v=document.getElementById("oracleSel").value;
+    declareOracleReverse(p,v);
+    log(p.name+" 使用邪惡反轉（"+p.flags.oracleUses+"/2）"+(p.flags.oraclePredict!=null?"，並預測毒氣樓層「"+FLOOR_LABEL[p.flags.oraclePredict]+"」":"，未使用精準預測")+"。"); speakSkill(p,"oracle:0");
+    closeModal(); renderAll();
+  };
+  bindModalClose("oracleCancel");
+}
+function detectiveTargets(p){
+  const tracked=p.flags.detectiveTracked||[];
+  return STATE.players.filter(x=>x.id!==p.id && x.alive && !x.ghost && !tracked.includes(x.id));
+}
+function declareDetectiveTrack(p,target){
+  p.flags.detectiveUses++; p.flags.skillUsedThisRound=true;
+  p.flags.detectiveTarget=target.id;
+  p.flags.detectiveTracked=(p.flags.detectiveTracked||[]).concat(target.id);
+  p.stepsLeft=0; p.flags.roomLocked=true; p.flags.roomCommitted=true;
+}
+function openDetectiveModal(p){
+  const targets=detectiveTargets(p);
+  if(!targets.length){ flashMsg("沒有可跟蹤的玩家（每人只能被跟蹤1次）。"); return; }
+  const opts=targets.map(o=>`<option value="${o.id}">${o.name}</option>`).join("");
+  openModal(`<h3>情報位移：放棄移動，跟蹤一名玩家</h3>
+    <div class="muted" style="font-size:12px;margin-bottom:6px">結算開始時，你會出現在他當時所在的房間；本輪不能使用房間功能。</div>
+    <select id="detSel">${opts}</select><br><br>
+    <button class="btn small warn" id="detOk">跟蹤</button> <button class="btn small ghost" id="detCancel">取消</button>`);
+  document.getElementById("detOk").onclick=()=>{
+    const target=STATE.players.find(x=>x.id===+document.getElementById("detSel").value);
+    declareDetectiveTrack(p,target);
+    log(p.name+" 使用情報位移：放棄移動，鎖定跟蹤 "+target.name+"（"+p.flags.detectiveUses+"/3）。"); speakSkill(p,"detective:0");
+    closeModal(); renderAll();
+  };
+  bindModalClose("detCancel");
+}
 function openPickpocketModal(p){
   const others=playersInRoom(p.room,true).filter(x=>x.id!==p.id);
   if(!others.length){ flashMsg("這裡沒有其他玩家可偷。"); return; }
@@ -4688,8 +4928,8 @@ function aiConsiderSkillAfterMove(p){
         p.flags.hunterAmbushActive=true;
         p.power++;
         const ambushHits=targets.map(t=>{
-          const gc=damageWard(t, t.prof==="climber"?1:2);
-          return {t, dmg:gc.dmg, tag:t.prof==="climber"?"(剛硬意志-1)":(gc.note?"("+gc.note+")":"")};
+          const gc=damageWard(t, 2);
+          return {t, dmg:gc.dmg, tag:(gc.note?"("+gc.note+")":"")};
         });
         ambushHits.forEach(h=>damagePlayer(h.t,h.dmg,"獵人埋伏"));
         log(p.name+" 使用埋伏：武力永久+1，"+ambushHits.map(h=>h.t.name+h.tag).join("、")+" 各受到傷害。");
@@ -4759,15 +4999,27 @@ function aiConsiderSkillAfterMove(p){
 // Same single-destination-per-round rule as the human: computes ONE target room, moves ONCE,
 // then may act only in that room — never moves again afterward this round.
 function resolveAITurn(p){
+  // 私家偵探: AI tracks a random weaker-or-equal player from round 2 on (before any movement,
+  // since the skill means giving the movement up) — and then skips moving and the room function.
+  if(p.prof==="detective" && STATE.round>=2 && !skillUseCapReached(p,"detective:0") && p.hp>=5 && Math.random()<0.5){
+    const cands=detectiveTargets(p).filter(x=>combatPower(x)<=combatPower(p));
+    if(cands.length){
+      const t=cands[Math.floor(Math.random()*cands.length)];
+      declareDetectiveTrack(p,t);
+      log(p.name+" 使用情報位移：放棄移動，鎖定跟蹤 "+t.name+"。");
+    }
+  }
   aiConsiderTruckerBoost(p);
   aiConsiderRunnerSprint(p);
   aiConsiderHunterSprint(p);
-  const target=aiChooseTarget(p);
-  tryMove(p,target);
+  if(p.flags.detectiveTarget==null){
+    const target=aiChooseTarget(p);
+    tryMove(p,target);
+  }
   if(p.room==="102") applyLaser(p);
   const room=ROOMS[p.room];
   // 張角的黃天之世（三國模式）: AI 也一樣拿不到被封印房間的功能。
-  const roomDisabled = STATE.sanguoDisabledRooms && STATE.sanguoDisabledRooms.has(p.room);
+  const roomDisabled = (STATE.sanguoDisabledRooms && STATE.sanguoDisabledRooms.has(p.room)) || p.flags.detectiveTarget!=null;
   if(!roomDisabled && room.draw>0){ resolveAIDraw(p,p.room,room.draw); }
   if(!roomDisabled && room.special==="gene"){ p.power++; p.speed++; p.carry++; }
   if(!roomDisabled && room.special==="respec"){ /* AI keeps stats */ }
@@ -4926,6 +5178,13 @@ function resolveAITurn(p){
     STATE.voteLog.push({name:p.name, floor:voteFloor, weight:voteWeight});
     p.flags.voteWeight=1;
   }
+  // 毒域先知: AI flips the vote from round 2 to 5 about half the time, guessing one of the
+  // ballot floors other than its own as the final poison floor.
+  if(p.prof==="oracle" && STATE.round>=2 && STATE.round<6 && !skillUseCapReached(p,"oracle:0") && Math.random()<0.5){
+    const guesses=ballot.filter(f=>f!==myFloor);
+    declareOracleReverse(p, guesses.length?guesses[Math.floor(Math.random()*guesses.length)]:null);
+    log(p.name+" 使用邪惡反轉"+(p.flags.oraclePredict!=null?"，並預測毒氣樓層「"+FLOOR_LABEL[p.flags.oraclePredict]+"」":"")+"。");
+  }
   p.flags.votedThisRound=true;
 }
 
@@ -4994,18 +5253,27 @@ function damagePlayer(p,amount,cause,killerId){
   // already killed the target) — record the hit for the log, but don't re-run killPlayer's
   // side effects (item drop, embalmer bonus, shade's speed+2, ...) a second time on the same death.
   if(!p.alive){ p.roundEvents.push({cause,amount}); return; }
+  // 對局統計: 只計實際扣到血的傷害；攻擊方只有戰鬥直擊才會帶 killerId，故 dmgDealt 僅含 PVP 戰鬥傷害
+  p.dmgTaken=(p.dmgTaken||0)+Math.min(amount,p.hp);
+  if(killerId!==undefined){
+    const atk=STATE.players.find(x=>x.id===killerId);
+    if(atk) atk.dmgDealt=(atk.dmgDealt||0)+Math.min(amount,p.hp);
+  }
   p.hp-=amount;
   p.roundEvents.push({cause,amount});
   if(p.hp<=0){ p.hp=0; killPlayer(p,cause,killerId); }
 }
 function killPlayer(p,cause,killerId){
   p.alive=false; p.ghost=true; p.ghostDrainTotal=0;
+  p.deathRound=STATE.round; p.deathCause=cause;
+  if(killerId!==undefined){ const k=STATE.players.find(x=>x.id===killerId); if(k) k.kills=(k.kills||0)+1; }
   log(p.name+" 死亡（"+cause+"），於停屍間化為暗影...","dmg");
   SFX.death();
   // 屠夫的以血養血: only fires off the two direct combat hits in resolveCombat (see killerId's
   // doc comment on damagePlayer above) — killer must still be alive to benefit.
   if(killerId!==undefined){
     const killer=STATE.players.find(x=>x.id===killerId);
+    if(killer && killer.alive && killer.prof==="assassin") killer.flags.assassinSpeedNext=true; // 無聲離場
     if(killer && killer.alive && killer.prof==="butcher"){
       killer.hp=Math.min(killer.maxhp,killer.hp+2);
       log(killer.name+"（以血養血）擊殺 "+p.name+"，恢復2點生命（HP→"+killer.hp+"）。","heal");
@@ -5139,9 +5407,6 @@ function damageWard(target,dmg,opts){
   const isHunger = opts&&opts.hunger;
   if(!isHunger && target.prof==="lucky" && target.flags.luckyImmuneActive) return {dmg:0,note:"〔逢凶化吉〕"};
   if(!isHunger && target.prof==="guardian" && target.flags.guardianDefenseActive) return {dmg:0,note:"〔絕對防禦〕"};
-  if(target.prof==="guardian" || playersInRoom(target.room,true).some(x=>x.prof==="guardian")){
-    return {dmg:Math.max(0,dmg-1),note:"〔守護者庇護 -1〕"};
-  }
   return {dmg,note:""};
 }
 // 隱士的離群索居: true only when NEITHER another living player NOR a shade shares the room —
@@ -5164,13 +5429,30 @@ function roomIsPoisoned(room){
 }
 function resolvePoisonVote(){
   const entries=Object.entries(STATE.voteCounts);
-  if(!entries.length) return "本輪毒氣投票: 無人投票，本輪無新增毒氣樓層。";
+  // 毒域先知: anyone who declared 邪惡反轉 this round (alive, round<=5) flips the result to the
+  // runner-up floor(s); predictions are judged against whatever ends up poisoned (none if no votes).
+  const oracles=STATE.players.filter(x=>x.prof==="oracle" && x.alive && !x.ghost && x.flags.oracleReverse);
+  const judge=(winners)=>oracles.forEach(o=>{ if(o.flags.oraclePredict!=null) o.flags.oracleHit=winners.includes(o.flags.oraclePredict); });
+  if(!entries.length){ judge([]); oracles.forEach(o=>{o.flags.oracleReverse=false;}); return "本輪毒氣投票: 無人投票，本輪無新增毒氣樓層。"; }
   let best=-1;
   entries.forEach(([f,c])=>{ if(c>best) best=c; });
   // a tie for the highest vote count poisons ALL tied floors, not just the first one seen.
-  const winners=entries.filter(([f,c])=>c===best).map(([f])=>+f);
+  let winners=entries.filter(([f,c])=>c===best).map(([f])=>+f);
+  let reversed=false;
+  if(oracles.length && STATE.round<6){
+    reversed=true;
+    if(winners.length===1){ // a lone first place gets replaced by the runner-up (all of them, if tied)
+      const rest=entries.filter(([f,c])=>c<best);
+      if(rest.length){
+        const second=Math.max(...rest.map(([f,c])=>c));
+        winners=rest.filter(([f,c])=>c===second).map(([f])=>+f);
+      } else reversed=false; // only one floor got votes — nothing to reverse to
+    }
+  }
+  judge(winners);
+  oracles.forEach(o=>{ o.flags.oracleReverse=false; });
   winners.forEach(f=>STATE.poisoned.add(f));
-  const label=winners.map(f=>FLOOR_LABEL[f]).join("、");
+  const label=winners.map(f=>FLOOR_LABEL[f]).join("、")+(reversed?"〔邪惡反轉〕":"");
   return winners.length>1
     ? "本輪毒氣投票結果：「"+label+"」樓層並列最高票，全數淪為毒氣區域！"
     : "本輪毒氣投票結果：「"+label+"」樓層淪為毒氣區域！";
@@ -5279,6 +5561,20 @@ function settleRound(){
   log("<b>── 進入結算階段 ──</b>");
   STATE.__report={combat:[], rocket:[], hunger:[], drain:[], poison:"", poisonDamage:[]};
 
+  // 私家偵探的情報位移: everyone else has finished moving by now, so land in the tracked player's room.
+  STATE.players.forEach(p=>{
+    if(p.flags.detectiveTarget==null) return;
+    const t=STATE.players.find(x=>x.id===p.flags.detectiveTarget);
+    p.flags.detectiveTarget=null;
+    if(!p.alive || p.ghost) return;
+    if(t && t.alive && !t.ghost){
+      p.room=t.room;
+      log(p.name+"（情報位移）出現在被跟蹤者 "+t.name+" 所在的「"+t.room+"」。");
+    } else {
+      log(p.name+"（情報位移）跟蹤的目標已不在，原地不動。");
+    }
+  });
+
   // 0) 劉備的仁德（三國模式，強制被動，整局限3次）: the very first thing settlement does, before
   // anything else this round resolves — if 劉備 shares a room with at least one 同勢力(同國家)
   // 隊友, every such teammate present gets +1 permanent 武力 and 劉備 himself takes -1 (floored at
@@ -5337,6 +5633,19 @@ function settleRound(){
     }
   });
 
+  // 刺客的背刺 (被動): judged on the room headcount as it stands entering combat — exactly the
+  // assassin plus ONE other living player — and lands before the normal power comparison.
+  STATE.players.forEach(p=>{
+    if(p.prof!=="assassin" || !p.alive || p.ghost) return;
+    const here=playersInRoom(p.room,true);
+    if(here.length!==2) return;
+    const t=here.find(x=>x.id!==p.id);
+    const gc=damageWard(t, 2);
+    damagePlayer(t,gc.dmg,"刺客背刺",p.id);
+    log(p.name+"（背刺）在「"+p.room+"」暗算 "+t.name+"，直接造成 "+gc.dmg+" 點傷害"+gc.note+"。","dmg");
+    STATE.__report.combat.push(p.name+" 背刺 "+t.name+" @"+p.room+"（-"+gc.dmg+"）");
+  });
+
   // 2) combat resolution per room
   if(STATE.sanguoTeamMode) resolveRoomCombatsTeam(); else resolveRoomCombats();
 
@@ -5351,7 +5660,6 @@ function settleRound(){
       let dmg=4, note="";
       if(p.prof==="bomb"){ dmg=Math.max(0,dmg-1); note="〔爆破緩衝 -1〕"; }
       if(p.prof==="mediocre"){ dmg+=1; note+="〔脆弱體質 +1〕"; }
-      if(p.prof==="climber" && dmg>0){ dmg=Math.max(0,dmg-1); note+="〔剛硬意志 -1〕"; }
       if(p.prof==="zhouyu" && dmg>0){ dmg=Math.max(0,dmg-2); note+="〔赤壁奇謀 -2〕"; } // 三國模式
       if(shooter && shooter.prof==="luxun"){ dmg+=1; note+="〔夷陵奇謀 +1〕"; } // 三國模式
       { const gc=damageWard(p,dmg); dmg=gc.dmg; note+=gc.note; }
@@ -5380,17 +5688,32 @@ function settleRound(){
   // trucker ram (declared during action phase via 卸載加速, resolves here too)
   STATE.players.forEach(p=>{
     if(p.flags.truckerJustUsed){
-      // 攀岩者的剛硬意志 can zero this out for them specifically, so each target's own actual
+      // 守護者的絕對防禦等 can zero this out for specific targets, so each target's own actual
       // damage is computed individually rather than assuming the flat 1 the aggregate log states.
       playersInRoom(p.room,true).filter(x=>x.id!==p.id).forEach(x=>{
-        const gc=damageWard(x, x.prof==="climber"?0:1);
+        const gc=damageWard(x, 1);
         damagePlayer(x,gc.dmg,"貨車司機猛烈衝撞");
-        if(x.prof==="climber") log(x.name+"（剛硬意志）抵銷了猛烈衝撞的傷害。");
-        else if(gc.note) log(x.name+gc.note+"抵銷了猛烈衝撞的傷害。");
+        if(gc.note) log(x.name+gc.note+"抵銷了猛烈衝撞的傷害。");
       });
-      log(p.name+" 觸發猛烈衝撞：房內其他玩家各受到1點傷害（剛硬意志者除外），房間強制公開。");
+      log(p.name+" 觸發猛烈衝撞：房內其他玩家各受到1點傷害，房間強制公開。");
       p.flags.truckerJustUsed=false; p.flags.truckerDoubled=false;
     }
+  });
+
+  // 縱火犯的點火 (被動): at settlement, if the arsonist's room holds 3+ living players (himself
+  // included), every OTHER player there loses 1 HP and he heals 1. Damage is credited to him.
+  STATE.players.forEach(p=>{
+    if(p.prof!=="arsonist" || !p.alive || p.ghost) return;
+    const here=playersInRoom(p.room,true);
+    if(here.length<3) return;
+    const victims=here.filter(x=>x.id!==p.id);
+    victims.forEach(x=>{
+      const gc=damageWard(x, 1);
+      damagePlayer(x,gc.dmg,"縱火犯點火",p.id);
+    });
+    p.hp=Math.min(p.maxhp,p.hp+1);
+    log(p.name+"（點火）在「"+p.room+"」的 "+here.length+" 人混戰中縱火：其他人各扣1點生命（守護者的絕對防禦等可抵銷），自己恢復1點（HP→"+p.hp+"）。","dmg");
+    STATE.__report.combat.push(p.name+" 縱火 @"+p.room+"（"+victims.map(x=>x.name).join("、")+" 各-1）");
   });
 
   // 3) poison
@@ -5398,6 +5721,11 @@ function settleRound(){
   const baseDmg=poisonDamageForRound() + (STATE.poisonBoost?2:0);
   STATE.players.forEach(p=>{
     if(!p.alive || p.ghost) return;
+    // 毒域先知的精準預測: a correct guess heals 1 up front (the -2 poison cut is applied below).
+    if(p.prof==="oracle" && p.flags.oracleHit){
+      p.hp=Math.min(p.maxhp,p.hp+1);
+      log(p.name+"（精準預測）猜中最終毒氣樓層，回復1點生命（HP→"+p.hp+"），本輪毒氣傷害-2。","heal");
+    }
     // 毒人的以毒為生: entirely replaces the normal poison-damage calc above (round-scaling dmg,
     // 毒性調和/抗毒/女巫's reductions, gasmask/oxygen/lottery immunities — none of it applies to
     // them) with a 3-way rule of its own: +2 in an already-poisoned FUNCTION room (same
@@ -5421,13 +5749,14 @@ function settleRound(){
       let dmg=baseDmg, note="";
       if(ROOMS[p.room].floor===STATE.poisonReduceFloor){ dmg=Math.max(0,dmg-2); note+="〔毒性調和 -2〕"; }
       if(p.prof==="chemist" && dmg>0){ dmg=Math.max(0,dmg-1); note+="〔抗毒 -1〕"; }
+      if(p.prof==="oracle" && dmg>0){ dmg=Math.max(0,dmg-1); note+="〔毒氣適應 -1〕"; }
+      if(p.prof==="oracle" && p.flags.oracleHit && dmg>0){ dmg=Math.max(0,dmg-2); note+="〔精準預測 -2〕"; }
       if(p.prof==="witch" && dmg>0){ const before=dmg; const cut=STATE.round<=3?2:1; dmg=Math.max(0,dmg-cut); note+="〔毒氣防護 -"+(before-dmg)+"〕"; }
       if(p.prof==="diver" && p.flags.diverHoldBreathActive){ dmg=0; note+="〔憋氣術〕"; }
       if(p.inv.includes("gasmask")){ dmg=0; note+="〔防毒面具〕"; }
       if(p.flags.oxygenImmuneActive){ dmg=0; note+="〔氧氣瓶〕"; }
       if(p.flags.lotteryDodgeActive){ dmg=0; note+="〔樂透：躲避毒氣〕"; }
       if(p.flags.poisonImmune){ dmg=0; note+="〔樂透：永久免疫毒氣〕"; }
-      if(p.prof==="climber" && dmg>0){ dmg=Math.max(0,dmg-1); note+="〔剛硬意志 -1〕"; }
       if(hermitAlone(p) && dmg>0){ dmg=Math.max(0,dmg-1); note+="〔離群索居 -1〕"; }
       if(p.room==="202") dmg=0;
       { const gc=damageWard(p,dmg); dmg=gc.dmg; note+=gc.note; }
@@ -5436,6 +5765,7 @@ function settleRound(){
       STATE.__report.poisonDamage.push(p.name+"（"+p.room+" "+(ROOMS[p.room].name||"")+"） -"+dmg+note);
     }
   });
+  STATE.players.forEach(p=>{ p.flags.oracleHit=false; p.flags.oraclePredict=null; });
   STATE.poisonReduceFloor=null; STATE.poisonBoost=false;
 
   // 4) hunger (round>=2)
@@ -5448,7 +5778,6 @@ function settleRound(){
       if(!p.flags.consumed_food) missing++;
       if(missing>0){
         let note="";
-        if(p.prof==="climber"){ missing=Math.max(0,missing-1); note="〔剛硬意志 -1〕"; }
         if(hermitAlone(p) && missing>0){ missing=Math.max(0,missing-1); note+="〔離群索居 -1〕"; }
         // 董卓的暴政（三國模式）: anyone hungry sharing a room with an alive 董卓 (other than
         // 董卓 himself, who is judged by his own hunger check separately) takes +1 extra.
@@ -5473,9 +5802,8 @@ function settleRound(){
   // 5) laser room
   STATE.players.forEach(p=>{
     if(p.alive && p.pendingLaser){
-      const laserGc=damageWard(p, p.prof==="climber"?0:1);
+      const laserGc=damageWard(p, 1);
       damagePlayer(p, laserGc.dmg, "激光室");
-      if(p.prof==="climber") log(p.name+"（剛硬意志）抵銷了激光室的傷害。");
       if(laserGc.note) log(p.name+laserGc.note+"抵銷了激光室的傷害。");
       p.pendingLaser=false;
     }
@@ -5490,14 +5818,14 @@ function settleRound(){
         log(v.name+"（暗影使者）免疫暗影吸血。"); return;
       }
       const drainRoom=g.room; // capture before damagePlayer can move a killed victim to the mortuary
-      // 攀岩者的剛硬意志／守護者的庇護或絕對防禦: the drain itself still counts toward the
+      // 守護者的絕對防禦／幸運兒的逢凶化吉: the drain itself still counts toward the
       // ghost's revival total (it's still a successful drain attempt), it just costs the
       // protected victim 0 HP instead of 1.
-      const drainGc=damageWard(v, v.prof==="climber"?0:1);
+      const drainGc=damageWard(v, 1);
       const drainDmg=drainGc.dmg;
       damagePlayer(v,drainDmg,"暗影吸血");
       g.ghostDrainTotal++;
-      log(g.name+"（暗影）吸取了 "+v.name+" "+drainDmg+"點生命"+(v.prof==="climber"?"（剛硬意志抵銷）":drainGc.note?"（"+drainGc.note+"抵銷）":"")+"。","dmg");
+      log(g.name+"（暗影）吸取了 "+v.name+" "+drainDmg+"點生命"+(drainGc.note?"（"+drainGc.note+"抵銷）":"")+"。","dmg");
       STATE.__report.drain.push(g.name+"（暗影）@"+drainRoom+"：吸取 "+v.name+" "+drainDmg+"點生命（"+v.name+" HP→"+v.hp+(v.alive?"":" 💀")+"）");
       STATE.players.forEach(sh=>{ if(sh.prof==="shade" && sh.alive && !sh.ghost){ sh.hp=Math.min(sh.maxhp,sh.hp+1); log(sh.name+"（暗影共鳴）恢復1點生命。","heal"); } });
     });
@@ -5611,8 +5939,11 @@ function resolveCombat(a,b,roomId,frozenA){
     let d=dmg, note="";
     if(p.prof==="fatty" && d>0){ const before=d; d=Math.max(0,d-2); note+="〔肥肉坦克 -"+(before-d)+"〕"; }
     if(p.prof==="bomb" && attackerHasGun && d>0){ const before=d; d=Math.max(0,d-3); note+="〔防爆盾牌 -"+(before-d)+"〕"; }
+    if(p.prof==="arsonist" && d>0 && playersInRoom(roomId,true).length>=3){ const before=d; d=Math.max(0,d-3); note+="〔火場老手 -"+(before-d)+"〕"; }
+    // 守護者的庇護結界: every combat hit taken inside a room that holds a (living) 守護者 is -1,
+    // for everyone there including him — combat only, other damage sources no longer get it.
+    if(d>0 && playersInRoom(roomId,true).some(x=>x.prof==="guardian")){ d=Math.max(0,d-1); note+="〔守護者庇護 -1〕"; }
     if(p.prof==="veteran" && p.hp<=3 && d>0){ const before=d; d=Math.max(0,d-4); note+="〔破釜沉舟 -"+(before-d)+"〕"; }
-    if(p.prof==="climber" && d>0){ const before=d; d=Math.max(0,d-1); note+="〔剛硬意志 -"+(before-d)+"〕"; }
     // 隱士的離群索居: included for completeness (the skill's own wording lists 戰鬥 alongside
     // 中毒/飢餓), though combat inherently requires an opponent sharing the room, so "truly
     // alone" can never actually be true here — this branch is a structural no-op.
@@ -5634,6 +5965,14 @@ function resolveCombat(a,b,roomId,frozenA){
   if(dmgToA>0){ damagePlayer(a,dmgToA,"與"+b.name+"戰鬥",b.id); log(a.name+" 在「"+roomId+"」戰鬥中受到 "+dmgToA+" 點傷害（對手 "+b.name+"）"+ra.note+"。","dmg"); }
   if(dmgToB>0){ damagePlayer(b,dmgToB,"與"+a.name+"戰鬥",a.id); log(b.name+" 在「"+roomId+"」戰鬥中受到 "+dmgToB+" 點傷害（對手 "+a.name+"）"+rb.note+"。","dmg"); }
   if(dmgToA===0 && dmgToB===0) log(a.name+" 與 "+b.name+" 在「"+roomId+"」武力相同，未分勝負。");
+  // 吸血鬼的吸血: heals half of the combat damage he actually dealt (rounded down), capped at 2 per round.
+  [[a,dmgToB],[b,dmgToA]].forEach(([v,dealt])=>{
+    if(v.prof!=="vampire" || !v.alive || dealt<=0) return;
+    const h=Math.min(2-(v.flags.vampireHealRound||0), Math.floor(dealt/2));
+    if(h<=0) return;
+    v.hp=Math.min(v.maxhp,v.hp+h); v.flags.vampireHealRound=(v.flags.vampireHealRound||0)+h;
+    log(v.name+"（吸血）造成 "+dealt+" 點傷害，恢復 "+h+" 點生命（HP→"+v.hp+"）。","heal");
+  });
   // ---- 三國模式：戰鬥後結算的一次性被動 ----
   if(a.prof==="xiahoudun" && dmgToA>0 && !bGun && b.alive){ damagePlayer(b,1,"剛烈反擊",a.id); log(b.name+" 近戰打中 "+a.name+"（剛烈），反被打回 1 點傷害。","dmg"); }
   if(b.prof==="xiahoudun" && dmgToB>0 && !aGun && a.alive){ damagePlayer(a,1,"剛烈反擊",b.id); log(a.name+" 近戰打中 "+b.name+"（剛烈），反被打回 1 點傷害。","dmg"); }
@@ -5811,6 +6150,7 @@ function endGame(){
   });
   document.getElementById("game").classList.add("hidden");
   setAbandonBtnVisible(false);
+  recordGameResult();
   renderEndScreen();
   saveGame();
 }
@@ -6035,6 +6375,9 @@ function renderAll(){
       btn.onclick=()=>useEngineerRecycle(p);
     } else if(s.passive){ btn.disabled=true; btn.title="被動技能，自動生效"; }
     else if(p.flags.skillUsedThisRound){ btn.disabled=true; btn.title="本輪已使用過職業技能，下輪才能再使用"; }
+    else if(p.prof==="tamer" && idx===0 && !tamerReady(p)){
+      btn.disabled=true; btn.title="巡迴獵犬必須在做完房間行動後才能使用";
+    }
     else if(p.prof==="gambler" && idx===0 && p.flags.roomActsUsedThisRound>0){
       btn.disabled=true; btn.title="已使用過房間功能，好賭成性必須在使用房間功能前發動";
     }
