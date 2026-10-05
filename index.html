@@ -5346,12 +5346,22 @@ function killPlayer(p,cause,killerId){
   // resolved in openEmbalmerChoiceModal right after this round's summary) from exactly this batch.
   const choiceMode = e && e.flags.embalmerChoiceMode;
   const droppedForChoice=[];
-  p.inv.forEach(it=>{
+  // 蠱耗感應's +1 carry lands first (the skill's own order: the death grants carry, THEN the
+  // pickup is offered), so a full backpack doesn't make the embalmer miss the very slot this
+  // death just earned them. Taken straight from the dead player's inventory wherever they died —
+  // no trip to the mortuary (B701) is needed.
+  embalmers.forEach(em=>{ em.carry++; log(em.name+"（蠱耗感應）負重永久+1（現為 "+em.carry+"）。"); });
+  // automatic passive pickup: a truly RANDOM pick among the items the embalmer can still carry
+  // (mid-settlement, so there's no moment to ask what to drop; anything unpicked, or that doesn't
+  // fit, goes to the mortuary instead rather than silently exceeding carry).
+  let embalmerPickIdx=-1;
+  if(!choiceMode && e && !e.flags.__embalmerGotThisRound){
+    const okIdx=p.inv.map((it,i)=>i).filter(i=>!(itemCostsCarry(e,p.inv[i]) && carryRoom(e)<=0));
+    if(okIdx.length) embalmerPickIdx=okIdx[Math.floor(Math.random()*okIdx.length)];
+  }
+  p.inv.forEach((it,i)=>{
     if(choiceMode){ ROOMS["B701"].stock[it]=(ROOMS["B701"].stock[it]||0)+1; droppedForChoice.push(it); return; }
-    // automatic passive pickup — mid-settlement, so there's no moment to ask what to drop;
-    // just skip it (item goes to the mortuary instead) rather than silently exceeding carry.
-    const canCarry=!(itemCostsCarry(e||{}, it) && e && carryRoom(e)<=0);
-    if(e && canCarry && !e.flags.__embalmerGotThisRound){
+    if(i===embalmerPickIdx){
       e.inv.push(it); e.flags.__embalmerGotThisRound=true; log(e.name+" 蠱耗感應獲得: "+ITEMS[it].name); return;
     }
     ROOMS["B701"].stock[it]=(ROOMS["B701"].stock[it]||0)+1;
@@ -5382,7 +5392,6 @@ function killPlayer(p,cause,killerId){
   p.inv=[];
   p.deathRoom=p.room; // where they actually died, before the mortuary relocation below overwrites p.room
   p.room="B701";
-  embalmers.forEach(e=>{ e.carry++; log(e.name+"（蠱耗感應）負重永久+1（現為 "+e.carry+"）。"); });
   // shade immunity/heal handled separately in ghost-drain resolution; 暗影親和 speed+2 below
   if(p.prof==="shade"){ p.speed+=2; log(p.name+"（暗影親和）成為暗影，移動速度永久+2（現為 "+p.speed+"）。"); }
   // 超度師的安魂儀式: auto-fires the instant they die, once per game — excluded on round 6 (the
