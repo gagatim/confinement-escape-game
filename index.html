@@ -654,7 +654,7 @@ const PROFESSIONS = {
     {name:"肥肉坦克", desc:"（被動）受到近戰、槍械傷害時，最終傷害-2。", passive:true},
     {name:"肥宅味", desc:"（被動）所有玩家都知道你所在的房間。", passive:true}
   ]},
-  bomb:{name:"防爆小組", skills:[
+  bomb:{name:"橡膠人", skills:[
     {name:"防爆盾牌", desc:"（被動）槍械傷害永久-4；但你無法持有槍（手槍／霰彈槍）：抽到槍時放回房間，並補抽一張（不可獲得槍）。", passive:true},
     {name:"爆破緩衝", desc:"（被動）無視火箭筒傷害。", passive:true}
   ]},
@@ -854,7 +854,7 @@ const EXPANSION_PROFS=new Set(["fatty","trucker","bartender","chemist","hacker",
 // One small emoji "portrait" per profession — shown on the selection card and anywhere a player's
 // profession is listed in-game, so each of the 16 is visually distinct at a glance, not just by name.
 const PROF_ICON={
-  fatty:"🍔", bomb:"💣", gambler:"🎲", scavenger:"♻️", trucker:"🚚", bartender:"🍸",
+  fatty:"🍔", bomb:"🏀", gambler:"🎲", scavenger:"♻️", trucker:"🚚", bartender:"🍸",
   chemist:"🧪", embalmer:"⚰️", hacker:"💻", tycoon:"💰", shade:"👻", tamer:"🐕",
   merc:"🔪", geneFreak:"🧬", outsider:"🚪", climber:"🧗", engineer:"🔧",
   medic:"🩺", pilot:"✈️", demolitions:"🧨", chef:"🍳", smuggler:"🧳", survivor:"🎒",
@@ -1558,7 +1558,7 @@ function skillFX(p,key){
 // is called directly with the profession id instead of going through speakSkill(p,key)).
 const SELECT_QUOTES={
   fatty:"我不動，但我扛得住。",
-  bomb:"任何爆炸，我來擋。",
+  bomb:"子彈？對我沒用。",
   gambler:"骰子已經在我手上發燙了。",
   scavenger:"別人的垃圾，是我的活路。",
   trucker:"讓開，我要衝了。",
@@ -2754,7 +2754,7 @@ const SMUGGLER_BONUS_ROOMS=new Set(["B206","B107","B301","B503"]);
 // revealed) with no regard for carry space — the player gets to see everything drawn and
 // choose what to keep afterward, instead of the old behaviour of quietly drawing fewer items
 // just because the bag happened to already be full.
-// 防爆小組 can never hold a 槍 (手槍/霰彈槍): anything that would hand him one is skipped/redrawn.
+// 橡膠人 can never hold a 槍 (手槍/霰彈槍): anything that would hand him one is skipped/redrawn.
 function canHoldItem(p,item){ return !(p.prof==="bomb" && ITEMS[item].gun); }
 function drawItemsFromStock(p,roomId,maxDraw){
   const room=ROOMS[roomId];
@@ -2781,9 +2781,9 @@ function drawItemsFromStock(p,roomId,maxDraw){
     if(isDump && nonTrashGained>=room.dumpCap && stockKeys.some(k=>k!=="trash") && stockKeys.length===1 && stockKeys[0]!=="trash") break;
     let pick=stockKeys[Math.floor(Math.random()*stockKeys.length)];
     if(!canHoldItem(p,pick)){
-      // 防爆小組 drew a gun: it goes back untouched (not obtained) and he redraws one more from
+      // 橡膠人 drew a gun: it goes back untouched (not obtained) and he redraws one more from
       // the non-gun stock instead.
-      log(p.name+"（防爆小組）抽到"+ITEMS[pick].name+"，無法持有，放回並補抽一張。");
+      log(p.name+"（橡膠人）抽到"+ITEMS[pick].name+"，無法持有，放回並補抽一張。");
       const okKeys=stockKeys.filter(k=>canHoldItem(p,k));
       if(!okKeys.length) continue;
       pick=okKeys[Math.floor(Math.random()*okKeys.length)];
@@ -3199,9 +3199,9 @@ function collectAirdrop(p){
   // share one round's supply instead of each re-adding the whole schedule and inflating it.
   const bag = ROOMS["202"].airdropBag;
   if(bag && bag.length){
-    // 防爆小組 can't take a gun: skip over it (it stays in the bag for others) to the next holdable item.
+    // 橡膠人 can't take a gun: skip over it (it stays in the bag for others) to the next holdable item.
     const bi=bag.findIndex(it=>canHoldItem(p,it));
-    if(bi<0){ log(p.name+"（防爆小組）空投只有槍，無法持有。"); }
+    if(bi<0){ log(p.name+"（橡膠人）空投只有槍，無法持有。"); }
     else {
       const pick=bag.splice(bi,1)[0];
       if(carryRoom(p)>0){ p.inv.push(pick); log(p.name+" 從停機坪空投獲得: "+ITEMS[pick].name); }
@@ -6012,7 +6012,7 @@ function resolveCombat(a,b,roomId,frozenA){
   // 黃蓋的詐降: the named target can't hurt 黃蓋 this round (he can still hurt them).
   if(a.prof==="huanggai" && a.flags.zhaxiangTarget===b.id) dmgToA=0;
   if(b.prof==="huanggai" && b.flags.zhaxiangTarget===a.id) dmgToB=0;
-  // profession damage reduction (肥宅, 防爆小組 vs gun) — note WHICH skill reduced it, not just
+  // profession damage reduction (肥宅, 橡膠人 vs gun) — note WHICH skill reduced it, not just
   // the already-reduced final number, so the combat log explains itself instead of looking arbitrary.
   const reduce=(p,dmg,attackerHasGun)=>{
     let d=dmg, note="";
