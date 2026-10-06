@@ -727,7 +727,7 @@ const PROFESSIONS = {
     {name:"廢墟搜索", desc:"（被動）在垃圾場搜索後，若火箭筒仍在庫存，40%機率額外直接獲得1把（不佔用抽取次數）。", passive:true}
   ]},
   chef:{name:"廚師", skills:[
-    {name:"一餐抵兩餐", desc:"（被動）每輪只需繳交1份糧食，即可同時免除水與糧的飢餓懲罰。", passive:true},
+    {name:"一餐抵兩餐", desc:"（被動）每輪只需繳交1份水或1份糧食，即可同時免除水與糧的飢餓懲罰。", passive:true},
     {name:"儲糧有道", desc:"（被動）水與糧食永久不佔負重。", passive:true}
   ]},
   smuggler:{name:"走私客", skills:[
@@ -3400,6 +3400,10 @@ function useItem(p,item){
   if(item==="wine" && p.prof==="bartender"){ openBartenderWineModal(p); return; }
   // 水/糧/腎上腺素 each just flip a one-time flag at settlement (免飢餓 / 保底1血) — they don't
   // stack, so declaring a second one this round would just silently discard it for nothing.
+  if(p.prof==="chef" && (item==="water"||item==="food") && (p.flags.pendingItemUses.includes("water")||p.flags.pendingItemUses.includes("food")||p.flags.pendingItemUses.includes("waterfood"))){
+    flashMsg("廚師每輪只需繳1份水或糧食，本輪已宣告過，不需要（也請不要）再用第2份。");
+    return;
+  }
   if((item==="water"||item==="food"||item==="waterfood"||item==="adrenaline") && p.flags.pendingItemUses.includes(item)){
     flashMsg(ITEMS[item].name+"本輪已宣告使用過，效果不會疊加，不需要（也請不要）重複使用。");
     return;
@@ -3461,7 +3465,7 @@ function resolvePendingItemUses(p){
     switch(item){
       case "water": case "food":
         p.flags["consumed_"+item]=true;
-        if(item==="food" && p.prof==="chef") p.flags.consumed_water=true; // 廚師的一餐抵兩餐
+        if((item==="food"||item==="water") && p.prof==="chef"){ p.flags.consumed_water=true; p.flags.consumed_food=true; } // 廚師的一餐抵兩餐: 水或糧擇一即可
         log(p.name+" 結算：使用了"+ITEMS[item].name+"。");
         // 老饕的美食鑑賞: a coin-flip bonus HP riding on the food declare itself.
         if(item==="food" && p.prof==="gourmet"){
@@ -5166,9 +5170,10 @@ function resolveAITurn(p){
     if(countItem(p,"waterfood")>0){
       // 水糧包: covers both needs off a single card, so prefer it over burning 2 separate items.
       removeItem(p,"waterfood"); p.flags.pendingItemUses.push("waterfood");
-    } else if(p.prof==="chef" && countItem(p,"food")>0){
-      // 一餐抵兩餐: food alone covers both, so don't also burn a water item for nothing.
-      removeItem(p,"food"); p.flags.pendingItemUses.push("food");
+    } else if(p.prof==="chef" && (countItem(p,"food")>0 || countItem(p,"water")>0)){
+      // 一餐抵兩餐: a single water OR food covers both, so don't also burn a second item for nothing.
+      const pick=countItem(p,"water")>countItem(p,"food") ? "water" : "food";
+      removeItem(p,pick); p.flags.pendingItemUses.push(pick);
     } else {
       if(countItem(p,"water")>0){ removeItem(p,"water"); p.flags.pendingItemUses.push("water"); }
       if(countItem(p,"food")>0){ removeItem(p,"food"); p.flags.pendingItemUses.push("food"); }
