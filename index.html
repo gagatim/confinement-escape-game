@@ -655,8 +655,8 @@ const PROFESSIONS = {
     {name:"肥宅味", desc:"（被動）所有玩家都知道你所在的房間。", passive:true}
   ]},
   bomb:{name:"橡膠人", skills:[
-    {name:"防爆盾牌", desc:"（被動）槍械傷害永久-4；但你無法持有槍（手槍／霰彈槍）：抽到槍時放回房間，並補抽一張（不可獲得槍）。", passive:true},
-    {name:"爆破緩衝", desc:"（被動）無視火箭筒傷害。", passive:true}
+    {name:"橡膠身軀", desc:"（被動）槍械傷害永久-4；但你無法持有槍（手槍／霰彈槍）：抽到槍時放回房間，並補抽一張（不可獲得槍）。", passive:true},
+    {name:"彈力緩衝", desc:"（被動）無視火箭筒傷害。", passive:true}
   ]},
   gambler:{name:"賭徒", skills:[
     {name:"好賭成性", desc:"須在使用房間功能前發動，擲骰：1-2失敗（本輪無法使用房間功能）、3-4無事、5-6成功（本輪房間功能可用兩次）。整局限用3次。", uses:3},
@@ -5725,7 +5725,7 @@ function settleRound(){
     STATE.__report.rocket.push(r+(hit.length?"（命中 "+hit.map(p=>p.name).join("、")+"）":"（房內無人）"));
     hit.forEach(p=>{
       let dmg=4, note="";
-      if(p.prof==="bomb"){ dmg=0; note="〔爆破緩衝：無視〕"; }
+      if(p.prof==="bomb"){ dmg=0; note="〔彈力緩衝：無視〕"; }
       if(p.prof==="mediocre"){ dmg+=1; note+="〔脆弱體質 +1〕"; }
       if(p.prof==="zhouyu" && dmg>0){ dmg=Math.max(0,dmg-2); note+="〔赤壁奇謀 -2〕"; } // 三國模式
       if(shooter && shooter.prof==="luxun"){ dmg+=1; note+="〔夷陵奇謀 +1〕"; } // 三國模式
@@ -6017,7 +6017,7 @@ function resolveCombat(a,b,roomId,frozenA){
   const reduce=(p,dmg,attackerHasGun)=>{
     let d=dmg, note="";
     if(p.prof==="fatty" && d>0){ const before=d; d=Math.max(0,d-2); note+="〔肥肉坦克 -"+(before-d)+"〕"; }
-    if(p.prof==="bomb" && attackerHasGun && d>0){ const before=d; d=Math.max(0,d-4); note+="〔防爆盾牌 -"+(before-d)+"〕"; }
+    if(p.prof==="bomb" && attackerHasGun && d>0){ const before=d; d=Math.max(0,d-4); note+="〔橡膠身軀 -"+(before-d)+"〕"; }
     if(p.prof==="arsonist" && d>0 && playersInRoom(roomId,true).length>=3){ const before=d; d=Math.max(0,d-3); note+="〔火場老手 -"+(before-d)+"〕"; }
     // 守護者的庇護結界: every combat hit taken inside a room that holds a (living) 守護者 is -1,
     // for everyone there including him — combat only, other damage sources no longer get it.
