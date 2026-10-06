@@ -1367,6 +1367,17 @@ const SFX=(()=>{
   return {
     isMuted:()=>muted,
     setMuted(v){ muted=v; localStorage.setItem("sfxMuted",v?"1":"0"); },
+    // 技能特效版: one short synthesized cue per effect motion (matches FX_STYLE[].m)
+    skill(m){
+      switch(m){
+        case "burst": sweep(300,60,0.3,"sawtooth",0.2); tone(880,0.12,"square",0.07,0.02); tone(1320,0.1,"triangle",0.06,0.08); break;
+        case "rain": for(let i=0;i<7;i++) tone(1400-i*110,0.07,"square",0.045,i*0.055); break;
+        case "rise": [0,1,2,3].forEach(i=>tone(440*Math.pow(1.26,i),0.18,"sine",0.09,i*0.07)); break;
+        case "ring": tone(660,0.35,"sine",0.1); tone(990,0.45,"sine",0.07,0.06); sweep(400,900,0.3,"triangle",0.06); break;
+        case "streak": sweep(200,1400,0.32,"sawtooth",0.1); sweep(1400,300,0.22,"triangle",0.05,0.28); break;
+        case "spiral": for(let i=0;i<8;i++) tone(500+i*90,0.09,"triangle",0.07,i*0.05); break;
+      }
+    },
     click(){ tone(1500,0.045,"square",0.045); },
     move(){ tone(520,0.06,"triangle",0.08); tone(700,0.07,"triangle",0.07,0.05); },
     hit(){ sweep(220,80,0.18,"sawtooth",0.2); },
@@ -1711,6 +1722,7 @@ function skillFX(p,key,opts){
   const here=fxVisible(p)?fxChipCenter(p.room):null;
   const ox=here?here.x:innerWidth/2, oy=here?here.y:innerHeight/2;
   fxEmit(s,ox,oy,!here);
+  SFX.skill(s.m);
   if(here){
     fxPulse(here.chip,"fx-hit",s.c);
     // lingering aura for "this round" buffs on the human's own chip
@@ -3338,7 +3350,7 @@ function doSpecialRoom(p,room){
     case "respec": {
       // 重新分配的總點數 = 玩家目前實際擁有的三項屬性總和，而不是固定的初始點數 — 否則像
       // 基因庫（每次三項各永久+1）這種永久加點會在重新分配時被悄悄吃掉。
-      openRespecModal(p,p.power+p.speed+p.carry);
+      openRespecModal(p);
       break;
     }
     // "slide" (回收站) and "teleport" (傳送室) are both handled earlier in doRoomAction, before
@@ -3422,13 +3434,26 @@ function bindModalClose(id){ document.getElementById(id).onclick=closeModal; }
 document.addEventListener("keydown",(e)=>{
   if(e.key==="Escape" && !MODAL_BG_EL.classList.contains("hidden")) closeModal();
 });
-function openRespecModal(p,cap){
+// 重新分配點數一律以「臨時效果（腎上腺素速度10／麻醉鏢速度0）生效前」的基礎速度計算，
+// 否則打針後速度顯示10時重新分配，總點數會被灌水；分配完臨時效果仍保留，只是效果結束後還原成新的基礎速度。
+function baseSpeed(p){
+  if(p.flags.__tranqRestoreNext) return p.flags.__tranqDelta||0;
+  if(p.flags.__adrenalineRestoreNext) return p.speed-(p.flags.adrenalineBoostDelta||0);
+  return p.speed;
+}
+function setBaseSpeed(p,b){
+  if(p.flags.__tranqRestoreNext) p.flags.__tranqDelta=b;
+  else if(p.flags.__adrenalineRestoreNext) p.flags.adrenalineBoostDelta=p.speed-b;
+  else p.speed=b;
+}
+function openRespecModal(p){
+  const baseSpd=baseSpeed(p), cap=p.power+baseSpd+p.carry;
   // 基因怪人的「先天優勢」把武力上限鎖在5點 — 與創角畫面的 clampAlloc 用同一條規則，
   // 否則重新分配點數會悄悄繞過這個上限，把全部點數灌進武力值。
   const powCap = (p.prof==="geneFreak"||p.prof==="smuggler") ? 5 : 99;
   openModal(`<h3>操作室：重新分配基因點數（共 ${cap} 點）</h3>
     <div class="statbar"><label>武力值</label><input type="number" id="rsPower" min="0" max="${Math.min(cap,powCap)}" value="${p.power}"></div>
-    <div class="statbar"><label>移動步數</label><input type="number" id="rsSpeed" min="0" max="${cap}" value="${p.speed}"></div>
+    <div class="statbar"><label>移動步數</label><input type="number" id="rsSpeed" min="0" max="${cap}" value="${baseSpd}"></div>
     <div class="statbar"><label>背包空間</label><input type="number" id="rsCarry" min="0" max="${cap}" value="${p.carry}"></div>
     <div id="rsErr" class="muted" style="color:var(--ember-bright);min-height:1.2em"></div>
     <button class="btn small" id="rsOk">確認</button> <button class="btn small ghost" id="rsCancel">取消</button>`);
@@ -3436,7 +3461,7 @@ function openRespecModal(p,cap){
     const a=+document.getElementById("rsPower").value,b=+document.getElementById("rsSpeed").value,c=+document.getElementById("rsCarry").value;
     if(a+b+c!==cap){ document.getElementById("rsErr").textContent="點數需剛好分配完（目前共 "+(a+b+c)+" / "+cap+" 點）"; return; }
     if(a>powCap){ document.getElementById("rsErr").textContent="武力值不可超過上限 "+powCap+" 點"; return; }
-    p.power=a; p.speed=b; p.carry=c; closeModal(); renderAll();
+    p.power=a; setBaseSpeed(p,b); p.carry=c; closeModal(); renderAll();
     log(p.name+" 於操作室重新分配了基因點數。");
   };
   bindModalClose("rsCancel");
@@ -4449,7 +4474,7 @@ function useProfSkill(p,idx){
   } else if(p.prof==="geneFreak" && idx===1){
     if(skillUseCapReached(p,"geneFreak:1")){ flashMsg("已用完2次"); return; }
     p.flags.geneUses++; p.flags.skillUsedThisRound=true; speakSkill(p,"geneFreak:1");
-    openRespecModal(p,p.power+p.speed+p.carry);
+    openRespecModal(p);
   } else if(p.prof==="climber" && idx===0){
     p.flags.climberVertical=true; p.flags.skillUsedThisRound=true;
     log(p.name+" 發動垂直攀爬。"); speakSkill(p,"climber:0");
