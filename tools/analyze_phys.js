@@ -1,0 +1,10 @@
+const r=require(process.argv[2]);
+const by={};
+r.forEach(g=>{const n=g.players.length;g.players.forEach(p=>{const s=by[p.name]||(by[p.name]={n:p.name,g:0,sv:0,alive:0,rankPct:0,win:0,top3:0,kills:0,dealt:0,taken:0,early:0,svs:[]});
+const sc=p.alive?7:(p.deathRound||1);s.svs.push(sc);
+s.g++;s.sv+=sc;if(p.alive)s.alive++;s.rankPct+=(p.rank-1)/(n-1);if(p.rank===1)s.win++;if(p.rank<=3)s.top3++;s.kills+=p.kills;s.dealt+=p.dealt;s.taken+=p.taken;if(!p.alive&&p.deathRound<=2)s.early++;});});
+const all=r.flatMap(g=>g.players).map(p=>p.alive?7:(p.deathRound||1));
+const mean=a=>a.reduce((x,y)=>x+y,0)/a.length, gm=mean(all), gsd=Math.sqrt(all.reduce((x,y)=>x+(y-gm)**2,0)/(all.length-1));
+const rows=Object.values(by).map(s=>({職業:s.n,場:s.g,存活輪數:+(s.sv/s.g).toFixed(2),z:+(((s.sv/s.g)-gm)/(gsd/Math.sqrt(s.g))).toFixed(1),存活率:(s.alive/s.g*100).toFixed(0)+'%',名次分:+((1-s.rankPct/s.g)*100).toFixed(0),前3:(s.top3/s.g*100).toFixed(0)+'%',冠軍:(s.win/s.g*100).toFixed(0)+'%',擊殺:+(s.kills/s.g).toFixed(2),輸出:+(s.dealt/s.g).toFixed(1),承傷:+(s.taken/s.g).toFixed(1),早死:(s.early/s.g*100).toFixed(0)+'%'})).sort((a,b)=>b.存活輪數-a.存活輪數);
+console.log('局數',r.length,'人/局',(r.reduce((a,g)=>a+g.players.length,0)/r.length).toFixed(1),'平均存活輪數',gm.toFixed(2),'sd',gsd.toFixed(2),'整體存活率',(r.flatMap(g=>g.players).filter(p=>p.alive).length/r.flatMap(g=>g.players).length*100).toFixed(1)+'%');
+console.table(rows);
