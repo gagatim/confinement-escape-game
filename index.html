@@ -216,6 +216,18 @@
   .fx-title small{display:block;font-size:.4em;font-weight:600;letter-spacing:.2em;opacity:.85}
   @keyframes fxFlash{0%{opacity:0}15%{opacity:1}100%{opacity:0}}
   @keyframes fxTitle{0%{opacity:0;transform:scale(.6)}20%{opacity:1;transform:scale(1.08)}70%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(1.15)}}
+  /* ---- 技能特效 v2: per-profession canvas particles (#fxCanvas), a glow on the caster's map chip,
+     and a persistent aura on the human player's chip while a "this round" buff is active. ---- */
+  #fxCanvas{position:fixed;inset:0;width:100vw;height:100vh;pointer-events:none;z-index:9998}
+  .fx-title{color:var(--fxc,#fff);text-shadow:0 0 12px #000,0 0 28px var(--fxc,var(--gold,#e8c36a))}
+  .room-chip.fx-hit{animation:fxChip 1.2s ease-out;position:relative;z-index:5}
+  @keyframes fxChip{0%{box-shadow:0 0 0 0 var(--fxc);transform:scale(1)}20%{box-shadow:0 0 22px 8px var(--fxc);transform:scale(1.18)}100%{box-shadow:0 0 0 0 transparent;transform:scale(1)}}
+  .room-chip.fx-aura{animation:fxAura 1.4s ease-in-out infinite}
+  .room-chip.fx-aura.a-speed{--fxc:#50c8ff}.room-chip.fx-aura.a-shield{--fxc:#ffd75a}
+  .room-chip.fx-aura.a-heal{--fxc:#5aff96}.room-chip.fx-aura.a-dmg{--fxc:#ff5a2a}.room-chip.fx-aura.a-gold{--fxc:#ffe18c}
+  @keyframes fxAura{0%,100%{box-shadow:0 0 4px 1px var(--fxc)}50%{box-shadow:0 0 16px 5px var(--fxc)}}
+  .room-chip.fx-floor{animation:fxFloor 1.6s ease-out}
+  @keyframes fxFloor{0%{filter:none}25%{filter:drop-shadow(0 0 10px var(--fxc)) brightness(1.5)}100%{filter:none}}
   .tag{display:inline-block;font-size:10px;padding:1px 6px;border-radius:4px;background:var(--panel-2);border:1px solid var(--line);margin-left:4px}
 
   /* ---- 低調模式 (boss key): a fake spreadsheet that covers the whole viewport above
@@ -275,7 +287,7 @@
       <h2 style="font-size:16px;color:var(--cyan-bright)">1. 選擇職業</h2>
       <div class="muted mono" id="profCountInfo" style="font-size:12px;margin-bottom:6px"></div>
       <label class="muted" style="display:block;margin-bottom:6px;font-size:13px">
-        <input type="checkbox" id="fxToggle"> 啟用技能特效版（一般職業與擴充職業的主動技能發動時，出現全螢幕光效與技能名稱；不勾選就是基本版；三國模式暫不支援）</label>
+        <input type="checkbox" id="fxToggle"> 啟用技能特效版（技能發動時依職業出現專屬粒子特效、地圖房間光效與技能名稱；對目標房間或樓層施放時會有飛行軌跡與衝擊；不勾選就是基本版）</label>
       <label class="muted" style="display:block;margin-bottom:6px;font-size:13px">
         <input type="checkbox" id="expansionToggle"> 啟用擴充模式（新增擴充職業，AI也可能隨機選到，實際數量見上方統計）</label>
       <label class="muted" style="display:block;margin-bottom:6px;font-size:13px">
@@ -807,8 +819,7 @@ const PROFESSIONS = {
     {name:"絕對防禦", desc:"整局限用1次：本回合可選擇不移動，自身無視戰鬥、毒氣、火箭筒等任何傷害，且可直接使用房間功能；飢餓仍需繳交水/糧。", uses:1}
   ]},
   lucky:{name:"幸運兒", skills:[
-    {name:"吉星高照", desc:"（被動）每次抽取道具前自動擲骰，擲到1或4時，本次額外多抽1張（停機坪不適用）。", passive:true},
-    {name:"逢凶化吉", desc:"每輪可發動：擲骰，擲到1才成功（1/6），成功則本回合免疫所有傷害（戰鬥、毒氣、火箭筒等）；飢餓仍需繳交水/糧。", uses:99}
+    {name:"吉星高照", desc:"（被動）每輪輪到自己行動時，先自動擲骰：擲到1：本回合免疫所有傷害（戰鬥、毒氣、火箭筒等，飢餓仍需繳交水/糧），且本回合在房間抽取道具時多抽1張；擲到4：本回合移動速度+2；其他點數沒有效果。", passive:true}
   ]},
   hermit:{name:"隱士", skills:[
     {name:"離群索居", desc:"（被動）房間內只有你1人（無其他玩家、無暗影）時，戰鬥／中毒／飢餓傷害各-1。", passive:true},
@@ -1530,28 +1541,197 @@ const VOICE=(()=>{
     speak
   };
 })();
-function speakSkill(p,key){ VOICE.speak(SKILL_QUOTES[key],p.prof,{queue:true,hype:true}); skillFX(p,key); }
-// 技能特效版: off by default (see #fxToggle on the setup screen). Active skills only — passives
-// that happen to call speakSkill are skipped. Effect style is picked from the skill's own
-// description text, so every profession (一般職業 and 三國 alike) gets one without per-skill wiring.
+function speakSkill(p,key,opts){ VOICE.speak(SKILL_QUOTES[key],p.prof,{queue:true,hype:true}); skillFX(p,key,opts); }
+// 技能特效版 v2: off by default (see #fxToggle on the setup screen). Each profession has its own
+// colour / glyph / motion (FX_STYLE); anything without an entry (incl. every 三國 general, tinted by
+// kingdom) falls back to a category look picked from the skill's own description text. Triggered
+// passives that call speakSkill (幸運兒, 還魂師, 老大...) get an effect too.
 let fxMode=false;
 try{ fxMode=localStorage.getItem("skillFx")==="1"; }catch(e){}
 let fxStamp=0; // bumps on every skillFX call, so the useProfSkill wrapper below can tell whether a skill already showed its own effect
-function skillFX(p,key){
+const FX_CAT={
+  dmg:{c:"#ff5a2a",g:["💥","🔥","✦"],m:"burst"}, speed:{c:"#50c8ff",g:["💨","⚡","»"],m:"streak"},
+  shield:{c:"#ffd75a",g:["🛡️","✨","◈"],m:"ring"}, heal:{c:"#5aff96",g:["💚","✚","✨"],m:"rise"},
+  gold:{c:"#ffe18c",g:["✨","⭐","✦"],m:"burst"}
+};
+const FX_STYLE={
+  gambler:{c:"#ff4d6d",g:["🎲","🃏","♠️","♦️","♣️"],m:"burst"},
+  scavenger:{c:"#a8d13a",g:["♻️","🔩","🥫","⚙️"],m:"spiral"},
+  trucker:{c:"#ff9f1c",g:["🚚","💨","🔥"],m:"streak"},
+  chemist:{c:"#7cff6b",g:["🧪","⚗️","☣️","●"],m:"rise"},
+  embalmer:{c:"#b58cff",g:["⚰️","🕯️","💀"],m:"rise"},
+  hacker:{c:"#33ff66",g:["0","1","0","1","#","▌"],m:"rain",mono:true},
+  tamer:{c:"#e0a96d",g:["🐕","🐾","🦴"],m:"streak"},
+  geneFreak:{c:"#ff6bd6",g:["🧬","✦","◉"],m:"spiral"},
+  climber:{c:"#9ad0ff",g:["🧗","⛰️","❄️"],m:"rise"},
+  survivor:{c:"#8bd17c",g:["🎒","⛑️","✚"],m:"ring"},
+  shopper:{c:"#ff8fb1",g:["🛍️","💸","🏷️"],m:"burst"},
+  runner:{c:"#4de0ff",g:["🏃","💨","⚡"],m:"streak"},
+  pickpocket:{c:"#8a8fa8",g:["🥷","✦","💨"],m:"streak"},
+  diver:{c:"#4aa8ff",g:["🫧","🤿","🐟"],m:"rise"},
+  courier:{c:"#d9a066",g:["📦","✉️","💨"],m:"streak"},
+  farmer:{c:"#d8c24a",g:["🌾","🌱","🥕"],m:"rise"},
+  miner:{c:"#ffd54a",g:["⛏️","💎","🪙"],m:"burst"},
+  hunter:{c:"#6bbf59",g:["🏹","🍃","💢"],m:"streak"},
+  mediocre:{c:"#ff7a7a",g:["🩸","💔","🤷"],m:"burst"},
+  collector:{c:"#c58bff",g:["📿","💍","🏺"],m:"spiral"},
+  guardian:{c:"#ffd75a",g:["🛡️","✨","◈"],m:"ring"},
+  hermit:{c:"#9aa5b1",g:["🌫️","·","☁️"],m:"ring"},
+  prepper:{c:"#d98c3a",g:["🥫","🥖","💧"],m:"burst"},
+  witch:{c:"#a64dff",g:["🧙","☠️","🔮","☣️"],m:"rise"},
+  oracle:{c:"#6bffb0",g:["☠️","🔮","👁️"],m:"spiral"},
+  detective:{c:"#ffcf5a",g:["🕵️","🔍","❓"],m:"ring"},
+  boss:{c:"#e0e0e0",g:["🕴️","💼","💢"],m:"burst"},
+  lucky:{c:"#4cff7a",g:["🍀","⭐","🌈"],m:"rain"},
+  exorcist:{c:"#fff1b0",g:["🕯️","✝️","✨"],m:"rise"},
+  tycoon:{c:"#ffd54a",g:["💰","🪙","💎"],m:"rain"},
+  vampire:{c:"#d11a3a",g:["🧛","🩸","🦇"],m:"rise"},
+  assassin:{c:"#c9ccd6",g:["🗡️","💨","✦"],m:"streak"},
+  arsonist:{c:"#ff6a1a",g:["🔥","🔥","💥"],m:"rise"},
+  medic:{c:"#5aff96",g:["🩺","✚","💊"],m:"ring"},
+  demolitions:{c:"#ff5a2a",g:["🧨","💥","🔥"],m:"burst"},
+  butcher:{c:"#c0392b",g:["🥩","🔪","🩸"],m:"burst"}
+};
+const FX_KINGDOM_C={"魏":"#5a9bff","蜀":"#4ade80","吳":"#ff6b6b"};
+function fxStyleFor(p,sk,type){
+  if(FX_STYLE[p.prof]) return FX_STYLE[p.prof];
+  const base=FX_CAT[type];
+  const kc=SANGUO_PROFS.has(p.prof)?FX_KINGDOM_C[SANGUO_KINGDOM[p.prof]]:null;
+  return {c:kc||base.c,g:[PROF_ICON[p.prof]||base.g[0]].concat(base.g),m:base.m};
+}
+// Only reveal a caster/target's map position when the human could already know it: themself,
+// someone sharing their room, or 肥宅 (whose room is public). Otherwise the effect stays full-screen.
+function fxVisible(q){
+  const me=STATE.players[0];
+  if(!q||!me||q.room==null) return false;
+  if(q===me) return true;
+  return q.room===me.room || (q.prof==="fatty"&&q.alive);
+}
+function fxChipCenter(room){
+  const c=GAME_MAP_CHIPS[room]; if(!c) return null;
+  const r=c.getBoundingClientRect(); if(!r.width) return null;
+  return {x:r.left+r.width/2,y:r.top+r.height/2,chip:c};
+}
+const FXP={list:[],raf:0,cv:null,cx:null};
+function fxCanvas(){
+  if(FXP.cv) return FXP.cv;
+  const cv=document.createElement("canvas"); cv.id="fxCanvas";
+  const fit=()=>{ const d=window.devicePixelRatio||1; cv.width=innerWidth*d; cv.height=innerHeight*d; FXP.cx.setTransform(d,0,0,d,0,0); };
+  document.body.appendChild(cv); FXP.cv=cv; FXP.cx=cv.getContext("2d"); fit();
+  window.addEventListener("resize",fit);
+  return cv;
+}
+function fxAdd(o){
+  FXP.list.push(Object.assign({x:0,y:0,vx:0,vy:0,gy:0,t:0,max:60,delay:0,size:24,rot:0,vr:0,glyph:"",color:"#fff",kind:"glyph",grow:0,drag:1},o));
+  if(!FXP.raf){ fxCanvas(); FXP.raf=requestAnimationFrame(fxStep); }
+}
+function fxStep(){
+  const cx=FXP.cx; cx.clearRect(0,0,innerWidth,innerHeight);
+  FXP.list=FXP.list.filter(p=>p.t<p.max);
+  for(const p of FXP.list){
+    if(p.delay>0){ p.delay--; continue; }
+    p.t++;
+    const k=p.t/p.max;
+    if(p.to){ const e=1-Math.pow(1-k,3); p.x=p.fx+(p.to.x-p.fx)*e; p.y=p.fy+(p.to.y-p.fy)*e-Math.sin(k*Math.PI)*p.arc; }
+    else if(p.orb){ p.a+=p.va; p.r+=p.vr; p.x=p.ox+Math.cos(p.a)*p.r; p.y=p.oy+Math.sin(p.a)*p.r; }
+    else { p.vx*=p.drag; p.vy=p.vy*p.drag+p.gy; p.x+=p.vx; p.y+=p.vy; }
+    p.rot+=p.vr; p.size+=p.grow;
+    cx.globalAlpha=Math.max(0,Math.min(1,k<.12?k/.12:(1-k)/.55));
+    if(p.kind==="ring"){ cx.strokeStyle=p.color; cx.lineWidth=3; cx.beginPath(); cx.arc(p.x,p.y,Math.max(1,p.size),0,7); cx.stroke(); }
+    else if(p.kind==="line"){ cx.strokeStyle=p.color; cx.lineWidth=2; cx.beginPath(); cx.moveTo(p.x,p.y); cx.lineTo(p.x-p.vx*p.size,p.y-p.vy*p.size); cx.stroke(); }
+    else if(p.kind==="dot"){ cx.fillStyle=p.color; cx.beginPath(); cx.arc(p.x,p.y,Math.max(.5,p.size),0,7); cx.fill(); }
+    else {
+      cx.save(); cx.translate(p.x,p.y); cx.rotate(p.rot);
+      cx.font=(p.mono?"bold ":"")+p.size+"px "+(p.mono?"Consolas,monospace":"'Segoe UI Emoji','Apple Color Emoji',sans-serif");
+      cx.textAlign="center"; cx.textBaseline="middle"; cx.fillStyle=p.color; cx.shadowColor=p.color; cx.shadowBlur=p.mono?10:0;
+      cx.fillText(p.glyph,0,0); cx.restore();
+    }
+  }
+  cx.globalAlpha=1;
+  FXP.raf=FXP.list.length?requestAnimationFrame(fxStep):0;
+  if(!FXP.raf) cx.clearRect(0,0,innerWidth,innerHeight);
+}
+const fxR=(a,b)=>a+Math.random()*(b-a);
+function fxEmit(s,x,y,full){
+  const W=innerWidth,H=innerHeight,pick=()=>s.g[Math.floor(Math.random()*s.g.length)];
+  const gl=(o)=>fxAdd(Object.assign({glyph:pick(),color:s.c,mono:s.mono},o));
+  const ring=(d,sz,g)=>fxAdd({kind:"ring",x,y,size:8,grow:g||5,max:40,delay:d,color:s.c});
+  switch(s.m){
+    case "burst":
+      ring(0,0,7); ring(6,0,5);
+      for(let i=0;i<26;i++){ const a=fxR(0,6.28),v=fxR(3,9); gl({x,y,vx:Math.cos(a)*v,vy:Math.sin(a)*v,gy:.12,drag:.97,size:fxR(18,34),vr:fxR(-.2,.2),max:fxR(40,70)|0}); }
+      for(let i=0;i<20;i++){ const a=fxR(0,6.28),v=fxR(4,12); fxAdd({kind:"dot",x,y,vx:Math.cos(a)*v,vy:Math.sin(a)*v,drag:.94,size:fxR(1.5,3.5),color:s.c,max:35}); }
+      break;
+    case "rain":
+      for(let i=0;i<46;i++) gl({x:fxR(0,W),y:fxR(-H*.3,0),vy:fxR(4,9),vx:fxR(-.5,.5),size:fxR(16,32),max:fxR(70,110)|0,delay:i%24});
+      break;
+    case "rise":
+      ring(0,0,4);
+      for(let i=0;i<28;i++) gl({x:x+fxR(-70,70),y:y+fxR(-10,40),vx:fxR(-.6,.6),vy:fxR(-3.2,-1),size:fxR(18,34),max:fxR(60,100)|0,delay:i*2});
+      break;
+    case "ring":
+      ring(0,0,6); ring(8,0,5); ring(16,0,4);
+      for(let i=0;i<12;i++){ const a=i/12*6.28; gl({x,y,vx:Math.cos(a)*2.6,vy:Math.sin(a)*2.6,size:fxR(20,30),max:60}); }
+      break;
+    case "streak":
+      for(let i=0;i<34;i++){ const yy=full?fxR(0,H):y+fxR(-90,90); fxAdd({kind:"line",x:fxR(-100,W*.6),y:yy,vx:fxR(24,40),vy:0,size:fxR(2,4),color:s.c,max:34,delay:i%14}); }
+      for(let i=0;i<8;i++) gl({x:-40,y:(full?fxR(H*.2,H*.8):y+fxR(-60,60)),vx:fxR(16,24),size:fxR(26,38),max:55,delay:i*3});
+      break;
+    case "spiral":
+      for(let i=0;i<24;i++) gl({orb:1,ox:x,oy:y,a:i/24*12.56,r:6,va:.13,vr:fxR(1.6,2.8),size:fxR(18,32),max:70,delay:i});
+      ring(0,0,6);
+      break;
+  }
+}
+function fxFlyTo(s,from,to){
+  for(let i=0;i<14;i++) fxAdd({glyph:s.g[i%s.g.length],color:s.c,mono:s.mono,fx:from.x,fy:from.y,x:from.x,y:from.y,to:{x:to.x,y:to.y},arc:fxR(30,90),size:fxR(18,28),max:42,delay:i*2});
+}
+function fxPulse(chip,cls,color){
+  chip.style.setProperty("--fxc",color); chip.classList.remove(cls); void chip.offsetWidth; chip.classList.add(cls);
+  setTimeout(()=>chip.classList.remove(cls),1750);
+}
+function skillFX(p,key,opts){
   fxStamp++;
   if(!fxMode || !p) return;
-  if(SANGUO_PROFS.has(p.prof)) return; // 目前只做一般職業／擴充職業，三國模式之後再加
   const sk=PROFESSIONS[p.prof] && PROFESSIONS[p.prof].skills[parseInt(String(key).split(":")[1],10)];
-  if(!sk || sk.passive) return;
+  if(!sk) return;
+  opts=opts||{};
   const d=sk.desc||"";
   const type=/傷害|攻擊|擊|炸|火/.test(d)?"dmg":/速度|步|移動|跳|傳送/.test(d)?"speed":/減|免疫|無法|歸零|防|不會|護/.test(d)?"shield":/恢復|生命|回復/.test(d)?"heal":"gold";
+  const s=fxStyleFor(p,sk,type);
   let layer=document.getElementById("fxLayer");
   if(!layer){ layer=document.createElement("div"); layer.id="fxLayer"; document.body.appendChild(layer); }
   const el=document.createElement("div");
-  el.innerHTML=`<div class="fx-flash ${type}"></div><div class="fx-title"><small>${p.name}</small>${sk.name}</div>`;
+  el.style.setProperty("--fxc",s.c);
+  el.innerHTML=`<div class="fx-flash ${type}"></div><div class="fx-title"><small>${PROF_ICON[p.prof]||""} ${p.name}</small>${sk.name}</div>`;
   layer.appendChild(el);
   if(type==="dmg" && typeof screenShake==="function") screenShake();
   setTimeout(()=>el.remove(),1100);
+  // map-anchored effect: caster's chip (only if its position is already known to the human)
+  const here=fxVisible(p)?fxChipCenter(p.room):null;
+  const ox=here?here.x:innerWidth/2, oy=here?here.y:innerHeight/2;
+  fxEmit(s,ox,oy,!here);
+  if(here){
+    fxPulse(here.chip,"fx-hit",s.c);
+    // lingering aura for "this round" buffs on the human's own chip
+    if(p===STATE.players[0] && /本輪|本回合/.test(d) && type!=="dmg") here.chip.classList.add("fx-aura","a-"+type);
+  }
+  // target: another room (trajectory + impact) or a whole floor (pulse every chip on it)
+  const tq=opts.target, troom=opts.room||(tq&&fxVisible(tq)?tq.room:null);
+  if(troom){ const t=fxChipCenter(troom); if(t){ fxFlyTo(s,{x:ox,y:oy},t); fxEmit(s,t.x,t.y,false); } }
+  if(opts.floor!=null){
+    Object.values(ROOMS).forEach(r=>{ if(r.floor===opts.floor && GAME_MAP_CHIPS[r.id]) fxPulse(GAME_MAP_CHIPS[r.id],"fx-floor",s.c); });
+    Object.values(ROOMS).filter(r=>r.floor===opts.floor).map(r=>fxChipCenter(r.id)).filter(Boolean)
+      .forEach((c,i)=>{ if(i%2===0) fxEmit({...s,m:"rise"},c.x,c.y,false); });
+  }
+}
+// "this round" auras last until the next round begins
+{
+  const _beginRound=beginRound;
+  beginRound=function(){
+    document.querySelectorAll(".room-chip.fx-aura").forEach(c=>c.classList.remove("fx-aura","a-speed","a-shield","a-heal","a-gold","a-dmg"));
+    return _beginRound.apply(this,arguments);
+  };
 }
 // Self-introduction line spoken when a profession card is clicked on the setup screen —
 // separate from SKILL_QUOTES since there's no player object yet at that point (VOICE.speak
@@ -2489,7 +2669,8 @@ function beginRound(){
     p.flags.vampireHealRound=0; // 吸血鬼的吸血: per-round heal cap
     p.flags.hunterAmbushActive=false; // 獵人的埋伏: the must-move waiver only covers the round it's used
     p.flags.guardianDefenseActive=false; // 守護者的絕對防禦: the must-move waiver + damage immunity only covers the round it's used
-    p.flags.luckyImmuneActive=false; // 幸運兒的逢凶化吉: the damage immunity only covers the round it's used
+    p.flags.luckyImmuneActive=false; // 幸運兒的吉星高照: the immunity/extra-draw only cover the round they were rolled
+    p.flags.luckyDrawBonus=false;
     p.flags.hermitCloakActive=false; // 隱士的遁世: the invisibility + room-function lockout only covers the round it's used
     p.flags.lotteryDodgeActive=false; // 樂透房's "本輪躲避毒氣" outcome: re-armed fresh each round it's rolled
     p.flags.smokeActive=false; // 煙霧彈: exempts this round's combat only, declared fresh each round it's used
@@ -2621,6 +2802,7 @@ function advanceTurn(){
     const pid=STATE.turnOrder[STATE.turnIndex];
     const p=STATE.players.find(x=>x.id===pid);
     if(!p || (!p.alive && !p.ghost)){ STATE.turnIndex++; continue; }
+    luckyTurnRoll(p); // 幸運兒 rolls at the very start of their own turn
     if(p.isAI){
       if(p.ghost) resolveGhostAITurn(p); else resolveAITurn(p);
       checkRunnerEndurance(p);
@@ -2901,16 +3083,27 @@ function isFlatWeightless(p,item){
 }
 // Human draw: reveal everything, auto-keep it all if it fits, otherwise let the player choose
 // which to keep up to remaining carry space (weightless items are always kept for free).
-// 幸運兒的吉星高照: rolled fresh on every single search, human or AI — no per-round/per-game cap,
-// since there's no cost to it and nothing to strategically withhold it for. 1 and 4 out of 6
-// hitting (not just a 1-in-6) keeps the bonus common enough to actually feel like the profession's
-// gimmick rather than a rare fluke.
+// 幸運兒的吉星高照: the die is rolled once at the start of the player's own turn (luckyTurnRoll
+// below); a roll of 1 sets luckyDrawBonus, which gives every search that turn +1 card drawn.
 function rollLuckyBonus(p){
-  if(p.prof!=="lucky") return 0;
+  if(p.prof!=="lucky" || !p.flags.luckyDrawBonus) return 0;
+  log(p.name+"（吉星高照）本回合抽取道具多抽1張！");
+  return 1;
+}
+// 幸運兒's start-of-turn roll: 1 = 本回合無敵＋抽取多1張, 4 = 本回合速度+2, anything else = nothing.
+function luckyTurnRoll(p){
+  if(p.prof!=="lucky" || !p.alive || p.ghost || p.flags.luckyRolledRound===STATE.round) return;
+  p.flags.luckyRolledRound=STATE.round;
   const roll=Math.floor(Math.random()*6)+1;
-  const hit=roll===1||roll===4;
-  log(p.name+"（吉星高照）擲骰"+roll+(hit?"：額外多抽1張！":"：本次無加成。"));
-  return hit?1:0;
+  if(roll===1){
+    p.flags.luckyImmuneActive=true; p.flags.luckyDrawBonus=true;
+    log(p.name+"（吉星高照）擲骰1：本回合免疫所有傷害（飢餓除外），抽取道具多抽1張！"); speakSkill(p,"lucky:1");
+  } else if(roll===4){
+    p.stepsLeft=Math.min(10,p.stepsLeft+2); p.roundStartSteps=Math.min(10,p.roundStartSteps+2);
+    log(p.name+"（吉星高照）擲骰4：本回合移動速度+2！");
+  } else {
+    log(p.name+"（吉星高照）擲骰"+roll+"：本回合沒有加成。");
+  }
 }
 function resolveHumanDraw(p,roomId,maxDraw){
   const room=ROOMS[roomId];
@@ -4209,7 +4402,7 @@ function useProfSkill(p,idx){
       <button class="btn small ghost" id="chCancel">取消</button>`);
     document.getElementById("chA").onclick=()=>{
       const f=+document.getElementById("chFloor").value;
-      STATE.poisonReduceFloor=f; log(p.name+" 指定「"+FLOOR_LABEL[f]+"」本輪毒氣傷害-2。"); speakSkill(p,"chemist:0a");
+      STATE.poisonReduceFloor=f; log(p.name+" 指定「"+FLOOR_LABEL[f]+"」本輪毒氣傷害-2。"); speakSkill(p,"chemist:0a",{floor:f});
       p.flags.chemistUses++; p.flags.skillUsedThisRound=true; closeModal(); renderAll();
     };
     document.getElementById("chB").onclick=()=>{
@@ -4230,7 +4423,7 @@ function useProfSkill(p,idx){
       const r=document.getElementById("hackRoomSel").value;
       const room=ROOMS[r];
       p.flags.hackerUsedRooms.push(r); p.flags.hackerUses++; p.flags.skillUsedThisRound=true;
-      log(p.name+" 使用遠端操控：於本回合遠端使用了「"+r+" "+(room.name||"")+"」。"); speakSkill(p,"hacker:1");
+      log(p.name+" 使用遠端操控：於本回合遠端使用了「"+r+" "+(room.name||"")+"」。"); speakSkill(p,"hacker:1",{room:r});
       const opensOwnModal=HACKER_OWN_MODAL_SPECIALS.has(room.special);
       if(!opensOwnModal) closeModal();
       if(room.draw>0) resolveHumanDraw(p,r,room.draw);
@@ -4322,7 +4515,7 @@ function useProfSkill(p,idx){
     p.flags.hunterAmbushActive=true;
     p.power++;
     const ambushTargets=playersInRoom(p.room,true).filter(x=>x.id!==p.id);
-    // 守護者的絕對防禦（或幸運兒的逢凶化吉）can each reduce a target's share of this —
+    // 守護者的絕對防禦（或幸運兒的吉星高照）can each reduce a target's share of this —
     // computed per-target up front since the room may hold a mix of protected players.
     const ambushHits=ambushTargets.map(t=>{
       const gc=damageWard(t, 2);
@@ -4353,17 +4546,6 @@ function useProfSkill(p,idx){
     if(skillUseCapReached(p,"guardian:1")){ flashMsg("已用完"); return; }
     p.flags.guardianDefenseUsed=true; p.flags.guardianDefenseActive=true; p.flags.skillUsedThisRound=true;
     log(p.name+" 發動絕對防禦：本輪可不移動、無視戰鬥/毒氣等傷害（飢餓除外），並能直接使用房間功能。"); speakSkill(p,"guardian:1");
-  } else if(p.prof==="lucky" && idx===1){
-    // No SKILL_USE_LIMITS entry — unlike guardian's once-per-game 絕對防禦, this can be
-    // attempted every round; the 1/6 gate is what keeps it in check instead of a use cap.
-    p.flags.skillUsedThisRound=true;
-    const roll=Math.floor(Math.random()*6)+1;
-    if(roll===1){
-      p.flags.luckyImmuneActive=true;
-      log(p.name+" 發動逢凶化吉(擲骰"+roll+")：本輪免疫所有傷害（飢餓仍正常結算）！"); speakSkill(p,"lucky:1");
-    } else {
-      log(p.name+" 發動逢凶化吉(擲骰"+roll+")：這次沒能觸發。");
-    }
   } else if(p.prof==="hermit" && idx===1){
     if(skillUseCapReached(p,"hermit:1")){ flashMsg("已用完2次"); return; }
     p.flags.hermitCloakUses++; p.flags.hermitCloakActive=true; p.flags.skillUsedThisRound=true;
@@ -4460,7 +4642,7 @@ function openDetectiveModal(p){
   document.getElementById("detOk").onclick=()=>{
     const target=STATE.players.find(x=>x.id===+document.getElementById("detSel").value);
     declareDetectiveTrack(p,target);
-    log(p.name+" 使用情報位移：放棄移動，鎖定跟蹤 "+target.name+"（"+p.flags.detectiveUses+"/3）。"); speakSkill(p,"detective:0");
+    log(p.name+" 使用情報位移：放棄移動，鎖定跟蹤 "+target.name+"（"+p.flags.detectiveUses+"/3）。"); speakSkill(p,"detective:0",{target:target});
     closeModal(); renderAll();
   };
   bindModalClose("detCancel");
@@ -4478,7 +4660,7 @@ function openPickpocketModal(p){
     p.flags.pickpocketUses++; p.flags.skillUsedThisRound=true;
     const idx=Math.floor(Math.random()*target.inv.length);
     const item=target.inv.splice(idx,1)[0];
-    log(p.name+" 使用順手牽羊，從 "+target.name+" 身上偷到「"+ITEMS[item].name+"」。"); speakSkill(p,"pickpocket:0");
+    log(p.name+" 使用順手牽羊，從 "+target.name+" 身上偷到「"+ITEMS[item].name+"」。"); speakSkill(p,"pickpocket:0",{target:target});
     closeModal();
     if(itemCostsCarry(p,item) && carryRoom(p)<=0){ openDrawSelectionModal(p,[item],p.room); return; }
     p.inv.push(item);
@@ -4505,7 +4687,7 @@ function openCourierDeliverModal(p){
     const target=STATE.players.find(x=>x.id===targetId);
     const item=p.inv.splice(itemIdx,1)[0];
     p.flags.courierUses++; p.flags.skillUsedThisRound=true;
-    log(p.name+" 使用專人配送，將「"+ITEMS[item].name+"」寄給了 "+target.name+"。"); speakSkill(p,"courier:1");
+    log(p.name+" 使用專人配送，將「"+ITEMS[item].name+"」寄給了 "+target.name+"。"); speakSkill(p,"courier:1",{target:target});
     closeModal();
     if(itemCostsCarry(target,item) && carryRoom(target)<=0){
       ROOMS[target.room].stock[item]=(ROOMS[target.room].stock[item]||0)+1;
@@ -4594,7 +4776,7 @@ function openCollectorTradeModal(p){
       } else { target.inv.push(it); }
     });
     p.flags.collectorTradeUses++; p.flags.skillUsedThisRound=true;
-    log(p.name+" 使用以物易物，用「"+givenItems.map(it=>ITEMS[it].name).join("、")+"」向 "+target.name+" 換到了「"+ITEMS[wanted].name+"」。"); speakSkill(p,"collector:1");
+    log(p.name+" 使用以物易物，用「"+givenItems.map(it=>ITEMS[it].name).join("、")+"」向 "+target.name+" 換到了「"+ITEMS[wanted].name+"」。"); speakSkill(p,"collector:1",{target:target});
     closeModal();
     if(itemCostsCarry(p,wanted) && carryRoom(p)<=0){ openDrawSelectionModal(p,[wanted],p.room); return; }
     p.inv.push(wanted);
@@ -4631,7 +4813,7 @@ function openWitchSprinkleModal(p){
     const f=+document.getElementById("witchFloor").value;
     STATE.poisoned.add(f);
     p.flags.witchSprinkleUsed=true; p.flags.skillUsedThisRound=true;
-    log(p.name+" 使用灑毒：「"+FLOOR_LABEL[f]+"」樓層直接淪為毒氣區域。"); speakSkill(p,"witch:0");
+    log(p.name+" 使用灑毒：「"+FLOOR_LABEL[f]+"」樓層直接淪為毒氣區域。"); speakSkill(p,"witch:0",{floor:f});
     closeModal(); renderAll();
   };
   bindModalClose("witchCancel");
@@ -4894,9 +5076,6 @@ function aiConsiderSkillAfterMove(p){
   }
   if(p.prof==="tamer"){ if(!skillUseCapReached(p,"tamer:0")) useProfSkill(p,0); return; }
   if(p.prof==="embalmer"){ if(!skillUseCapReached(p,"embalmer:1")) useProfSkill(p,1); return; }
-  // 幸運兒的逢凶化吉: unlike guardian's once-per-game 絕對防禦, this is a free unlimited 1/6
-  // gamble with no downside and nothing to reserve it for — always worth trying every round.
-  if(p.prof==="lucky"){ useProfSkill(p,1); return; }
   if(p.prof==="survivor"){
     // 野戰急救: only worth a limited charge when actually standing in a poisoned room this round.
     if(!skillUseCapReached(p,"survivor:1") && roomIsPoisoned(ROOMS[p.room])) useProfSkill(p,1);
@@ -4996,7 +5175,7 @@ function aiConsiderSkillAfterMove(p){
     if(!poisonedFloors.length) return; // nothing to mitigate — don't burn a limited use for +2 boost
     const target=poisonedFloors.includes(room.floor)?room.floor:poisonedFloors[0];
     STATE.poisonReduceFloor=target; p.flags.chemistUses++; p.flags.skillUsedThisRound=true;
-    log(p.name+" 使用毒性調和：指定「"+FLOOR_LABEL[target]+"」本輪毒氣傷害-2。"); speakSkill(p,"chemist:0a");
+    log(p.name+" 使用毒性調和：指定「"+FLOOR_LABEL[target]+"」本輪毒氣傷害-2。"); speakSkill(p,"chemist:0a",{floor:target});
     return;
   }
   if(p.prof==="hacker"){
@@ -5027,7 +5206,7 @@ function aiConsiderSkillAfterMove(p){
     else if(room.special==="canteen"){ p.flags.dietThisRound=true; }
     else if(room.special==="lottery"){ doLottery(p); }
     else if(room.special==="helipad"){ collectAirdrop(p); }
-    log(p.name+" 使用遠端操控：遠端使用了「"+pick+" "+(room.name||"")+"」。"); speakSkill(p,"hacker:1");
+    log(p.name+" 使用遠端操控：遠端使用了「"+pick+" "+(room.name||"")+"」。"); speakSkill(p,"hacker:1",{room:pick});
     return;
   }
   if(p.prof==="mediocre"){
@@ -5449,18 +5628,18 @@ function exorcistAutoRevive(p){
 }
 // Shared "damage warding" checks — every profession whose defense needs to reach ALL damage
 // sources (not just combat) funnels through here, next to fatty/bomb/veteran/climber's inline
-// checks above: 幸運兒's 逢凶化吉 (a per-round 1/6 gamble, see useProfSkill) and 守護者's
+// checks above: 幸運兒's 吉星高照 (a per-round 1/6 gamble, see useProfSkill) and 守護者's
 // 絕對防禦 (guaranteed, once per game) both short-circuit to 0 outright; failing those, 守護者's
 // 自身所有傷害-1／同房間人所有傷害-1 aura still knocks 1 off for himself AND anyone else
 // currently sharing his room. Returns {dmg,note} in the same shape every other profession's
 // inline reduction already uses, so callers just splice the note into their own accumulating
 // note string exactly the same way.
-// opts.hunger excludes both 逢凶化吉 and 絕對防禦 — 飢餓（仍需要水糧）is the one damage source
+// opts.hunger excludes both 吉星高照's immunity and 絕對防禦 — 飢餓（仍需要水糧）is the one damage source
 // neither full-immunity active covers.
 function damageWard(target,dmg,opts){
   if(dmg<=0) return {dmg,note:""};
   const isHunger = opts&&opts.hunger;
-  if(!isHunger && target.prof==="lucky" && target.flags.luckyImmuneActive) return {dmg:0,note:"〔逢凶化吉〕"};
+  if(!isHunger && target.prof==="lucky" && target.flags.luckyImmuneActive) return {dmg:0,note:"〔吉星高照：無敵〕"};
   if(!isHunger && target.prof==="guardian" && target.flags.guardianDefenseActive) return {dmg:0,note:"〔絕對防禦〕"};
   return {dmg,note:""};
 }
@@ -5895,7 +6074,7 @@ function settleRound(){
         log(v.name+"（暗影使者）免疫暗影吸血。"); return;
       }
       const drainRoom=g.room; // capture before damagePlayer can move a killed victim to the mortuary
-      // 守護者的絕對防禦／幸運兒的逢凶化吉: the drain itself still counts toward the
+      // 守護者的絕對防禦／幸運兒的吉星高照: the drain itself still counts toward the
       // ghost's revival total (it's still a successful drain attempt), it just costs the
       // protected victim 0 HP instead of 1.
       const drainGc=damageWard(v, 1);
