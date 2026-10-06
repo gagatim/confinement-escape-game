@@ -672,7 +672,7 @@ const PROFESSIONS = {
   ]},
   bartender:{name:"飲品師", skills:[
     {name:"特調精釀", desc:"（被動）你的果汁(酒)不佔負重，並初始擁有酒窖的2張果汁。使用前可剔除四種效果，再隨機抽取。", passive:true},
-    {name:"舉杯共飲", desc:"（被動）道具使用階段，你的果汁可對其他存活玩家使用。", passive:true}
+    {name:"舉杯共飲", desc:"（被動）道具使用階段，你的果汁可對其他存活玩家使用（同樣可先剔除四種效果）；其他玩家也可把酒交給你，請你代為調製。", passive:true}
   ]},
   chemist:{name:"化學家", skills:[
     {name:"毒性調和", desc:"移動階段可使用，二選一：指定1個已中毒樓層，本輪毒氣傷害-2（最低0）；或本輪毒氣樓層傷害+2。整局限用2次。", uses:2},
@@ -697,8 +697,7 @@ const PROFESSIONS = {
     {name:"巡迴獵犬", desc:"武力與負重永久+1。須在行動結束後才能使用（所在房間無功能可做時不受限）：派遣獵犬到距離5以內有庫存的房間，隨機抽1張道具（不可超過負重）。整局限用4次。", uses:4}
   ]},
   merc:{name:"雇傭兵", skills:[
-    {name:"武器精通", desc:"（被動）武器（刀/雙刀/手槍/霰彈槍）不佔負重，等於多2格背包。", passive:true},
-    {name:"槍械專家", desc:"（被動）手持任何武器（含刀/雙刀）時視為持槍：對手同樣持槍則照常比武力；對手持刀或空手，則直接以你的武力（含武器加成）扣減其生命。", passive:true}
+    {name:"武器精通", desc:"（被動）所有武器（刀/雙刀/手槍/霰彈槍）不佔負重；火箭筒不算武器，仍佔負重。", passive:true}
   ]},
   geneFreak:{name:"基因怪人", skills:[
     {name:"先天優勢", desc:"（被動）初始可分配基因點數12點，武力上限5點。", passive:true},
@@ -833,7 +832,7 @@ const PROFESSIONS = {
     {name:"毒氣適應", desc:"（被動）自身受到的毒氣傷害永遠-1（最低0）。", passive:true}
   ]},
   detective:{name:"私家偵探", skills:[
-    {name:"情報位移", desc:"行動階段可放棄移動，指定1名存活玩家：結算開始時你直接出現在其當時所在的房間，並可使用該房間的功能（自動執行）。整局限用3次，同一名玩家最多被跟蹤1次。", uses:3}
+    {name:"情報位移", desc:"行動階段可放棄移動，指定1名行動順序比你靠前的存活玩家：結算開始時你直接出現在其當時所在的房間，並可使用該房間的功能（自動執行）。整局限用3次，同一名玩家最多被跟蹤1次。", uses:3}
   ]},
   arsonist:{name:"縱火犯", skills:[
     {name:"點火", desc:"（被動）結算時，若你所在房間（含你）有3名以上存活玩家，房內其他玩家各-1血，你恢復1點生命。", passive:true},
@@ -2007,12 +2006,8 @@ function removeItem(p,item){
   return false;
 }
 function countItem(p,item){ return p.inv.filter(x=>x===item).length; }
-// 雇傭兵的槍械專家: any weapon in hand — even a bare 刀/雙刀 — counts as a gun for combat
-// resolution purposes, so resolveCombat's gun-vs-unarmed "full power dealt as damage" branch
-// (see below) kicks in off a plain knife instead of needing an actual pistol/shotgun.
 function hasGun(p){
-  if(p.inv.some(x=>ITEMS[x].gun)) return true;
-  return p.prof==="merc" && p.inv.some(x=>ITEMS[x].weapon);
+  return p.inv.some(x=>ITEMS[x].gun);
 }
 function combatPower(p){
   let base=p.power;
@@ -3410,6 +3405,7 @@ function useItem(p,item){
     return;
   }
   if(!removeItem(p,item)) return;
+  if(item==="wine") p.flags.wineExcludedQueue.push(null); // keep the queue aligned: this glass has no exclusion
   p.flags.pendingItemUses.push(item);
   log(p.name+" 宣告使用「"+ITEMS[item].name+"」（結算階段公開生效）。");
   renderAll();
@@ -3425,10 +3421,12 @@ function openBartenderWineModal(p){
     <button class="btn small" id="wineTargetOk">倒酒</button> <button class="btn small ghost" id="wineTargetCancel">取消</button>`);
   const updateExcludeUI=()=>{
     const isSelf=+document.getElementById("wineTargetSel").value===p.id;
-    document.getElementById("wineExcludeWrap").innerHTML = isSelf
-      ? "<div class='muted' style='font-size:12px;margin-bottom:4px'>你自己的酒：勾選剛好4種要排除的結果，剩下2種隨機抽取</div>"+
-        Object.entries(OUTCOME_LABELS).map(([k,label])=>`<label style="display:block;margin:2px 0"><input type="checkbox" class="wineExcl" value="${k}"> ${label}</label>`).join("")
-      : "<div class='muted' style='font-size:12px'>對方喝到的是普通的酒，6種結果均等隨機。</div>";
+    // 特調精釀 applies to every glass the bartender pours — for himself or anyone else — so the
+    // 4-outcome exclusion is offered for any target (e.g. keep only 5/6 to bless an ally, or only
+    // 1/2 to make it a 50% "丟棄所有道具" attack on a rival).
+    document.getElementById("wineExcludeWrap").innerHTML =
+      "<div class='muted' style='font-size:12px;margin-bottom:4px'>"+(isSelf?"你自己的酒":"請對方喝的酒")+"：勾選剛好4種要排除的結果，剩下2種隨機抽取</div>"+
+      Object.entries(OUTCOME_LABELS).map(([k,label])=>`<label style="display:block;margin:2px 0"><input type="checkbox" class="wineExcl" value="${k}"> ${label}</label>`).join("");
   };
   document.getElementById("wineTargetSel").addEventListener("change",updateExcludeUI);
   updateExcludeUI();
@@ -3436,31 +3434,29 @@ function openBartenderWineModal(p){
     const targetId=+document.getElementById("wineTargetSel").value;
     const isSelf=targetId===p.id;
     let excluded=[];
-    if(isSelf){
-      excluded=[...document.querySelectorAll(".wineExcl:checked")].map(cb=>+cb.value);
-      if(excluded.length!==4){ flashMsg("請剛好排除4種結果"); return; }
-    }
+    excluded=[...document.querySelectorAll(".wineExcl:checked")].map(cb=>+cb.value);
+    if(excluded.length!==4){ flashMsg("請剛好排除4種結果"); return; }
     if(!removeItem(p,"wine")) return;
     const target=STATE.players.find(x=>x.id===targetId);
     // one queue entry per queued "wine", in the same order, so multiple wines declared by/for the
     // same player in one round each keep their OWN exclusion instead of sharing a single flag that
     // only the first-resolved wine would see (the bug: a second wine would silently roll from the
     // full 1-6 pool, including the "excluded" results, once the shared flag had already been consumed).
-    target.flags.wineExcludedQueue.push(isSelf?excluded:null);
+    target.flags.wineExcludedQueue.push(excluded);
     target.flags.pendingItemUses.push("wine");
     log(p.name+(isSelf?" 為自己調製了特調果汁":" 舉杯共飲，請 "+target.name+" 喝了一杯果汁")+"（結算階段公開生效）。");
     closeModal(); renderAll();
   };
   bindModalClose("wineTargetCancel");
 }
-// 藥片 heals LAST (see resolvePillHealing below) — everything else queued this round (水/糧/
-// 腎上腺素/酒) resolves here, early, since water/food's hunger-flags and adrenaline's death-floor
+// 酒 and 藥片 resolve LAST (see resolvePendingWines / resolvePillHealing below, after 戰鬥 → 飢餓) —
+// 水/糧/腎上腺素 resolve here, early, since water/food's hunger-flags and adrenaline's death-floor
 // must already be in effect before combat/poison/hunger damage are calculated.
 function resolvePendingItemUses(p){
   const uses=p.flags.pendingItemUses||[];
   const pillsPending=[];
   uses.forEach(item=>{
-    if(item==="pill"){ pillsPending.push(item); return; }
+    if(item==="pill" || item==="wine"){ pillsPending.push(item); return; } // 藥片/酒 resolve later (see resolvePendingWines / resolvePillHealing)
     STATE.discardPile.push(item);
     switch(item){
       case "water": case "food":
@@ -3494,30 +3490,39 @@ function resolvePendingItemUses(p){
         break;
       case "adrenaline":
         p.flags.adrenalineActive=true; log(p.name+" 結算：注射腎上腺素，下輪速度變10，本輪不會致死。","heal"); break;
-      case "wine": {
-        // 特調精釀: a bartender's own glass may have 4 outcomes pre-excluded, rolled among
-        // whichever 2 remain. Each queued "wine" pulls its OWN exclusion (or none) off the front
-        // of wineExcludedQueue, in the same order they were declared — NOT a single shared flag,
-        // which would only ever apply to the first of several wines resolved in one round.
-        let pool=[1,2,3,4,5,6];
-        const excluded=p.flags.wineExcludedQueue.length?p.flags.wineExcludedQueue.shift():null;
-        if(excluded && excluded.length===4){
-          pool=pool.filter(n=>!excluded.includes(n));
-        }
-        const roll=pool[Math.floor(Math.random()*pool.length)];
-        let msg="結算：酒(擲骰"+roll+"): ";
-        if(roll===1){ p.inv=[]; msg+="丟棄所有道具卡！"; }
-        else if(roll===2){ msg+="無事發生。"; }
-        else if(roll===3){ p.power++; msg+="武力永久+1。"; }
-        else if(roll===4){ p.speed++; msg+="速度永久+1。"; }
-        else if(roll===5){ p.carry++; msg+="負重永久+1。"; }
-        else { p.hp=Math.min(p.maxhp,p.hp+2); msg+="生命值+2。"; }
-        log(p.name+" "+msg,"heal");
-        break;
-      }
     }
   });
-  p.flags.pendingItemUses=pillsPending; // pill(s) stay queued for resolvePillHealing
+  p.flags.pendingItemUses=pillsPending; // pill(s)/wine(s) stay queued until after combat/hunger
+}
+// 酒 resolves AFTER combat, poison and hunger (settlement order: 戰鬥 → 飢餓 → 使用道具), so a
+// glass drunk this round can't change this round's fights or hunger — its effect (including a
+// "丟棄所有道具") only shows from the next round on. A player who died earlier in settlement
+// simply loses the glass, same as a queued 藥片.
+function resolvePendingWines(p){
+  const uses=p.flags.pendingItemUses||[];
+  p.flags.pendingItemUses=uses.filter(x=>x!=="wine");
+  if(!p.alive || p.ghost) return;
+  uses.filter(x=>x==="wine").forEach(()=>{
+    STATE.discardPile.push("wine");
+    // 特調精釀: a bartender's own glass may have 4 outcomes pre-excluded, rolled among
+    // whichever 2 remain. Each queued "wine" pulls its OWN exclusion (or none) off the front
+    // of wineExcludedQueue, in the same order they were declared — NOT a single shared flag,
+    // which would only ever apply to the first of several wines resolved in one round.
+    let pool=[1,2,3,4,5,6];
+    const excluded=p.flags.wineExcludedQueue.length?p.flags.wineExcludedQueue.shift():null;
+    if(excluded && excluded.length===4){
+      pool=pool.filter(n=>!excluded.includes(n));
+    }
+    const roll=pool[Math.floor(Math.random()*pool.length)];
+    let msg="結算：酒(擲骰"+roll+"): ";
+    if(roll===1){ p.inv=[]; msg+="丟棄所有道具卡！"; }
+    else if(roll===2){ msg+="無事發生。"; }
+    else if(roll===3){ p.power++; msg+="武力永久+1。"; }
+    else if(roll===4){ p.speed++; msg+="速度永久+1。"; }
+    else if(roll===5){ p.carry++; msg+="負重永久+1。"; }
+    else { p.hp=Math.min(p.maxhp,p.hp+2); msg+="生命值+2。"; }
+    log(p.name+" "+msg,"heal");
+  });
 }
 // Resolves queued 藥片 use AFTER this round's combat/poison/hunger/laser/暗影吸血 damage, so the
 // heal isn't silently wiped out by damage that lands later in the same settlement — and a player
@@ -4404,7 +4409,12 @@ function openOracleModal(p){
 }
 function detectiveTargets(p){
   const tracked=p.flags.detectiveTracked||[];
-  return STATE.players.filter(x=>x.id!==p.id && x.alive && !x.ghost && !tracked.includes(x.id));
+  // 情報位移 can only follow someone whose 順序牌 position this round is EARLIER than the
+  // detective's (i.e. they've already moved, so there is a room to follow).
+  const order=STATE.turnOrder||[];
+  const myPos=order.indexOf(p.id);
+  return STATE.players.filter(x=>x.id!==p.id && x.alive && !x.ghost && !tracked.includes(x.id)
+    && (myPos<0 || (order.indexOf(x.id)>=0 && order.indexOf(x.id)<myPos)));
 }
 function declareDetectiveTrack(p,target){
   p.flags.detectiveUses++; p.flags.skillUsedThisRound=true;
@@ -4414,10 +4424,10 @@ function declareDetectiveTrack(p,target){
 }
 function openDetectiveModal(p){
   const targets=detectiveTargets(p);
-  if(!targets.length){ flashMsg("沒有可跟蹤的玩家（每人只能被跟蹤1次）。"); return; }
+  if(!targets.length){ flashMsg("沒有可跟蹤的玩家（只能跟蹤行動順序比你靠前的玩家，且每人只能被跟蹤1次）。"); return; }
   const opts=targets.map(o=>`<option value="${o.id}">${o.name}</option>`).join("");
   openModal(`<h3>情報位移：放棄移動，跟蹤一名玩家</h3>
-    <div class="muted" style="font-size:12px;margin-bottom:6px">結算開始時，你會出現在他當時所在的房間，並自動使用該房間的功能。</div>
+    <div class="muted" style="font-size:12px;margin-bottom:6px">只能選行動順序比你靠前的玩家。結算開始時，你會出現在他當時所在的房間，並自動使用該房間的功能。</div>
     <select id="detSel">${opts}</select><br><br>
     <button class="btn small warn" id="detOk">跟蹤</button> <button class="btn small ghost" id="detCancel">取消</button>`);
   document.getElementById("detOk").onclick=()=>{
@@ -5644,7 +5654,7 @@ function settleRound(){
     log(p.name+"（桃園結義）與同勢力隊友「"+sameKingdomHere.filter(x=>x.id!==p.id).map(x=>x.name).join("、")+"」同房，本輪有受傷風險（"+riskTags+"），全員恢復1點生命。","heal");
   });
 
-  // 1) queued item-card effects (水/糧/腎上腺素/酒 — all "結算階段公開使用"；藥片 heals later, see below)
+  // 1) queued item-card effects (水/糧/腎上腺素 — "結算階段公開使用"；酒與藥片 resolve later, see step 7)
   STATE.players.forEach(p=>{ if(p.alive) resolvePendingItemUses(p); });
 
   // surgery healing (triggered earlier when the room was visited; resolves alongside items)
@@ -5876,8 +5886,9 @@ function settleRound(){
     }
   });
 
-  // 7) 藥片 healing resolves LAST — after combat/poison/hunger/laser/暗影吸血 — so it reflects
+  // 7) 酒 then 藥片 resolve LAST — after combat/poison/hunger/laser/暗影吸血 — so it reflects
   // this round's final HP instead of being overwritten by damage that comes later in settlement.
+  STATE.players.forEach(p=>resolvePendingWines(p)); // 酒: after combat/poison/hunger
   STATE.players.forEach(p=>resolvePillHealing(p));
   // 黃蓋的詐降: after the round, take 1 random item from the named target (if any, and if it fits).
   STATE.players.forEach(p=>{
