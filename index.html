@@ -728,7 +728,7 @@ const PROFESSIONS = {
   ]},
   chef:{name:"廚師", skills:[
     {name:"一餐抵兩餐", desc:"（被動）每輪只需繳交1份水或1份糧食，即可同時免除水與糧的飢餓懲罰。", passive:true},
-    {name:"儲糧有道", desc:"（被動）水與糧食永久不佔負重。", passive:true}
+    {name:"儲糧有道", desc:"（被動）水與糧食的負重各為0.5（水、糧合計，總負重四捨五入：2份算1格、3份算2格）。", passive:true}
   ]},
   smuggler:{name:"走私客", skills:[
     {name:"暗格夾層", desc:"（被動）背包容量永久+3；但武力上限為5點（創角與重新分配點數時適用）。", passive:true},
@@ -1951,7 +1951,7 @@ function makePlayer(id,isAI,profId,stats,name){
     weightlessTrash: profId==="scavenger",
     weightlessWine: profId==="bartender",
     weightlessMedical: profId==="medic", // 醫官的隨身醫療包: 藥片/腎上腺素不佔負重
-    weightlessRation: profId==="chef" || profId==="gourmet" || profId==="prepper", // 廚師的儲糧有道／老饕的多多益善／生存狂的未雨綢繆: 水/糧不佔負重
+    weightlessRation: profId==="gourmet" || profId==="prepper", // 老饕的多多益善／生存狂的未雨綢繆: 水/糧不佔負重（廚師的儲糧有道改為每份0.5，見 usedCarry）
     weightlessPill: profId==="herbalist" // 草藥師的藥草袋: 藥片不佔負重
   };
   return p;
@@ -1966,7 +1966,7 @@ function effectiveCarryCap(p){
 // have to be costed together, since 礦工's paired gold weight can't be decided one item at a time.
 function usedCarry(p,invOverride){
   const inv=invOverride||p.inv;
-  let n=0, minerGold=0;
+  let n=0, minerGold=0, chefRation=0;
   // 收藏家的貪婪囤積: tallied per item type, same shape as 礦工's paired-gold tally below —
   // the first 2 of a given type cost carry as normal, the 3rd and any beyond that are free.
   const collectorCounts=p.prof==="collector" ? {} : null;
@@ -1976,6 +1976,8 @@ function usedCarry(p,invOverride){
     // 礦工的秤金術: gold weighs 0.5 each, tallied separately since it's a shared per-pair cost,
     // not a flat per-item one — see itemCostsCarry for the matching per-draw marginal check.
     if(it==="gold" && p.prof==="miner"){ minerGold++; continue; }
+    // 廚師的儲糧有道: 水/糧/水糧包 each weigh 0.5, tallied together and rounded up (same shape as 礦工 gold).
+    if(p.prof==="chef" && (it==="water"||it==="food"||it==="waterfood")){ chefRation++; continue; }
     if(it==="wine" && p.weightlessWine) continue;
     if(ITEMS[it].weapon && p.weaponWeightless) continue;
     if(it==="knife" && p.prof==="butcher") continue; // 屠夫的屠宰專精: 刀不佔負重
@@ -1989,6 +1991,7 @@ function usedCarry(p,invOverride){
     n++;
   }
   if(minerGold>0) n+=Math.ceil(minerGold/2);
+  if(chefRation>0) n+=Math.ceil(chefRation/2);
   return n;
 }
 function carryRoom(p){ return effectiveCarryCap(p)-usedCarry(p); }
@@ -2835,6 +2838,8 @@ function drawItemsFromStock(p,roomId,maxDraw){
   }
   return drawnItems;
 }
+function isRationItem(item){ return item==="water"||item==="food"||item==="waterfood"; }
+function countRation(p){ return p.inv.filter(isRationItem).length; }
 function itemCostsCarry(p,item){
   if(item==="trash" && p.weightlessTrash) return false;
   if(item==="gold" && p.weightlessGold) return false;
@@ -2843,6 +2848,8 @@ function itemCostsCarry(p,item){
   // before pushing a new gold (one at a time, in draw/keep order) reproduce usedCarry's
   // ceil(count/2) total exactly: the 1st gold costs, the 2nd is free, the 3rd costs, and so on.
   if(item==="gold" && p.prof==="miner") return countItem(p,"gold")%2===0;
+  // 廚師: every 2nd water/food (counted together) is free — marginal cost of adding one more.
+  if(p.prof==="chef" && isRationItem(item)) return countRation(p)%2===0;
   if(item==="wine" && p.weightlessWine) return false;
   if(ITEMS[item].weapon && p.weaponWeightless) return false;
   if(item==="knife" && p.prof==="butcher") return false; // 屠夫的屠宰專精
@@ -2861,6 +2868,7 @@ function itemCostsCarry(p,item){
 // slot, freeing nothing. Every other item/profession's cost is flat, so the two always agree.
 function itemRemovalFrees(p,item){
   if(item==="gold" && p.prof==="miner") return countItem(p,"gold")%2===1;
+  if(p.prof==="chef" && isRationItem(item)) return countRation(p)%2===1;
   // 收藏家的貪婪囤積: removing one of a type only frees a slot if you held 2 or fewer of it —
   // dropping from a 3rd-or-later (already-free) copy leaves the paid-for 2 untouched.
   if(p.prof==="collector") return countItem(p,item)<=2;
