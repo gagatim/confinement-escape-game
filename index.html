@@ -819,7 +819,7 @@ const PROFESSIONS = {
     {name:"絕對防禦", desc:"整局限用1次：本回合可選擇不移動，自身無視戰鬥、毒氣、火箭筒等任何傷害，且可直接使用房間功能；飢餓仍需繳交水/糧。", uses:1}
   ]},
   lucky:{name:"幸運兒", skills:[
-    {name:"吉星高照", desc:"（被動）每輪輪到自己行動時，先自動擲骰：擲到1：本回合免疫所有傷害（戰鬥、毒氣、火箭筒等，飢餓仍需繳交水/糧），且本回合在房間抽取道具時多抽1張；擲到4：本回合移動速度+2；其他點數沒有效果。", passive:true}
+    {name:"吉星高照", desc:"（被動）每輪輪到自己行動時，先自動擲骰：擲到1：本回合免疫所有傷害（戰鬥、毒氣、火箭筒等，飢餓仍需繳交水/糧），且本回合在房間抽取道具時多抽1張；擲到4：本回合移動速度+2，且本回合在房間抽取道具時多抽1張；其他點數沒有效果。", passive:true}
   ]},
   hermit:{name:"隱士", skills:[
     {name:"離群索居", desc:"（被動）房間內只有你1人（無其他玩家、無暗影）時，戰鬥／中毒／飢餓傷害各-1。", passive:true},
@@ -3104,7 +3104,7 @@ function rollLuckyBonus(p){
   log(p.name+"（吉星高照）本回合抽取道具多抽1張！");
   return 1;
 }
-// 幸運兒's start-of-turn roll: 1 = 本回合無敵＋抽取多1張, 4 = 本回合速度+2, anything else = nothing.
+// 幸運兒's start-of-turn roll: 1 = 本回合無敵＋抽取多1張, 4 = 本回合速度+2＋抽取多1張, anything else = nothing.
 function luckyTurnRoll(p){
   if(p.prof!=="lucky" || !p.alive || p.ghost || p.flags.luckyRolledRound===STATE.round) return;
   p.flags.luckyRolledRound=STATE.round;
@@ -3114,7 +3114,8 @@ function luckyTurnRoll(p){
     log(p.name+"（吉星高照）擲骰1：本回合免疫所有傷害（飢餓除外），抽取道具多抽1張！"); speakSkill(p,"lucky:1");
   } else if(roll===4){
     p.stepsLeft=Math.min(10,p.stepsLeft+2); p.roundStartSteps=Math.min(10,p.roundStartSteps+2);
-    log(p.name+"（吉星高照）擲骰4：本回合移動速度+2！");
+    p.flags.luckyDrawBonus=true;
+    log(p.name+"（吉星高照）擲骰4：本回合移動速度+2，抽取道具多抽1張！");
   } else {
     log(p.name+"（吉星高照）擲骰"+roll+"：本回合沒有加成。");
   }
