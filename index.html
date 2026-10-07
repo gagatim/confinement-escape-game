@@ -706,7 +706,7 @@ const PROFESSIONS = {
     {name:"暗影親和", desc:"（被動）成為暗影時，移動速度永久+2。", passive:true}
   ]},
   tamer:{name:"馴獸師", skills:[
-    {name:"巡迴獵犬", desc:"武力與負重永久+1。須在行動結束後才能使用（所在房間無功能可做時不受限）：派遣獵犬到距離5以內有庫存的房間，隨機抽1張道具（不可超過負重）。整局限用4次。", uses:4}
+    {name:"巡迴獵犬", desc:"武力與負重永久+1。須在行動結束後才能使用（所在房間無功能可做時不受限）：指定距離5以內有庫存的房間，派遣獵犬隨機抽1張道具（不可超過負重）；獵犬帶回的道具要到結算階段才能使用。整局限用4次。", uses:4}
   ]},
   merc:{name:"雇傭兵", skills:[
     {name:"武器精通", desc:"（被動）所有武器（刀/雙刀/手槍/霰彈槍）不佔負重；火箭筒不算武器，仍佔負重。", passive:true}
@@ -4370,6 +4370,60 @@ function useSanguoSkill(p,idx){
 }
 // 馴獸師的巡迴獵犬: only after this round's room action is done. A room with no function at all
 // (nothing to act on) or a locked/sealed one doesn't make the player wait for an action that can't happen.
+// 馴獸師的巡迴獵犬: the player names any room within 5 steps that still has stock; the hound draws 1
+// random item type from it. The item is held in flags.houndPending (counted against carry) and only
+// joins the real inventory when this round's settlement begins (see releaseHoundItems), so it can't be used during the action phase.
+function tamerCandidates(p){
+  return Object.keys(ROOMS).filter(r=>{ const d=bfsDist(p.room,r); return d>0 && d<=5 && Object.values(ROOMS[r].stock).some(v=>v>0); });
+}
+function houndPendingCost(p){ return (p.flags.houndPending||[]).filter(it=>itemCostsCarry(p,it)).length; }
+function tamerDispatch(p,target){
+  p.flags.skillUsedThisRound=true; p.flags.tamerUses++; speakSkill(p,"tamer:0");
+  const stockKeys=Object.keys(ROOMS[target].stock).filter(k=>ROOMS[target].stock[k]>0 && canHoldItem(p,k));
+  if(stockKeys.length && carryRoom(p)-houndPendingCost(p)>0){
+    const pick=stockKeys[Math.floor(Math.random()*stockKeys.length)];
+    ROOMS[target].stock[pick]--;
+    p.flags.houndPending=(p.flags.houndPending||[]).concat(pick);
+    log(p.name+" 派遣巡迴獵犬前往「"+target+" "+(ROOMS[target].name||"")+"」，帶回: "+ITEMS[pick].name+"（結算階段才能使用）。");
+  } else { log(p.name+" 派遣巡迴獵犬前往「"+target+"」，但無法獲得道具。"); }
+}
+function openTamerModal(p,cands){
+  const opts=cands.map(r=>`<option value="${r}">${r} ${ROOMS[r].name||""}（距離${bfsDist(p.room,r)}）</option>`).join("");
+  openModal(`<h3>巡迴獵犬：指定距離5以內的房間</h3><div class="muted" style="font-size:12px;margin-bottom:6px">獵犬隨機抽1張，帶回的道具要到結算階段才能使用。</div><select id="tamerSel">${opts}</select><br><br>
+    <button class="btn small warn" id="tamerOk">派遣</button> <button class="btn small ghost" id="tamerCancel">取消</button>`);
+  document.getElementById("tamerOk").onclick=()=>{
+    const target=document.getElementById("tamerSel").value;
+    closeModal(); tamerDispatch(p,target); renderAll();
+  };
+  bindModalClose("tamerCancel");
+}
+// Called at the very start of settlement: the hound's haul joins the backpack, and — since declaring is
+// an action-phase thing — any water/food/pill the tamer still needs this round is declared automatically.
+function releaseHoundItems(){
+  STATE.players.forEach(p=>{
+    const held=p.flags.houndPending;
+    if(!held || !held.length) return;
+    p.flags.houndPending=[];
+    if(!p.alive || p.ghost) return;
+    p.inv.push(...held);
+    log(p.name+"（巡迴獵犬）帶回的道具進入背包，可於結算階段使用："+held.map(i=>ITEMS[i].name).join("、")+"。");
+    const uses=p.flags.pendingItemUses=p.flags.pendingItemUses||[];
+    const declare=it=>{ if(removeItem(p,it)){ uses.push(it); log(p.name+" 結算階段使用獵犬帶回的「"+ITEMS[it].name+"」。"); return true; } return false; };
+    const needRation = STATE.round>=2 && !p.flags.dietThisRound && p.room!=="B204";
+    if(needRation && held.some(isRationItem)){
+      const paid=k=>uses.includes(k)||uses.includes("waterfood");
+      if(p.prof==="chef"){ if(!paid("water")&&!paid("food")){ if(!declare("waterfood")&&!declare("water")) declare("food"); } }
+      else {
+        if(!uses.includes("waterfood")){
+          if(!paid("water") && held.includes("water")) declare("water");
+          if(!paid("food") && held.includes("food")) declare("food");
+          if(!paid("water") && !paid("food") && held.includes("waterfood")) declare("waterfood");
+        }
+      }
+    }
+    if(held.includes("pill") && p.hp<p.maxhp && !uses.includes("pill")) declare("pill");
+  });
+}
 function tamerReady(p){
   const room=ROOMS[p.room];
   const noAction = !room || (!room.special && !(room.draw>0)) || p.flags.roomLocked;
@@ -4462,18 +4516,15 @@ function useProfSkill(p,idx){
   } else if(p.prof==="tamer" && idx===0){
     if(skillUseCapReached(p,"tamer:0")){ flashMsg("已用完4次"); return; }
     if(!tamerReady(p)){ flashMsg("巡迴獵犬必須在做完房間行動後才能使用。"); return; }
-    p.flags.skillUsedThisRound=true; speakSkill(p,"tamer:0");
-    const cands=Object.keys(ROOMS).filter(r=> bfsDist(p.room,r)<=5 && bfsDist(p.room,r)>0 && (Object.values(ROOMS[r].stock).some(v=>v>0)||r==="202"));
-    if(cands.length===0){ log(p.name+" 派遣巡迴獵犬：附近沒有可搜索的庫存房間，無功而返。"); p.flags.tamerUses++; return; }
-    const target=cands[Math.floor(Math.random()*cands.length)];
-    p.flags.tamerUses++;
-    if(target==="202"){ log(p.name+" 派遣巡迴獵犬前往停機坪。"); return; }
-    const stockKeys=Object.keys(ROOMS[target].stock).filter(k=>ROOMS[target].stock[k]>0);
-    if(stockKeys.length && carryRoom(p)>0){
-      const pick=stockKeys[Math.floor(Math.random()*stockKeys.length)];
-      ROOMS[target].stock[pick]--; p.inv.push(pick);
-      log(p.name+" 派遣巡迴獵犬前往「"+target+"」，獲得: "+ITEMS[pick].name);
-    } else { log(p.name+" 派遣巡迴獵犬前往「"+target+"」，但無法獲得道具。"); }
+    const cands=tamerCandidates(p);
+    if(cands.length===0){ flashMsg("距離5以內沒有尚有庫存的房間。"); return; }
+    if(p.isAI){
+      // AI picks at random among the in-range stocked rooms, favouring ones that hold water/food/medicine.
+      const good=cands.filter(r=>["water","food","pill","adrenaline"].some(k=>ROOMS[r].stock[k]>0));
+      const pool=good.length?good:cands;
+      tamerDispatch(p,pool[Math.floor(Math.random()*pool.length)]);
+    } else openTamerModal(p,cands);
+    return;
   } else if(p.prof==="geneFreak" && idx===1){
     if(skillUseCapReached(p,"geneFreak:1")){ flashMsg("已用完2次"); return; }
     p.flags.geneUses++; p.flags.skillUsedThisRound=true; speakSkill(p,"geneFreak:1");
@@ -4595,7 +4646,7 @@ function useProfSkill(p,idx){
 // nothing. Every OTHER active skill executes immediately on click, which is risky for a
 // limited-use skill (a stray click permanently burns one of only 1-4 charges) — those get a
 // confirm prompt naming the skill and its effect before anything happens.
-const SKILL_OPENS_OWN_MODAL=new Set(["oracle:0","detective:0","chemist:0","hacker:1","geneFreak:1","shopper:1","pickpocket:0","courier:1","mediocre:1","mediocre:2","collector:1","prepper:1","witch:0",
+const SKILL_OPENS_OWN_MODAL=new Set(["tamer:0","oracle:0","detective:0","chemist:0","hacker:1","geneFreak:1","shopper:1","pickpocket:0","courier:1","mediocre:1","mediocre:2","collector:1","prepper:1","witch:0",
   // 三國模式：需要選目標玩家/房間的主動技能，跳過通用確認彈窗，直接進自己的選擇彈窗
   "zhangfei:0","weiyan:0","zhouyu:0","lusu:1","luxun:0","ganning:0","yuanshao:0","zhangjiao:0","zhangjiao:1","zhanghe:0","huanggai:1","huaxiong:0","sunquan:0","caopi:0"]);
 // 技能特效版 fallback: most skills already call speakSkill (which shows the effect), but a few
@@ -5573,6 +5624,7 @@ function killPlayer(p,cause,killerId){
     }
     STATE.bountyTargetId=null;
   }
+  if(p.flags.houndPending && p.flags.houndPending.length){ p.inv.push(...p.flags.houndPending); p.flags.houndPending=[]; } // 獵犬還沒送達的道具也算遺物
   // drop items into mortuary
   const embalmers=STATE.players.filter(x=>x.alive && x.prof==="embalmer");
   const e=embalmers[0];
@@ -5889,6 +5941,7 @@ function settleRound(){
     log(p.name+"（桃園結義）與同勢力隊友「"+sameKingdomHere.filter(x=>x.id!==p.id).map(x=>x.name).join("、")+"」同房，本輪有受傷風險（"+riskTags+"），全員恢復1點生命。","heal");
   });
 
+  releaseHoundItems(); // 馴獸師: 獵犬帶回的道具在結算階段才可使用
   // 1) queued item-card effects (水/糧/腎上腺素 — "結算階段公開使用"；酒與藥片 resolve later, see step 7)
   STATE.players.forEach(p=>{ if(p.alive) resolvePendingItemUses(p); });
 
@@ -6631,6 +6684,11 @@ function renderAll(){
     const hint=document.createElement("div"); hint.className="muted"; hint.style.fontSize="11px"; hint.style.marginTop="6px";
     hint.textContent="（繩索、防毒面具除外，其餘道具須先移動並確定停留在房間後才能使用）";
     invEl.appendChild(hint);
+  }
+  if(p.flags.houndPending && p.flags.houndPending.length){
+    const hp=document.createElement("div"); hp.className="muted mono"; hp.style.fontSize="11px"; hp.style.marginTop="6px";
+    hp.textContent="獵犬帶回（結算階段才可用）: "+p.flags.houndPending.map(i=>ITEMS[i].name).join("、");
+    invEl.appendChild(hp);
   }
   if(p.flags.pendingItemUses && p.flags.pendingItemUses.length){
     const pend=document.createElement("div"); pend.className="muted mono"; pend.style.fontSize="11px"; pend.style.marginTop="6px";
