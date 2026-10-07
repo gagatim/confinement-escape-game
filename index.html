@@ -713,8 +713,8 @@ const PROFESSIONS = {
     {name:"猛烈衝撞", desc:"（被動）使用卸載加速時強制觸發：抵達房間時，房內其他存活玩家各-1血，且該房間公開。", passive:true}
   ]},
   bartender:{name:"飲品師", skills:[
-    {name:"特調精釀", desc:"（被動）你的果汁(酒)不佔負重，並初始擁有酒窖的2張果汁。使用前可剔除四種效果，再隨機抽取。", passive:true},
-    {name:"舉杯共飲", desc:"（被動）道具使用階段，你的果汁可對其他存活玩家使用（同樣可先剔除四種效果）；其他玩家也可把酒交給你，請你代為調製。", passive:true}
+    {name:"特調精釀", desc:"（被動）你的果汁(酒)不佔負重，並初始擁有酒窖的2張果汁。使用前可剔除四種效果（也可以不剔除；要剔除就必須剔除剛好四種），再隨機抽取。", passive:true},
+    {name:"舉杯共飲", desc:"（被動）道具使用階段，你的果汁可對其他存活玩家使用（同樣可先剔除四種效果，也可不剔除）；其他玩家也可把酒交給你，請你代為調製。", passive:true}
   ]},
   chemist:{name:"化學家", skills:[
     {name:"毒性調和", desc:"移動階段可使用，二選一：指定1個已中毒樓層，本輪毒氣傷害-2（最低0）；或本輪毒氣樓層傷害+2。整局限用2次。", uses:2},
@@ -739,7 +739,7 @@ const PROFESSIONS = {
     {name:"巡迴獵犬", desc:"武力與負重永久+1。須在行動結束後才能使用（所在房間無功能可做時不受限）：指定距離5以內有庫存的房間，派遣獵犬隨機抽1張道具（不可超過負重）；獵犬帶回的道具要到結算階段才能使用。整局限用4次。", uses:4}
   ]},
   merc:{name:"雇傭兵", skills:[
-    {name:"武器精通", desc:"（被動）所有武器（刀/雙刀/手槍/霰彈槍）不佔負重；火箭筒不算武器，仍佔負重。", passive:true}
+    {name:"武器精通", desc:"（被動）所有武器（刀/雙刀/手槍/霰彈槍）不佔負重；火箭筒不算武器，仍佔負重。你的刀與手槍效果相同，武力數值不變。", passive:true}
   ]},
   geneFreak:{name:"基因怪人", skills:[
     {name:"先天優勢", desc:"（被動）初始可分配基因點數12點，武力上限5點。", passive:true},
@@ -2234,6 +2234,7 @@ function removeItem(p,item){
 }
 function countItem(p,item){ return p.inv.filter(x=>x===item).length; }
 function hasGun(p){
+  if(p.prof==="merc" && p.inv.includes("knife")) return true; // 雇傭兵的武器精通 2nd sentence: a 刀 works as a 手槍 (power unchanged)
   return p.inv.some(x=>ITEMS[x].gun);
 }
 function combatPower(p){
@@ -3707,7 +3708,7 @@ function openBartenderWineModal(p){
     // 4-outcome exclusion is offered for any target (e.g. keep only 5/6 to bless an ally, or only
     // 1/2 to make it a 50% "丟棄所有道具" attack on a rival).
     document.getElementById("wineExcludeWrap").innerHTML =
-      "<div class='muted' style='font-size:12px;margin-bottom:4px'>"+(isSelf?"你自己的酒":"請對方喝的酒")+"：勾選剛好4種要排除的結果，剩下2種隨機抽取</div>"+
+      "<div class='muted' style='font-size:12px;margin-bottom:4px'>"+(isSelf?"你自己的酒":"請對方喝的酒")+"：要剔除就必須剛好勾選4種（剩下2種隨機抽取）；不勾選任何一項則6種均等隨機</div>"+
       Object.entries(OUTCOME_LABELS).map(([k,label])=>`<label style="display:block;margin:2px 0"><input type="checkbox" class="wineExcl" value="${k}"> ${label}</label>`).join("");
   };
   document.getElementById("wineTargetSel").addEventListener("change",updateExcludeUI);
@@ -3717,7 +3718,7 @@ function openBartenderWineModal(p){
     const isSelf=targetId===p.id;
     let excluded=[];
     excluded=[...document.querySelectorAll(".wineExcl:checked")].map(cb=>+cb.value);
-    if(excluded.length!==4){ flashMsg("請剛好排除4種結果"); return; }
+    if(excluded.length!==0 && excluded.length!==4){ flashMsg("要剔除請剛好排除4種結果，或全部不勾選（不剔除）"); return; }
     if(!removeItem(p,"wine")) return;
     const target=STATE.players.find(x=>x.id===targetId);
     // one queue entry per queued "wine", in the same order, so multiple wines declared by/for the
