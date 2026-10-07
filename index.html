@@ -697,32 +697,32 @@ const PROFESSIONS = {
     {name:"肥宅味", desc:"（被動）所有玩家都知道你所在的房間。", passive:true}
   ]},
   bomb:{name:"橡膠人", skills:[
-    {name:"橡膠身軀", desc:"（被動）槍械傷害永久-4；但你無法持有槍（手槍／霰彈槍）：抽到槍時放回房間，並補抽一張（不可獲得槍）。", passive:true},
-    {name:"彈力緩衝", desc:"（被動）無視火箭筒傷害。", passive:true}
+    {name:"橡膠身軀", desc:"（被動）受到持槍對手的戰鬥傷害時，傷害永久-4；但你無法持有槍（手槍／霰彈槍）：抽到槍時放回房間，並補抽一張（不會抽到槍）。", passive:true},
+    {name:"彈力緩衝", desc:"（被動）不受火箭筒傷害。", passive:true}
   ]},
   gambler:{name:"賭徒", skills:[
     {name:"好賭成性", desc:"須在使用房間功能前發動，擲骰：1-2失敗（本輪無法使用房間功能）、3-4無事、5-6成功（本輪房間功能可用兩次）。整局限用3次。", uses:3},
     {name:"逢賭必贏", desc:"整局限用1次：發動時【好賭成性】必定成功。", uses:1}
   ]},
   scavenger:{name:"拾荒者", skills:[
-    {name:"拾荒嗅覺", desc:"（被動）垃圾不佔負重；在房間抽取物品時，50%機率額外獲得1個垃圾（由垃圾場扣除）。", passive:true},
-    {name:"變廢為寶", desc:"行動階段可使用：將背包內任意數量（自選）的垃圾隨機轉為水或糧。整局限用2次。", uses:2}
+    {name:"拾荒嗅覺", desc:"（被動）垃圾不佔負重；在房間每抽到1件物品，有50%機率額外獲得1個垃圾（由垃圾場庫存扣除）。", passive:true},
+    {name:"變廢為寶", desc:"（主動，整局限用2次）行動階段可使用：選擇背包內任意數量的垃圾，每個隨機轉為1份水或1份糧（需有背包空位）。", uses:2}
   ]},
   trucker:{name:"貨車司機", skills:[
     {name:"卸載加速", desc:"移動階段可使用：丟棄1張非垃圾道具，本輪速度變兩倍（上限10）。整局限用3次。", uses:3},
     {name:"猛烈衝撞", desc:"（被動）使用卸載加速時強制觸發：抵達房間時，房內其他存活玩家各-1血，且該房間公開。", passive:true}
   ]},
   bartender:{name:"飲品師", skills:[
-    {name:"特調精釀", desc:"（被動）你的果汁(酒)不佔負重，並初始擁有酒窖的2張果汁。使用前可剔除四種效果（也可以不剔除；要剔除就必須剔除剛好四種），再隨機抽取。", passive:true},
-    {name:"舉杯共飲", desc:"（被動）道具使用階段，你的果汁可對其他存活玩家使用（同樣可先剔除四種效果，也可不剔除）；其他玩家也可把酒交給你，請你代為調製。", passive:true}
+    {name:"特調精釀", desc:"（被動）你的果汁(酒)不佔負重，開局先拿走酒窖的2瓶。使用酒前可選擇剔除剛好四種結果（也可不剔除），再從剩下的結果中隨機抽取。", passive:true},
+    {name:"舉杯共飲", desc:"（被動）道具使用階段，你可請同房的存活玩家喝你的果汁（同樣可剔除四種結果或不剔除）；其他玩家也可把酒交給你，請你代為調製。", passive:true}
   ]},
   chemist:{name:"化學家", skills:[
     {name:"毒性調和", desc:"移動階段可使用，二選一：指定1個已中毒樓層，本輪毒氣傷害-2（最低0）；或本輪毒氣樓層傷害+2。整局限用2次。", uses:2},
     {name:"抗毒", desc:"（被動）受到的毒氣傷害永久-1。", passive:true}
   ]},
   embalmer:{name:"入殮師", skills:[
-    {name:"蠱耗感應", desc:"（被動）每當有玩家變成暗影，你的負重永久+1。每位玩家死亡，其道具放入停屍間前，你都可隨機取走1張（不限每輪次數）；同一輪多人死亡，就從每位死者身上各取1張，負重也各+1。", passive:true},
-    {name:"亡者遺贈", desc:"整局限用1次：道具放入停屍間前，可放棄隨機取得，改為自行指定1張。", uses:1}
+    {name:"蠱耗感應", desc:"（被動）每當有玩家死亡變成暗影，你的負重永久+1，並在其道具放入停屍間前，隨機取走其中1張（不限每輪次數）。同一輪多人死亡時逐一處理：每位死者各取1張、負重各+1。", passive:true},
+    {name:"亡者遺贈", desc:"（主動，整局限用1次）有道具的死者，在其道具放入停屍間前，可以啟動，隨機取得道具改為自行選擇一張。", uses:1}
   ]},
   hacker:{name:"黑客", skills:[
     {name:"系統監控", desc:"（被動）可查看任意1個房間目前的人數與各玩家武力值（不含是否持槍）。", passive:true},
@@ -736,24 +736,24 @@ const PROFESSIONS = {
     {name:"暗影親和", desc:"（被動）成為暗影時，移動速度永久+2。", passive:true}
   ]},
   tamer:{name:"馴獸師", skills:[
-    {name:"巡迴獵犬", desc:"武力與負重永久+1。須在行動結束後才能使用（所在房間無功能可做時不受限）：指定距離5以內有庫存的房間，派遣獵犬隨機抽1張道具（不可超過負重）；獵犬帶回的道具要到結算階段才能使用。整局限用4次。", uses:4}
+    {name:"巡迴獵犬", desc:"武力與負重永久+1。（主動，整局限用4次）須在房間行動結束後才能使用（所在房間無功能可用時不受限）：指定距離5步以內、尚有庫存的房間，派遣獵犬隨機抽取1張道具（不可超過負重）。獵犬帶回的道具要到結算階段才能使用。", uses:4}
   ]},
   merc:{name:"雇傭兵", skills:[
     {name:"武器精通", desc:"（被動）所有武器（刀/雙刀/手槍/霰彈槍）不佔負重；火箭筒不算武器，仍佔負重。你的刀與手槍效果相同，武力數值不變。", passive:true}
   ]},
   geneFreak:{name:"基因怪人", skills:[
-    {name:"先天優勢", desc:"（被動）初始可分配基因點數12點，武力上限5點。", passive:true},
-    {name:"基因重組", desc:"技能使用階段可重新分配點數。整局限用2次。", uses:2}
+    {name:"先天優勢", desc:"（被動）開局可分配12點基因點數（一般玩家10點），武力上限5點。", passive:true},
+    {name:"基因重組", desc:"（主動，整局限用2次）技能使用階段可重新分配目前的全部點數（武力上限5點）。", uses:2}
   ]},
   outsider:{name:"邊緣人", skills:[
     {name:"邊緣存在感", desc:"（被動）所在房間存活玩家3人以上時：你不參與戰鬥結算（火箭筒傷害仍有效），並自動恢復1點生命（固定）。", passive:true}
   ]},
   climber:{name:"攀岩者", skills:[
-    {name:"垂直攀爬", desc:"發動後，本回合可直接上下移動樓層（仍消耗步數）。", uses:99},
-    {name:"節食", desc:"整局限用1次：本回合不需支付水/糧。", uses:1}
+    {name:"垂直攀爬", desc:"（主動）發動後，本回合可直接移動到正上方或正下方一層、位置重疊的房間，每次消耗1步；與節食同一輪只能擇一發動。", uses:99},
+    {name:"節食", desc:"（主動，整局限用1次）本回合不需支付水與糧。", uses:1}
   ]},
   engineer:{name:"工程師", skills:[
-    {name:"回收裝置A", desc:"（被動）不需持有循環回收裝置卡，每輪可直接使用1次回收功能，從棄牌堆取得1張道具。", passive:true}
+    {name:"回收裝置A", desc:"（被動）不需持有循環回收裝置卡，每輪可直接使用1次回收功能：從棄牌堆隨機取得1張道具（需有背包空位；垃圾不會被回收）。", passive:true}
   ]},
   medic:{name:"醫官", skills:[
     {name:"醫者仁心", desc:"（被動）手術室原本需恰好2人在場才會治療；你1人在場即可觸發，結算時恢復4點生命。", passive:true},
@@ -781,8 +781,8 @@ const PROFESSIONS = {
     {name:"野戰急救", desc:"整局限用2次：本回合毒氣傷害-1。", uses:2}
   ]},
   shopper:{name:"購物大媽", skills:[
-    {name:"精挑細選", desc:"（被動）抽取道具時多看1張，選1張放回房間（實際獲得數量不變）。", passive:true},
-    {name:"跳樓大拍賣", desc:"可消耗1步直接跳到下一層樓（只能往下）。整局限用3次，用完後速度永久-2。", uses:3}
+    {name:"精挑細選", desc:"（被動）搜索抽取道具時多抽1張，再自選1張放回房間；實際獲得的數量不變。", passive:true},
+    {name:"跳樓大拍賣", desc:"（主動，整局限用3次）消耗1步，直接跳到下一層樓的任一房間（只能往下，須在確定停留前使用）；用完第3次後，速度永久-2。", uses:3}
   ]},
   runner:{name:"馬拉松跑者", skills:[
     {name:"耐力訓練", desc:"（被動）若本輪步數剛好用完，且回合結束時身處功能房間，結算時恢復1點生命。", passive:true},
@@ -824,9 +824,9 @@ const PROFESSIONS = {
     {name:"埋伏", desc:"整局限用2次：可不移動直接使用房間功能；武力永久+1，同房間其他玩家各-2血。", uses:2}
   ]},
   mediocre:{name:"庸才", skills:[
-    {name:"脆弱體質", desc:"（被動）被火箭筒擊中時，最終傷害+1。", passive:true},
-    {name:"斷尾求生", desc:"整局限用3次：丟棄背包中1張道具，恢復2點生命。", uses:3},
-    {name:"以命換命", desc:"行動階段可使用：花1點生命，二選一：本輪負重+1，或本輪多1次抽卡機會（僅限本輪）。", uses:99}
+    {name:"脆弱體質", desc:"（被動）被火箭筒擊中時，傷害+1（共5點）。", passive:true},
+    {name:"斷尾求生", desc:"（主動，整局限用3次）丟棄背包中1張道具，立即恢復2點生命（不超過上限）。", uses:3},
+    {name:"以命換命", desc:"（主動）行動階段可使用（生命需大於1）：花1點生命，二選一：本輪負重+1，或本輪搜索時多抽1張（僅限本輪）。", uses:99}
   ]},
   boss:{name:"黑社會老大", skills:[
     {name:"一呼百應", desc:"（被動）遊戲開始時指定3名其他玩家為小弟（A／B／C），三人武力永久+1。", passive:true},
@@ -837,20 +837,20 @@ const PROFESSIONS = {
     {name:"以物易物", desc:"整局限用2次：查看任意1名玩家的完整背包，以你背包中任意2張道具，強制換取對方1張指定道具（不需同房，無視對方意願）。", uses:2}
   ]},
   butcher:{name:"屠夫", skills:[
-    {name:"屠宰專精", desc:"（被動）手持刀時，武力額外+2；刀不佔負重。", passive:true},
-    {name:"鮮血盛宴", desc:"（被動）擊殺其他玩家後，恢復2點生命。", passive:true}
+    {name:"屠宰專精", desc:"（被動）背包內有刀時，武力額外+2（只加一次）；刀不佔負重。", passive:true},
+    {name:"鮮血盛宴", desc:"（被動）在戰鬥中擊殺其他玩家後，恢復2點生命。", passive:true}
   ]},
   exorcist:{name:"還魂師", skills:[
-    {name:"臨終祝禱", desc:"（被動）死亡成為暗影時，吸血所需總量降為1點即可復活（整局可發動兩次，復活後血量為3）。", passive:true},
-    {name:"安魂儀式", desc:"（被動）復活後速度永久+1。", passive:true}
+    {name:"臨終祝禱", desc:"（被動）死亡變成暗影後，只要吸取1點生命就能復活（一般暗影需2點）；整局可發動兩次，復活後生命為3。", passive:true},
+    {name:"安魂儀式", desc:"（被動）每次復活後，速度永久+1。", passive:true}
   ]},
   guardian:{name:"守護者", skills:[
     {name:"庇護結界", desc:"（被動）所處房間內所有戰鬥傷害-1（含你與同房間所有人）。", passive:true},
     {name:"絕對防禦", desc:"整局限用1次：本回合可選擇不移動，自身無視戰鬥、毒氣、火箭筒等任何傷害，且可直接使用房間功能；飢餓仍需繳交水/糧。", uses:1}
   ]},
   lucky:{name:"幸運兒", skills:[
-    {name:"吉星高照", desc:"（被動）每輪輪到自己行動時，先自動擲骰：擲到1：本回合免疫所有傷害（戰鬥、毒氣、火箭筒等；飢餓仍需繳交水/糧，暗影吸血也擋不住），且本回合在房間抽取道具時多抽1張；擲到4：本回合可以多移動兩步，且本回合在房間抽取道具時多抽1張；擲到6：立即恢復2點生命（不超過上限）；擲到2可重擲（見幸運重擲）；擲到3、5沒有效果。", passive:true},
-    {name:"幸運重擲", desc:"（被動）吉星高照的骰子擲到2時，可以重擲，次數不限，以最後一次的結果為準。", passive:true}
+    {name:"吉星高照", desc:"（被動）每輪輪到自己行動時，先自動擲骰：擲到1：本回合免疫所有傷害（戰鬥、毒氣、火箭筒等；飢餓與暗影吸血除外），且房間搜索多抽1張；擲到4：本回合可多移動兩步，且房間搜索多抽1張；擲到6：立即恢復2點生命（不超過上限）；擲到2：重擲（見幸運重擲）；擲到3、5：沒有效果。", passive:true},
+    {name:"幸運重擲", desc:"（被動）吉星高照擲到2時，可以重擲，次數不限，以最後一次的結果為準。", passive:true}
   ]},
   hermit:{name:"隱士", skills:[
     {name:"離群索居", desc:"（被動）房間內只有你1人（無其他玩家、無暗影）時，戰鬥／中毒／飢餓傷害各-1。", passive:true},
@@ -874,15 +874,15 @@ const PROFESSIONS = {
     {name:"毒氣適應", desc:"（被動）自身受到的毒氣傷害永遠-1（最低0）。", passive:true}
   ]},
   detective:{name:"私家偵探", skills:[
-    {name:"情報位移", desc:"行動階段可放棄移動，指定1名行動順序比你靠前的存活玩家：你直接移動到其所在的房間（不花步數、無法事先得知），並可執行該房間的行動。整局限用3次，同一名玩家最多被跟蹤1次。", uses:3}
+    {name:"情報位移", desc:"（主動，整局限用3次）移動前使用，放棄本輪移動：指定1名行動順序比你靠前的存活玩家，你直接移動到他所在的房間（不花步數，事先無法得知他在哪），並可執行該房間的行動。同一名玩家最多被跟蹤1次。", uses:3}
   ]},
   arsonist:{name:"縱火犯", skills:[
     {name:"點火", desc:"（被動）結算時，若你所在房間（含你）有3名以上存活玩家，房內其他玩家各-1血，你恢復1點生命。", passive:true},
     {name:"火場老手", desc:"（被動）你所在房間（含你）有3名以上存活玩家時，你受到的戰鬥傷害-3。", passive:true}
   ]},
   vampire:{name:"吸血鬼", skills:[
-    {name:"吸血", desc:"（被動）戰鬥中對其他玩家造成傷害時，恢復傷害值一半（無條件捨去）的生命，每輪最多2點。", passive:true},
-    {name:"畏光", desc:"（被動）結算時若停留在頂樓房間（基因庫／停機坪），生命-2。", passive:true}
+    {name:"吸血", desc:"（被動）戰鬥中對其他玩家造成傷害時，回復該傷害一半（捨去小數）的生命；每輪最多回復2點。", passive:true},
+    {name:"畏光", desc:"（被動）結算時若停留在頂樓房間（基因庫、停機坪），生命-2。", passive:true}
   ]},
   assassin:{name:"刺客", skills:[
     {name:"背刺", desc:"（被動）結算時，若你所在房間只有你和另1名存活玩家，直接對他造成2點傷害（不比武力、不受反擊），無次數限制。", passive:true},
@@ -4595,11 +4595,6 @@ function useProfSkill(p,idx){
     if(skillUseCapReached(p,"climber:1")){ flashMsg("已用完"); return; }
     p.flags.climberDietUsed=true; p.flags.dietThisRound=true; p.flags.skillUsedThisRound=true;
     log(p.name+" 使用節食：本輪不需支付水/糧。"); speakSkill(p,"climber:1");
-  } else if(p.prof==="embalmer" && idx===1){
-    if(skillUseCapReached(p,"embalmer:1")){ flashMsg("已用完"); return; }
-    p.flags.embalmerUses++; p.flags.skillUsedThisRound=true;
-    p.flags.embalmerChoiceMode=true;
-    log(p.name+" 啟用亡者遺贈：下次道具進入停屍間時可自行選擇。"); speakSkill(p,"embalmer:1");
   } else if(p.prof==="survivor" && idx===1){
     if(skillUseCapReached(p,"survivor:1")){ flashMsg("已用完2次"); return; }
     p.flags.survivorFirstAidUses++; p.flags.skillUsedThisRound=true;
@@ -5215,7 +5210,7 @@ function aiConsiderSkillAfterMove(p){
     return;
   }
   if(p.prof==="tamer"){ if(!skillUseCapReached(p,"tamer:0")) useProfSkill(p,0); return; }
-  if(p.prof==="embalmer"){ if(!skillUseCapReached(p,"embalmer:1")) useProfSkill(p,1); return; }
+  if(p.prof==="embalmer") return; // 亡者遺贈 is decided at the moment of a death (see killPlayer), not as a normal-turn skill
   if(p.prof==="survivor"){
     // 野戰急救: only worth a limited charge when actually standing in a poisoned room this round.
     if(!skillUseCapReached(p,"survivor:1") && roomIsPoisoned(ROOMS[p.room])) useProfSkill(p,1);
@@ -5693,7 +5688,9 @@ function killPlayer(p,cause,killerId){
   // item still lands in B701 as normal, and instead of auto-taking whichever one happens to come
   // first in iteration order, the embalmer gets a real pick (via STATE.pendingEmbalmerChoice,
   // resolved in openEmbalmerChoiceModal right after this round's summary) from exactly this batch.
-  const choiceMode = e && e.flags.embalmerChoiceMode;
+  // 亡者遺贈 is decided at the moment of death: while the embalmer still has the use left and the dead
+  // player carries items, the random pickup is held back and the embalmer picks (or declines) afterwards.
+  const choiceMode = !!(e && !skillUseCapReached(e,"embalmer:1") && p.inv.length>0);
   const droppedForChoice=[];
   // 蠱耗感應's +1 carry lands first (the skill's own order: the death grants carry, THEN the
   // pickup is offered), so a full backpack doesn't make the embalmer miss the very slot this
@@ -5715,27 +5712,29 @@ function killPlayer(p,cause,killerId){
     }
     ROOMS["B701"].stock[it]=(ROOMS["B701"].stock[it]||0)+1;
   });
-  // Only consumed once an actual item was there to choose from — a death with an empty inventory
-  // leaves the charge armed for a later death, matching "下次道具進入停屍間時" literally.
   if(choiceMode && droppedForChoice.length){
-    e.flags.embalmerChoiceMode=false;
+    const priority=(it)=>(ITEMS[it].weapon?0:(it==="pill"||it==="adrenaline")?1:(it==="water"||it==="food")?2:3);
     if(e.isAI){
-      // An AI embalmer has no human sitting at a picker menu — resolve it immediately with the
-      // same value heuristic other AI item-keeping decisions use (weapon > medical > ration > rest),
-      // instead of queuing STATE.pendingEmbalmerChoice, which would otherwise hand the interactive
-      // picker modal to the HUMAN player to operate on the AI's behalf.
-      const priority=(it)=>(ITEMS[it].weapon?0:(it==="pill"||it==="adrenaline")?1:(it==="water"||it==="food")?2:3);
+      // An AI embalmer decides on the spot: spend 亡者遺贈 only for a weapon or medicine, otherwise it
+      // just takes the ordinary random pickup.
       let bestIdx=0;
       droppedForChoice.forEach((it,i)=>{ if(priority(it)<priority(droppedForChoice[bestIdx])) bestIdx=i; });
-      const chosen=droppedForChoice[bestIdx];
-      if(!itemCostsCarry(e,chosen) || carryRoom(e)>0){
+      let chosen=null, special=false;
+      if(priority(droppedForChoice[bestIdx])<=1){ chosen=droppedForChoice[bestIdx]; special=true; }
+      else {
+        const ok=droppedForChoice.filter(it=>!(itemCostsCarry(e,it) && carryRoom(e)<=0));
+        if(ok.length) chosen=ok[Math.floor(Math.random()*ok.length)];
+      }
+      if(chosen && (!itemCostsCarry(e,chosen) || carryRoom(e)>0)){
         ROOMS["B701"].stock[chosen]=Math.max(0,(ROOMS["B701"].stock[chosen]||0)-1);
         e.inv.push(chosen);
-        log(e.name+"（亡者遺贈）從 "+p.name+" 的遺物中選擇了「"+ITEMS[chosen].name+"」。");
+        if(special) e.flags.embalmerUses++;
+        log(e.name+(special?"（亡者遺贈）從 "+p.name+" 的遺物中選擇了「":" 蠱耗感應獲得: 「")+ITEMS[chosen].name+"」。");
       }
     } else {
-      STATE.pendingEmbalmerChoice={embalmerId:e.id, items:droppedForChoice, fromName:p.name};
-      log(e.name+"（亡者遺贈）"+p.name+" 的遺物已送入停屍間，結算後可自行挑選1張。");
+      STATE.pendingEmbalmerChoice=STATE.pendingEmbalmerChoice||[];
+      STATE.pendingEmbalmerChoice.push({embalmerId:e.id, items:droppedForChoice, fromName:p.name});
+      log(e.name+"（蠱耗感應）"+p.name+" 的遺物已送入停屍間，結算後可決定是否啟動亡者遺贈（自選1張），或隨機取得1張。");
     }
   }
   p.inv=[];
@@ -6402,7 +6401,7 @@ function showRoundSummary(){
     // 入殮師的亡者遺贈: a pending pick takes priority over advancing the round — the player
     // must choose their 1 item from THIS specific death's drops before settlement's other
     // consequences (next round's setup, or game end) proceed.
-    if(STATE.pendingEmbalmerChoice){ openEmbalmerChoiceModal(); return; }
+    if(STATE.pendingEmbalmerChoice && STATE.pendingEmbalmerChoice.length){ openEmbalmerChoiceModal(); return; }
     advanceAfterRoundSummary();
   };
 }
@@ -6465,39 +6464,48 @@ function advanceAfterRoundSummary(){
       });
       logRound(STATE.round); beginRound(); }
 }
-// 入殮師的亡者遺贈: STATE.pendingEmbalmerChoice is set by killPlayer the moment a death (with at
-// least 1 item to drop) happens while embalmerChoiceMode is armed — every dropped item still
+// 入殮師的亡者遺贈: STATE.pendingEmbalmerChoice (a queue) is filled by killPlayer the moment a death (with at
+// least 1 item to drop) happens while the embalmer still has the use left — every dropped item still
 // lands in B701's shared stock as normal, this just lets the embalmer immediately pull exactly
 // ONE of THOSE specific items back out for free before the round is allowed to advance, instead
 // of leaving it to 蠱耗感應's usual random luck.
 function openEmbalmerChoiceModal(){
-  const choice=STATE.pendingEmbalmerChoice;
+  const queue=STATE.pendingEmbalmerChoice||[];
+  const choice=queue[0];
+  const next=()=>{ queue.shift(); closeModal(); if(queue.length) openEmbalmerChoiceModal(); else { STATE.pendingEmbalmerChoice=null; advanceAfterRoundSummary(); } };
+  if(!choice){ STATE.pendingEmbalmerChoice=null; advanceAfterRoundSummary(); return; }
   const e=STATE.players.find(x=>x.id===choice.embalmerId);
-  if(!e || !e.alive){ STATE.pendingEmbalmerChoice=null; advanceAfterRoundSummary(); return; }
-  const opts=choice.items.map((it,i)=>`<option value="${i}">${ITEMS[it].name}</option>`).join("");
-  openModal(`<h3>亡者遺贈：從 ${choice.fromName} 的遺物中自行挑選1張</h3>
-    <select id="embalmerChoiceSel">${opts}</select><br><br>
-    <button class="btn small warn" id="embalmerChoiceOk">拿取</button>
-    <button class="btn small ghost" id="embalmerChoiceSkip">不拿，直接繼續</button>`);
-  const finish=()=>{ STATE.pendingEmbalmerChoice=null; closeModal(); advanceAfterRoundSummary(); };
-  document.getElementById("embalmerChoiceOk").onclick=()=>{
-    const idx=+document.getElementById("embalmerChoiceSel").value;
-    const item=choice.items[idx];
+  const takeItem=(item,special)=>{
     const room=ROOMS["B701"];
     if((room.stock[item]||0)>0) room.stock[item]--; // pull it back out of the shared mortuary stock
-    log(e.name+"（亡者遺贈）從 "+choice.fromName+" 的遺物中選擇了「"+ITEMS[item].name+"」。","heal");
+    if(special) e.flags.embalmerUses++;
+    log(e.name+(special?"（亡者遺贈）從 "+choice.fromName+" 的遺物中選擇了「":" 蠱耗感應從 "+choice.fromName+" 的遺物取得「")+ITEMS[item].name+"」。","heal");
     if(itemCostsCarry(e,item) && carryRoom(e)<=0){
-      STATE.pendingEmbalmerChoice=null; closeModal();
+      queue.shift(); closeModal();
       openDrawSelectionModal(e,[item],e.room);
-      // openDrawSelectionModal resolves on its own confirm button, so advance from there instead.
+      // openDrawSelectionModal resolves on its own confirm button, so continue from there instead.
       const origConfirm=document.getElementById("drawConfirm").onclick;
-      document.getElementById("drawConfirm").onclick=()=>{ origConfirm(); advanceAfterRoundSummary(); };
+      document.getElementById("drawConfirm").onclick=()=>{ origConfirm(); if(queue.length) openEmbalmerChoiceModal(); else { STATE.pendingEmbalmerChoice=null; advanceAfterRoundSummary(); } };
       return;
     }
     e.inv.push(item);
-    finish();
+    next();
   };
-  document.getElementById("embalmerChoiceSkip").onclick=finish;
+  const randomPick=()=>{
+    const ok=choice.items.filter(it=>!(itemCostsCarry(e,it) && carryRoom(e)<=0));
+    if(!ok.length){ log(e.name+" 的背包放不下，沒有取得任何遺物。"); next(); return; }
+    takeItem(ok[Math.floor(Math.random()*ok.length)],false);
+  };
+  if(!e || !e.alive){ next(); return; }
+  if(skillUseCapReached(e,"embalmer:1")){ randomPick(); return; } // 亡者遺贈 already spent earlier this round
+  const opts=choice.items.map((it,i)=>`<option value="${i}">${ITEMS[it].name}</option>`).join("");
+  openModal(`<h3>${choice.fromName} 的遺物：是否啟動亡者遺贈？</h3>
+    <div class="muted" style="font-size:12px;margin-bottom:6px">啟動（整局限1次）：自行選擇其中1張；不啟動：改為隨機取得1張。</div>
+    <select id="embalmerChoiceSel">${opts}</select><br><br>
+    <button class="btn small warn" id="embalmerChoiceOk">啟動亡者遺贈，拿取所選</button>
+    <button class="btn small ghost" id="embalmerChoiceSkip">不啟動，隨機取得1張</button>`);
+  document.getElementById("embalmerChoiceOk").onclick=()=>{ takeItem(choice.items[+document.getElementById("embalmerChoiceSel").value],true); };
+  document.getElementById("embalmerChoiceSkip").onclick=()=>{ randomPick(); };
 }
 function endGame(){
   STATE.gameOver=true;
@@ -6735,6 +6743,8 @@ function renderAll(){
       // 系統監控 is a "permanent passive" in name, but it's an on-demand lookup, not something
       // that resolves itself — give it a real query button instead of disabling it like other passives.
       btn.onclick=()=>openHackerMonitorModal(p);
+    } else if(p.prof==="embalmer" && idx===1){
+      btn.disabled=true; btn.title="有玩家死亡、其道具放入停屍間前，系統會詢問是否啟動";
     } else if(p.prof==="engineer" && idx===0){
       // 回收裝置A is likewise a "passive" that still needs a click to trigger, same pattern as
       // 系統監控 above — it's not gated by the once-a-round skillUsedThisRound budget, but by its
