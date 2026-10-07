@@ -842,14 +842,14 @@ const PROFESSIONS = {
   ]},
   exorcist:{name:"還魂師", skills:[
     {name:"臨終祝禱", desc:"（被動）死亡成為暗影時，吸血所需總量降為1點即可復活（整局可發動兩次，復活後血量為3）。", passive:true},
-    {name:"安魂儀式", desc:"（被動）死亡瞬間自動發動：立刻復活並恢復至5血，復活後速度永久+1。整局限用1次，第6輪（最後一輪）死亡不觸發。", passive:true}
+    {name:"安魂儀式", desc:"（被動）復活後速度永久+1。", passive:true}
   ]},
   guardian:{name:"守護者", skills:[
     {name:"庇護結界", desc:"（被動）所處房間內所有戰鬥傷害-1（含你與同房間所有人）。", passive:true},
     {name:"絕對防禦", desc:"整局限用1次：本回合可選擇不移動，自身無視戰鬥、毒氣、火箭筒等任何傷害，且可直接使用房間功能；飢餓仍需繳交水/糧。", uses:1}
   ]},
   lucky:{name:"幸運兒", skills:[
-    {name:"吉星高照", desc:"（被動）每輪輪到自己行動時，先自動擲骰：擲到1：本回合免疫所有傷害（戰鬥、毒氣、火箭筒等，飢餓仍需繳交水/糧），且本回合在房間抽取道具時多抽1張；擲到4：本回合可以多移動兩步，且本回合在房間抽取道具時多抽1張；擲到6：立即恢復2點生命（不超過上限）；擲到2可重擲（見幸運重擲）；擲到3、5沒有效果。", passive:true},
+    {name:"吉星高照", desc:"（被動）每輪輪到自己行動時，先自動擲骰：擲到1：本回合免疫所有傷害（戰鬥、毒氣、火箭筒等；飢餓仍需繳交水/糧，暗影吸血也擋不住），且本回合在房間抽取道具時多抽1張；擲到4：本回合可以多移動兩步，且本回合在房間抽取道具時多抽1張；擲到6：立即恢復2點生命（不超過上限）；擲到2可重擲（見幸運重擲）；擲到3、5沒有效果。", passive:true},
     {name:"幸運重擲", desc:"（被動）吉星高照的骰子擲到2時，可以重擲，次數不限，以最後一次的結果為準。", passive:true}
   ]},
   hermit:{name:"隱士", skills:[
@@ -2421,8 +2421,20 @@ function renderBossGrid(){
   };
 }
 /* ---------- spawn point selection (紅色出生點) ---------- */
+// AI 選出生點: each profession has a few "target rooms" it wants to reach early (weapon room for the
+// fighters, 酒窖 for 飲品師, 垃圾場 for the trash users, water/food rooms for everyone else). A spawn is
+// scored by how close it is to those targets (plus the old generic "near any stocked room" term), then
+// divided down for every player already sitting on it — a shared spawn means a fight before round 1.
+const SPAWN_GOALS={
+  merc:{B107:1.6,B501:.6}, butcher:{B107:1.6,B501:.6}, vampire:{B107:1.4,B501:.5}, bomb:{B107:1.2,B501:.4}, shopper:{B107:1,B501:1,B301:.6},
+  bartender:{B601:3,B501:.6}, scavenger:{B503:2,B505:.4}, mediocre:{B503:1.4,B505:.4,101:.4},
+  tamer:{B505:.7,101:.7,B501:.7,B301:.5}, exorcist:{B701:.8,B505:.6,B501:.6}, embalmer:{B701:.8,B505:.6,101:.5},
+  geneFreak:{201:1.4,101:.6,B505:.4}, engineer:{101:1,B505:1,B501:.7}, climber:{101:.8,B505:.8,B501:.8,B202:.5},
+  detective:{101:.8,B505:.8,B501:.8}, lucky:{101:.8,B505:.8,B501:.8,B107:.4}
+};
 function chooseAISpawn(p){
-  // weighted random: rooms closer to rooms with starting stock score higher, plus a flat random component
+  const goals=SPAWN_GOALS[p.prof]||{};
+  const taken={}; STATE.players.forEach(x=>{ if(x.id!==p.id && x.spawnRoom) taken[x.spawnRoom]=(taken[x.spawnRoom]||0)+1; });
   const weights=SPAWN_ROOMS.map(r=>{
     let w=1.5;
     Object.values(ROOMS).forEach(room=>{
@@ -2431,7 +2443,10 @@ function chooseAISpawn(p){
         if(d!==Infinity) w+=3/(1+d);
       }
     });
-    return w;
+    let goal=0;
+    Object.entries(goals).forEach(([room,wt])=>{ const d=bfsDist(r,room); if(d!==Infinity) goal+=wt*6/(1+d); });
+    w=(w*0.5+goal*7)/(1+0.7*(taken[r]||0));
+    return w*w*w; // sharpen: clearly better spawns are picked much more often, but not always
   });
   const total=weights.reduce((a,b)=>a+b,0);
   let roll=Math.random()*total;
@@ -5729,31 +5744,11 @@ function killPlayer(p,cause,killerId){
   // shade immunity/heal handled separately in ghost-drain resolution; 暗影親和 speed+2 below
   if(p.prof==="shade"){ p.speed+=2; log(p.name+"（暗影親和）成為暗影，移動速度永久+2（現為 "+p.speed+"）。"); }
   p.flags.ghostSpeed=baseSpeed(p); // 暗影每輪的移動步數＝死前的移動速度，不含腎上腺素（baseSpeed 已扣除）
-  // 還魂師的安魂儀式: auto-fires the instant they die, once per game — excluded on round 6 (the
-  // last round) for the same reason the old manually-targeted version was: a revival that can
-  // never again be put at risk before the game ends would be a free ranking boost, since
-  // renderEndScreen sorts purely by final hp (then power).
-  if(p.prof==="exorcist" && !p.flags.exorcistRiteUsed){
-    if(STATE.round<6) exorcistAutoRevive(p);
-    else log(p.name+"（安魂儀式）第6輪死亡不會觸發，維持暗影狀態。");
-  }
 }
 // 還魂師的臨終祝禱: only ever lowers the THREATENED player's own revival bar (their prof at the
 // moment they died), not whoever's asking — used both by the drain-settlement check and the
 // live progress bar/skill-list text, so all three stay in sync automatically.
 function ghostDrainNeeded(p){ return (p.prof==="exorcist" && (p.flags.exorcistGhostUses||0)<2) ? 1 : 2; }
-// 還魂師的安魂儀式: a death-triggered auto-passive, called from killPlayer below — the exorcist
-// always revives only THEMSELVES, the instant they die, once per game. No renderAll() here since
-// this runs mid-settlement (same as 你們先上/破釜沉舟 etc.) — the eventual round-end render
-// picks up the reverted alive/ghost state along with everything else.
-function exorcistAutoRevive(p){
-  p.flags.exorcistRiteUsed=true;
-  p.ghost=false; p.alive=true;
-  p.hp=Math.min(p.maxhp, 5);
-  p.speed+=1; // 復活後速度永久+1
-  log(p.name+"（安魂儀式）死而復生，立即恢復至 "+p.hp+" 點生命，速度永久+1（現為 "+p.speed+"）！","heal");
-  speakSkill(p,"exorcist:1");
-}
 // Shared "damage warding" checks — every profession whose defense needs to reach ALL damage
 // sources (not just combat) funnels through here, next to fatty/bomb/veteran/climber's inline
 // checks above: 幸運兒's 吉星高照 (a per-round 1/6 gamble, see useProfSkill) and 守護者's
@@ -5767,7 +5762,7 @@ function exorcistAutoRevive(p){
 function damageWard(target,dmg,opts){
   if(dmg<=0) return {dmg,note:""};
   const isHunger = opts&&opts.hunger;
-  if(!isHunger && target.prof==="lucky" && target.flags.luckyImmuneActive) return {dmg:0,note:"〔吉星高照：無敵〕"};
+  if(!isHunger && !(opts&&opts.drain) && target.prof==="lucky" && target.flags.luckyImmuneActive) return {dmg:0,note:"〔吉星高照：無敵〕"}; // 吉星高照擋不住暗影吸血
   if(!isHunger && target.prof==="guardian" && target.flags.guardianDefenseActive) return {dmg:0,note:"〔絕對防禦〕"};
   return {dmg,note:""};
 }
@@ -6184,7 +6179,7 @@ function settleRound(){
       // 守護者的絕對防禦／幸運兒的吉星高照: the drain itself still counts toward the
       // ghost's revival total (it's still a successful drain attempt), it just costs the
       // protected victim 0 HP instead of 1.
-      const drainGc=damageWard(v, 1);
+      const drainGc=damageWard(v, 1, {drain:true});
       const drainDmg=drainGc.dmg;
       damagePlayer(v,drainDmg,"暗影吸血");
       g.ghostDrainTotal++;
@@ -6197,6 +6192,7 @@ function settleRound(){
       if(g.prof==="exorcist" && needN===1) g.flags.exorcistGhostUses=(g.flags.exorcistGhostUses||0)+1; // 臨終祝禱 is good for 2 revivals per game
       g.flags.reviveSafeRound=STATE.round+1; // 基本規則（所有玩家）：靠暗影吸血復活後的下一輪，結算時免繳水糧、不怕毒氣（戰鬥仍有效）
       g.ghost=false; g.alive=true; g.hp=Math.min(g.maxhp, Math.max(3,g.ghostDrainTotal));
+      if(g.prof==="exorcist"){ g.speed+=1; log(g.name+"（安魂儀式）復活後速度永久+1（現為 "+g.speed+"）。"); speakSkill(g,"exorcist:1"); } // 安魂儀式: 復活後速度永久+1
       log(g.name+" 吸滿"+needN+"點生命，於「"+g.room+"」復活！(HP "+g.hp+")","heal");
     }
   });
