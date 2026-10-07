@@ -293,7 +293,7 @@
       <label class="muted" style="display:block;margin-bottom:6px;font-size:13px">
         <input type="checkbox" id="sanguoToggle"> 啟用三國模式（角色全面替換為40位三國武將〔魏／蜀／吳／群雄各10人〕，AI也只會從這40人中選取；取消勾選則恢復一般職業）</label>
       <label class="muted" style="display:block;margin-bottom:6px;font-size:13px">
-        <input type="checkbox" id="physicalToggle"> 啟用實體模式（遊戲方式與一般版本相同，但職業只開放精選的16位，AI也只會從這16位中選取；玩家人數改為8~12人，可重複選同一個出生點；與擴充模式、三國模式互斥）</label>
+        <input type="checkbox" id="physicalToggle" checked> 啟用實體模式（遊戲方式與一般版本相同，但職業只開放精選的16位，AI也只會從這16位中選取；玩家人數改為8~12人，可重複選同一個出生點；與擴充模式、三國模式互斥）</label>
       <label class="muted" style="display:block;margin-bottom:10px;font-size:13px">
         <input type="checkbox" id="sanguoTeamToggle"> 啟用三國陣營戰（需先啟用三國模式；限定9或12人，依國家分成3～4隊，每隊3人，同國家不互相傷害，房內混戰只計較國家間的代表武力，結算比較各國總血量）</label>
       <div class="prof-grid" id="profGrid"></div>
@@ -1955,6 +1955,8 @@ document.getElementById("physicalToggle").addEventListener("change",(e)=>{
   } else syncProfCards();
   syncPlayerRange();
 });
+// 實體模式 is the default roster: start with the 16 精選職業 showing (untick to get the full list).
+{ const pt=document.getElementById("physicalToggle"); pt.checked=true; pt.dispatchEvent(new Event("change")); }
 // 三國模式: swaps the ENTIRE roster (not additive like 擴充模式) — only these 40 武將 are
 // selectable, for both the human player and AI, while it's on.
 {
