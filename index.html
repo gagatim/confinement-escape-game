@@ -660,6 +660,36 @@ function reachableRooms(from,maxSteps){
   return out;
 }
 
+// 暗影穿牆移動: a shade ignores ladders/corridor restrictions — every step goes to any room that is
+// physically touching its current one (same row with touching columns, or the row directly above/
+// below with overlapping columns). Its total steps per round = its pre-death speed (flags.ghostSpeed,
+// which never includes 腎上腺素's boost). Built lazily from ROOMS' own floor/order/span data.
+let GHOST_ADJ=null;
+function ghostAdj(){
+  if(GHOST_ADJ) return GHOST_ADJ;
+  const ids=Object.keys(ROOMS), fr=r=>[r.floor,r.floor+(r.rowSpan||1)-1];
+  GHOST_ADJ={};
+  ids.forEach(a=>{
+    const A=ROOMS[a],[a1,a2]=fr(A);
+    GHOST_ADJ[a]=ids.filter(b=>{
+      if(a===b) return false;
+      const B=ROOMS[b],[b1,b2]=fr(B);
+      const colTouch=A.order<=B.order+B.span && B.order<=A.order+A.span;
+      const colOverlap=A.order<B.order+B.span && B.order<A.order+A.span;
+      return (a1<=b2 && b1<=a2 && colTouch) || ((b1===a2+1||a1===b2+1) && colOverlap);
+    });
+  });
+  return GHOST_ADJ;
+}
+function ghostReach(from,maxSteps){
+  const G=ghostAdj(), out={[from]:0}, q=[from];
+  for(let i=0;i<q.length;i++){
+    const n=q[i]; if(out[n]>=maxSteps) continue;
+    for(const m of G[n]) if(out[m]===undefined){ out[m]=out[n]+1; q.push(m); }
+  }
+  return out;
+}
+
 /* ===================== DATA: PROFESSIONS ===================== */
 const PROFESSIONS = {
   fatty:{name:"肥宅", skills:[
@@ -2652,7 +2682,7 @@ function beginRound(){
     // Round 1 starts at the secretly-chosen spawn room; every later round continues from
     // wherever the player physically ended up last round — position is NOT reset to a hub.
     if(STATE.round===1 && p.spawnRoom) p.room=p.spawnRoom;
-    p.stepsLeft = p.speed;
+    p.stepsLeft = p.ghost ? (p.flags.ghostSpeed!=null?p.flags.ghostSpeed:baseSpeed(p)) : p.speed; // 暗影的步數＝死前速度（不含腎上腺素）
     // 毒人的淬毒衝刺: keyed off wherever they're STARTING this round (before any movement), not
     // where they end up — so round 1 never qualifies (STATE.poisoned is still empty at that point).
     if(p.prof==="toxic" && roomIsPoisoned(ROOMS[p.room])){
@@ -2836,9 +2866,11 @@ function advanceTurn(){
 // where players tend to congregate to use room functions, giving it a chance at blood without
 // omniscient tracking.
 function resolveGhostAITurn(p){
-  const funcRooms=Object.keys(ROOMS).filter(id=>ROOMS[id].special && id!==p.room);
-  const allRooms=Object.keys(ROOMS).filter(id=>id!==p.room);
-  const pool = (funcRooms.length && Math.random()<0.7) ? funcRooms : allRooms;
+  // 暗影每輪的步數＝死前移動速度（不含腎上腺素），穿牆但只能走到步數內的房間。
+  const reach=Object.keys(ghostReach(p.room,p.stepsLeft));
+  const funcRooms=reach.filter(id=>ROOMS[id].special && id!==p.room);
+  const allRooms=reach.filter(id=>id!==p.room);
+  const pool = (funcRooms.length && Math.random()<0.7) ? funcRooms : (allRooms.length?allRooms:[p.room]);
   p.room=pool[Math.floor(Math.random()*pool.length)];
   p.flags.roomCommitted=true;
 }
@@ -2875,7 +2907,7 @@ function moveDist(p,from,to){
   return dist;
 }
 function tryMove(p,target){
-  if(p.ghost){ p.room=target; return true; } // ghosts move freely, no step cost enforced strictly
+  if(p.ghost){ const d=ghostReach(p.room,p.stepsLeft)[target]; if(d===undefined) return false; p.room=target; p.stepsLeft-=d; return true; } // 暗影穿牆，但步數有限
   const dist=moveDist(p,p.room,target);
   let steps = p.stepsLeft;
   if(dist===Infinity || dist>steps) return false;
@@ -2889,7 +2921,7 @@ function tryMove(p,target){
 // against every room in the game instead of the step/adjacency-limited reach a living player uses.
 function mustMoveThisRound(p){
   if(p.flags.hunterAmbushActive || p.flags.guardianDefenseActive || p.flags.detectiveTarget!=null) return false;
-  if(p.ghost) return Object.keys(ROOMS).some(r=>r!==p.roundStartRoom);
+  if(p.ghost) return Object.keys(ghostReach(p.roundStartRoom,p.roundStartSteps)).some(r=>r!==p.roundStartRoom);
   const reach=reachableRooms(p.roundStartRoom, p.roundStartSteps);
   return Object.keys(reach).some(r=>r!==p.roundStartRoom);
 }
@@ -2899,8 +2931,9 @@ function onRoomClick(roomId){
   const p=you();
   if(!isMyTurn()){ flashMsg("尚未輪到你的回合。"); return; }
   if(p.flags.roomCommitted){ flashMsg("本輪已確定停留於此房間，無法再移動（每輪只能在最終抵達的單一房間行動）。"); return; }
-  if(p.ghost){ // 暗影無視梯子電梯，能穿牆移動，不受相鄰房間/步數限制
-    tryMove(p,roomId); SFX.move(); renderAll(); return;
+  if(p.ghost){ // 暗影無視梯子電梯，能穿牆移動，每步到實體相鄰的房間，總步數＝死前速度
+    if(!tryMove(p,roomId)){ flashMsg("暗影步數不足（步數＝死前移動速度）"); return; }
+    SFX.move(); renderAll(); return;
   }
   const fromRoom=p.room;
   const dist=moveDist(p,fromRoom,roomId);
@@ -5685,6 +5718,7 @@ function killPlayer(p,cause,killerId){
   p.room="B701";
   // shade immunity/heal handled separately in ghost-drain resolution; 暗影親和 speed+2 below
   if(p.prof==="shade"){ p.speed+=2; log(p.name+"（暗影親和）成為暗影，移動速度永久+2（現為 "+p.speed+"）。"); }
+  p.flags.ghostSpeed=baseSpeed(p); // 暗影每輪的移動步數＝死前的移動速度，不含腎上腺素（baseSpeed 已扣除）
   // 還魂師的安魂儀式: auto-fires the instant they die, once per game — excluded on round 6 (the
   // last round) for the same reason the old manually-targeted version was: a revival that can
   // never again be put at risk before the game ends would be a free ranking boost, since
@@ -6600,7 +6634,7 @@ function renderAll(){
   EL.stSpeed.textContent=p.speed;
   EL.stCarry.textContent=p.carry;
   EL.curRoom.textContent=p.room+" "+(ROOMS[p.room].name||"");
-  EL.stepsLeft.textContent=p.ghost?"∞（穿牆）":p.stepsLeft;
+  EL.stepsLeft.textContent=p.stepsLeft+(p.ghost?"（穿牆）":"");
   EL.carryUsed.textContent=usedCarry(p);
   EL.carryCap.textContent=effectiveCarryCap(p)>9000?"∞":effectiveCarryCap(p);
 
@@ -6680,7 +6714,7 @@ function renderAll(){
   const skEl=EL.skillList; skEl.innerHTML="";
   if(p.ghost){
     const needed=ghostDrainNeeded(p);
-    skEl.innerHTML="<div class='muted' style='font-size:12px'>你是暗影：可自由穿牆移動到任意房間，回合結束時若與存活玩家同房，將於結算階段吸取1點生命；目前已吸 "+p.ghostDrainTotal+"/"+needed+" 點，吸滿即可原地復活。</div>";
+    skEl.innerHTML="<div class='muted' style='font-size:12px'>你是暗影：可穿牆移動，每步到實體相鄰的房間，每輪步數＝死前的移動速度（不含腎上腺素），回合結束時若與存活玩家同房，將於結算階段吸取1點生命；目前已吸 "+p.ghostDrainTotal+"/"+needed+" 點，吸滿即可原地復活。</div>";
   } else {
   PROFESSIONS[p.prof].skills.forEach((s,idx)=>{
     const btn=document.createElement("button"); btn.className="skillbtn";
@@ -6715,7 +6749,7 @@ function renderAll(){
   // the existing nodes instead of tearing down and recreating all ~42 chips + their listeners.
   buildGameMapOnce();
   const reach = p.flags.roomCommitted ? {} :
-    p.ghost ? Object.fromEntries(Object.keys(ROOMS).map(id=>[id,0])) : // 暗影能穿牆，任何房間皆可到達
+    p.ghost ? ghostReach(p.room,p.stepsLeft) : // 暗影能穿牆，但步數有限（＝死前速度）
     reachableRooms(p.room,p.stepsLeft);
   Object.values(ROOMS).forEach(r=>{
     const chip=GAME_MAP_CHIPS[r.id];
@@ -6739,7 +6773,7 @@ function renderAll(){
   const room=ROOMS[p.room];
   const roomOpsLeft=(1+(p.flags.gamblerBonusOps||0))-(p.flags.roomActsUsedThisRound||0);
   if(p.ghost){
-    raEl.innerHTML="<span class='muted'>暗影無法使用房間功能，點選地圖上任意房間即可穿牆移動過去，移動完畢後按「結束我的回合」。</span>";
+    raEl.innerHTML="<span class='muted'>暗影無法使用房間功能，點選步數內的房間即可穿牆移動過去（步數＝死前移動速度），移動完畢後按「結束我的回合」。</span>";
   } else if(p.flags.roomCommitted && roomOpsLeft<=0){
     raEl.innerHTML="<span class='pill' style='color:var(--amber-bright);border-color:var(--amber-bright)'>已確定停留於「"+p.room+" "+(room.name||"")+"」－本輪不可再移動</span>";
   } else if(p.flags.roomCommitted){
