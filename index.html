@@ -842,7 +842,7 @@ const PROFESSIONS = {
   ]},
   exorcist:{name:"還魂師", skills:[
     {name:"臨終祝禱", desc:"（被動）死亡成為暗影時，吸血所需總量降為1點即可復活（整局可發動兩次，復活後血量為3）。", passive:true},
-    {name:"安魂儀式", desc:"（被動）死亡瞬間自動發動：立刻復活並恢復至5血。整局限用1次，第6輪（最後一輪）死亡不觸發。", passive:true}
+    {name:"安魂儀式", desc:"（被動）死亡瞬間自動發動：立刻復活並恢復至5血，復活後速度永久+1。整局限用1次，第6輪（最後一輪）死亡不觸發。", passive:true}
   ]},
   guardian:{name:"守護者", skills:[
     {name:"庇護結界", desc:"（被動）所處房間內所有戰鬥傷害-1（含你與同房間所有人）。", passive:true},
@@ -5741,7 +5741,8 @@ function exorcistAutoRevive(p){
   p.flags.exorcistRiteUsed=true;
   p.ghost=false; p.alive=true;
   p.hp=Math.min(p.maxhp, 5);
-  log(p.name+"（安魂儀式）死而復生，立即恢復至 "+p.hp+" 點生命！","heal");
+  p.speed+=1; // 復活後速度永久+1
+  log(p.name+"（安魂儀式）死而復生，立即恢復至 "+p.hp+" 點生命，速度永久+1（現為 "+p.speed+"）！","heal");
   speakSkill(p,"exorcist:1");
 }
 // Shared "damage warding" checks — every profession whose defense needs to reach ALL damage
