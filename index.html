@@ -6101,6 +6101,7 @@ function settleRound(){
       if(p.flags.poisonImmune){ dmg=0; note+="〔樂透：永久免疫毒氣〕"; }
       if(hermitAlone(p) && dmg>0){ dmg=Math.max(0,dmg-1); note+="〔離群索居 -1〕"; }
       if(p.room==="202") dmg=0;
+      if(p.flags.reviveSafeRound===STATE.round && dmg>0){ dmg=0; note+="〔暗影復活後的下一輪不怕毒氣〕"; }
       { const gc=damageWard(p,dmg); dmg=gc.dmg; note+=gc.note; }
       damagePlayer(p,dmg,"毒氣");
       if(dmg>0) log(p.name+" 在毒氣區受到 "+dmg+" 點傷害"+note+"。","dmg");
@@ -6124,6 +6125,7 @@ function settleRound(){
     STATE.players.forEach(p=>{
       if(!p.alive || p.ghost) return;
       if(p.flags.dietThisRound || p.room==="B204") return;
+      if(p.flags.reviveSafeRound===STATE.round){ log(p.name+" 暗影復活後的下一輪，免繳水糧。"); return; }
       let missing=0;
       if(!p.flags.consumed_water) missing++;
       if(!p.flags.consumed_food) missing++;
@@ -6183,6 +6185,7 @@ function settleRound(){
     if(g.ghostDrainTotal>=ghostDrainNeeded(g)){
       const needN=ghostDrainNeeded(g);
       if(g.prof==="exorcist" && needN===1) g.flags.exorcistGhostUses=(g.flags.exorcistGhostUses||0)+1; // 臨終祝禱 is good for 2 revivals per game
+      g.flags.reviveSafeRound=STATE.round+1; // 基本規則（所有玩家）：靠暗影吸血復活後的下一輪，結算時免繳水糧、不怕毒氣（戰鬥仍有效）
       g.ghost=false; g.alive=true; g.hp=Math.min(g.maxhp, Math.max(3,g.ghostDrainTotal));
       log(g.name+" 吸滿"+needN+"點生命，於「"+g.room+"」復活！(HP "+g.hp+")","heal");
     }
