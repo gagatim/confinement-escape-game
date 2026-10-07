@@ -843,7 +843,7 @@ const PROFESSIONS = {
     {name:"毒氣適應", desc:"（被動）自身受到的毒氣傷害永遠-1（最低0）。", passive:true}
   ]},
   detective:{name:"私家偵探", skills:[
-    {name:"情報位移", desc:"行動階段可放棄移動，指定1名行動順序比你靠前的存活玩家：結算開始時你直接出現在其當時所在的房間，並可使用該房間的功能（自動執行）。整局限用3次，同一名玩家最多被跟蹤1次。", uses:3}
+    {name:"情報位移", desc:"行動階段可放棄移動，指定1名行動順序比你靠前的存活玩家：你直接移動到其所在的房間（不花步數、無法事先得知），並可執行該房間的行動。整局限用3次，同一名玩家最多被跟蹤1次。", uses:3}
   ]},
   arsonist:{name:"縱火犯", skills:[
     {name:"點火", desc:"（被動）結算時，若你所在房間（含你）有3名以上存活玩家，房內其他玩家各-1血，你恢復1點生命。", passive:true},
@@ -2932,6 +2932,7 @@ function undoMovement(){
   const p=you();
   if(!isMyTurn()) return;
   if(p.flags.roomCommitted) return;
+  if(p.flags.detectiveTarget!=null){ flashMsg("情報位移後無法回手。"); return; }
   p.room=p.roundStartRoom;
   p.stepsLeft=p.roundStartSteps;
   // 102 applies its laser effect just by walking through it (before any commit) — undo that too,
@@ -4670,9 +4671,9 @@ function confirmAndUseSkill(p,idx){
 
 // 神偷的順手牽羊: unlike 交易 below, this needs no consent from the target and isn't limited to
 // items they'd willingly trade — picks a random item straight out of their inventory.
-// 私家偵探的情報位移: declare-only — the actual relocation happens at the very start of
-// settleRound(), once everyone else has finished moving, so the detective lands wherever the
-// target really ended up. Giving up movement = steps zeroed + room function locked this round.
+// 私家偵探的情報位移: on his own turn he names an earlier-acting player and is moved straight into
+// that player's room (no step cost; the room is not shown beforehand — players trade that info in
+// the free-talk phase) and may then use the room's function like normal. Giving up movement = steps zeroed.
 // 毒域先知的邪惡反轉 + 精準預測: declare-only — resolvePoisonVote() applies the reversal at
 // settlement (it needs the round's final vote counts) and marks each oracle's guess hit/miss.
 function declareOracleReverse(p,guessFloor){
@@ -4706,22 +4707,24 @@ function detectiveTargets(p){
 }
 function declareDetectiveTrack(p,target){
   p.flags.detectiveUses++; p.flags.skillUsedThisRound=true;
-  p.flags.detectiveTarget=target.id;
+  p.flags.detectiveTarget=target.id; // also exempts him from 每輪強制移動 for this round
   p.flags.detectiveTracked=(p.flags.detectiveTracked||[]).concat(target.id);
-  p.stepsLeft=0; p.flags.roomLocked=true; p.flags.roomCommitted=true;
+  p.stepsLeft=0;
+  p.room=target.room;
+  if(p.room==="102") applyLaser(p);
 }
 function openDetectiveModal(p){
   const targets=detectiveTargets(p);
   if(!targets.length){ flashMsg("沒有可跟蹤的玩家（只能跟蹤行動順序比你靠前的玩家，且每人只能被跟蹤1次）。"); return; }
   const opts=targets.map(o=>`<option value="${o.id}">${o.name}</option>`).join("");
-  openModal(`<h3>情報位移：放棄移動，跟蹤一名玩家</h3>
-    <div class="muted" style="font-size:12px;margin-bottom:6px">只能選行動順序比你靠前的玩家。結算開始時，你會出現在他當時所在的房間，並自動使用該房間的功能。</div>
+  openModal(`<h3>情報位移：放棄移動，移動到一名玩家所在的房間</h3>
+    <div class="muted" style="font-size:12px;margin-bottom:6px">只能選行動順序比你靠前的玩家。你會直接移動到他所在的房間（不花步數），之後可以執行該房間的行動。</div>
     <select id="detSel">${opts}</select><br><br>
     <button class="btn small warn" id="detOk">跟蹤</button> <button class="btn small ghost" id="detCancel">取消</button>`);
   document.getElementById("detOk").onclick=()=>{
     const target=STATE.players.find(x=>x.id===+document.getElementById("detSel").value);
     declareDetectiveTrack(p,target);
-    log(p.name+" 使用情報位移：放棄移動，鎖定跟蹤 "+target.name+"（"+p.flags.detectiveUses+"/3）。"); speakSkill(p,"detective:0",{target:target});
+    log(p.name+" 使用情報位移：放棄移動，直接移動到 "+target.name+" 所在的「"+p.room+" "+(ROOMS[p.room].name||"")+"」（"+p.flags.detectiveUses+"/3）。"); speakSkill(p,"detective:0",{target:target});
     closeModal(); renderAll();
   };
   bindModalClose("detCancel");
@@ -5317,7 +5320,7 @@ function resolveAITurn(p){
     if(cands.length){
       const t=cands[Math.floor(Math.random()*cands.length)];
       declareDetectiveTrack(p,t);
-      log(p.name+" 使用情報位移：放棄移動，鎖定跟蹤 "+t.name+"。");
+      log(p.name+" 使用情報位移：放棄移動，直接移動到 "+t.name+" 所在的「"+p.room+"」。");
     }
   }
   aiConsiderTruckerBoost(p);
@@ -5330,7 +5333,7 @@ function resolveAITurn(p){
   if(p.room==="102") applyLaser(p);
   const room=ROOMS[p.room];
   // 張角的黃天之世（三國模式）: AI 也一樣拿不到被封印房間的功能。
-  const roomDisabled = (STATE.sanguoDisabledRooms && STATE.sanguoDisabledRooms.has(p.room)) || p.flags.detectiveTarget!=null;
+  const roomDisabled = (STATE.sanguoDisabledRooms && STATE.sanguoDisabledRooms.has(p.room));
   if(!roomDisabled && room.draw>0){ resolveAIDraw(p,p.room,room.draw); }
   if(!roomDisabled && room.special==="gene"){ p.power++; p.speed++; p.carry++; }
   if(!roomDisabled && room.special==="respec"){ /* AI keeps stats */ }
@@ -5875,31 +5878,7 @@ function settleRound(){
   log("<b>── 進入結算階段 ──</b>");
   STATE.__report={combat:[], rocket:[], hunger:[], drain:[], poison:"", poisonDamage:[]};
 
-  // 私家偵探的情報位移: everyone else has finished moving by now, so land in the tracked player's room.
-  STATE.players.forEach(p=>{
-    if(p.flags.detectiveTarget==null) return;
-    const t=STATE.players.find(x=>x.id===p.flags.detectiveTarget);
-    p.flags.detectiveTarget=null;
-    if(!p.alive || p.ghost) return;
-    if(t && t.alive && !t.ghost){
-      p.room=t.room;
-      log(p.name+"（情報位移）出現在被跟蹤者 "+t.name+" 所在的「"+t.room+"」。");
-      // The jump leaves the detective free to use the landing room's function (e.g. 水塔 water,
-      // 手術室's 2-person heal when exactly 2 end up here, 基因庫/餐廳...). Runs at settlement
-      // time, so it's resolved automatically: draws use the same best-first auto pick the AI uses
-      // (no picker modal mid-settlement), and rooms that open their own modal (操作室/控制室) or
-      // are pure movement/trap mechanics (回收站/傳送室/激光室) are skipped.
-      const lr=ROOMS[p.room];
-      const blocked=["slide","teleport","laser"].includes(lr.special) || HACKER_OWN_MODAL_SPECIALS.has(lr.special)
-        || (STATE.sanguoDisabledRooms && STATE.sanguoDisabledRooms.has(p.room)) || p.flags.hermitCloakActive;
-      if(!blocked){
-        if(lr.draw>0) resolveAIDraw(p,p.room,lr.draw);
-        if(lr.special) doSpecialRoom(p,lr);
-      }
-    } else {
-      log(p.name+"（情報位移）跟蹤的目標已不在，原地不動。");
-    }
-  });
+  STATE.players.forEach(p=>{ p.flags.detectiveTarget=null; }); // 私家偵探的情報位移 only exempts the action phase
 
   // 0) 劉備的仁德（三國模式，強制被動，整局限3次）: the very first thing settlement does, before
   // anything else this round resolves — if 劉備 shares a room with at least one 同勢力(同國家)
