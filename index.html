@@ -333,6 +333,17 @@
     #modal{max-height:86vh}
     .card{padding:var(--space-3)}
   }
+  /* ---- 玩法速覽 (onboarding guide) ---- */
+  .howto h3{font-size:17px;color:var(--cyan-bright);margin:0 0 var(--space-2)}
+  .howto h4{font-family:"Orbitron","Noto Sans TC",sans-serif;font-size:12px;letter-spacing:.08em;color:var(--violet);margin:var(--space-4) 0 var(--space-2)}
+  .howto p,.howto li{font-size:13px;line-height:1.7;margin:0}
+  .howto ol,.howto ul{margin:0;padding-left:20px}
+  .howto li{margin:3px 0}
+  .howto .goal{background:var(--panel-2);border:1px solid var(--line);border-left:3px solid var(--amber);border-radius:var(--radius-md);padding:var(--space-3);font-size:13px;line-height:1.7}
+  .howto table{border-collapse:collapse;width:100%;font-size:12.5px}
+  .howto th,.howto td{border:1px solid var(--line);padding:5px 8px;text-align:center}
+  .howto th{background:var(--panel-2);color:var(--muted);font-weight:600}
+  .howto .tip{color:var(--amber-bright)}
   /* reduced motion: no shake, flashes, particles or pulsing for users who ask the OS for it */
   @media (prefers-reduced-motion:reduce){
     *,*::before,*::after{animation-duration:.01ms !important;animation-iteration-count:1 !important;
@@ -350,6 +361,7 @@
       <div class="muted mono" style="font-size:10.5px;margin-top:2px">葉晉廷製作 · 請勿隨意分享</div>
     </div>
     <div id="topStatus" class="row"></div>
+    <button class="btn small ghost" id="howtoBtn" title="一分鐘看懂玩法：目標、每輪流程、毒氣與飢餓傷害、排名規則">📖 玩法速覽</button>
     <button class="btn small ghost" id="stealthBtn" title="老闆鍵：一鍵偽裝成報表（快捷鍵：按住 Alt 再按 ` 鍵可隨時觸發，不用把滑鼠移過來）">🥷 低調模式</button>
     <button class="btn small ghost" id="iconsBtn" title="常駐低調：把介面上的 emoji 圖示換成純文字，平時看起來更像內部系統">🖼 去圖示模式</button>
     <button class="btn small ghost" id="statsBtn" title="查看各職業的對局數據與強弱分析">📊 職業數據</button>
@@ -1636,6 +1648,46 @@ document.addEventListener("click",e=>{
   const syncMuteLabel=()=>{ muteBtn.textContent = SFX.isMuted()? "🔇 音效已關閉" : "🔊 音效"; };
   syncMuteLabel();
   muteBtn.addEventListener("click",()=>{ SFX.setMuted(!SFX.isMuted()); syncMuteLabel(); });
+})();
+
+/* ---------- 玩法速覽: one-minute onboarding (core loop, key numbers, first-run hints) ---------- */
+// Design intent: a first-time player should know (1) what wins, (2) what happens each round, and
+// (3) the few numbers that decide survival, WITHOUT reading the full rulebook. Numbers are read
+// from the live constants where they exist so this text can never drift from the rules.
+function showHowTo(){
+  const pd=[1,2,3,4,5,6].map(r=>poisonDamageForRound(r));
+  openModal(`<div class="howto">
+    <h3>📖 一分鐘看懂禁閉逃殺</h3>
+    <div class="goal"><b>目標：</b>撐過 6 輪。最後比「剩餘血量」，血量相同比武力；死亡的人血量為 0。結束時手上每根金條可換 +1 血。</div>
+    <h4>每輪流程</h4>
+    <ol>
+      <li><b>投票毒區</b>：每輪從 3 個候選樓層投票，得票最多的樓層變成毒區（累積，不會消失）。</li>
+      <li><b>移動</b>：用你的步數走到相鄰房間；輪到你才能行動，順序每輪重洗。</li>
+      <li><b>房間動作</b>：搜索拿道具、用職業技能、交易。道具要先停留在房間後才能使用。</li>
+      <li><b>結算</b>：同房間的人戰鬥 → 毒區扣血 → 飢餓扣血。</li>
+    </ol>
+    <h4>會讓你扣血的三件事</h4>
+    <table>
+      <tr><th>來源</th><th>規則</th></tr>
+      <tr><td>毒氣</td><td>站在毒區樓層的房間才會扣：第 1 輪 ${pd[0]}、第 2~3 輪 ${pd[1]}、第 4~5 輪 ${pd[3]}、第 6 輪 ${pd[5]} 點</td></tr>
+      <tr><td>飢餓</td><td>每輪要繳 1 水＋1 糧；缺哪個就扣 1 血（水塔 101、糧倉 B505 可以拿）</td></tr>
+      <tr><td>戰鬥</td><td>同房間比武力，差值就是弱者受到的傷害；一方持槍、另一方沒有，沒槍的人吃下對方全部武力</td></tr>
+    </table>
+    <h4>新手三個提示</h4>
+    <ul>
+      <li class="tip">第 1 輪先確認自己有水有糧，再去搶武器庫或補給房間。</li>
+      <li class="tip">不確定就別跟武力比你高的人待在同一間房。</li>
+      <li class="tip">每輪一定要看一眼「本輪可投票樓層」，別讓自己所在的樓層被投成毒區。</li>
+    </ul>
+    <p class="muted" style="margin-top:var(--space-3);font-size:12px">不確定選誰？規則直觀、適合新手：庸才、幸運兒、屠夫、攀岩者。之後可隨時按右上角「📖 玩法速覽」重看。</p>
+    <div style="margin-top:var(--space-4)"><button class="btn" id="howtoOk">開始遊戲</button></div>
+  </div>`);
+  document.getElementById("howtoOk").onclick=()=>{ try{ localStorage.setItem("howtoSeen","1"); }catch(e){} closeModal(); };
+}
+(()=>{
+  const b=document.getElementById("howtoBtn"); if(b) b.addEventListener("click",()=>showHowTo());
+  let seen=false; try{ seen=localStorage.getItem("howtoSeen")==="1"; }catch(e){}
+  if(!seen) setTimeout(()=>{ if(!(typeof STATE!=="undefined" && STATE && STATE.players && STATE.players.length)) showHowTo(); },600);
 })();
 
 /* ---------- accessibility: language + keyboard access for div-based clickables ---------- */
@@ -6123,8 +6175,8 @@ function resolvePoisonVote(){
     ? "本輪毒氣投票結果：「"+label+"」樓層並列最高票，全數淪為毒氣區域！"
     : "本輪毒氣投票結果：「"+label+"」樓層淪為毒氣區域！";
 }
-function poisonDamageForRound(){
-  const r=STATE.round;
+function poisonDamageForRound(round){
+  const r=(round===undefined)?STATE.round:round; // optional arg lets the 玩法速覽 guide read the real table
   if(r===1) return 1;
   if(r===2||r===3) return 2;
   if(r===4||r===5) return 3;
