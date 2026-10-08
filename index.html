@@ -2044,6 +2044,7 @@ function fxPulse(chip,cls,color){
 function skillFX(p,key,opts){
   fxStamp++;
   if(!fxMode || !p) return;
+  if(p!==STATE.players[0]) return;   // 只顯示玩家自己的技能特效，AI 的不播
   const sk=PROFESSIONS[p.prof] && PROFESSIONS[p.prof].skills[parseInt(String(key).split(":")[1],10)];
   if(!sk) return;
   opts=opts||{};
