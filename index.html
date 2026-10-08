@@ -3621,7 +3621,11 @@ function openDrawSelectionModal(p,drawnItems,roomId){
     if(r.free) return `<label style="display:block;margin:4px 0"><input type="checkbox" checked disabled> ${ITEMS[r.item].name}（${r.tag}．不佔負重，自動保留）</label>`;
     return `<label style="display:block;margin:4px 0"><input type="checkbox" class="drawChk" data-key="${r.key}"${r.defaultChecked?" checked":""}> ${ITEMS[r.item].name}（${r.tag}）</label>`;
   }).join("");
-  openModal(`<h3>整理背包 — 選擇要保留的道具（最多可帶 ${cap===9999?"∞":cap} 件）</h3>
+  const dropNote=isFunctionlessRoom(ROOMS[roomId])
+    ? "取消勾選「背包中」的道具即為丟棄；這間房間沒有功能，丟下的道具會直接消失。"
+    : "取消勾選「背包中」的道具即為丟棄；丟下的道具會留在「"+(ROOMS[roomId].name||roomId)+"」，之後可以被搜索到。未勾選的新道具同樣留在房間。";
+  openModal(`<h3>背包已滿 — 選擇要保留的道具（最多可帶 ${cap===9999?"∞":cap} 件）</h3>
+    <div class="muted" style="margin-bottom:8px;font-size:12.5px">${dropNote}</div>
     <div>${rows}</div>
     <div class="mono muted" id="drawCount" style="margin:8px 0"></div>
     <button class="btn small" id="drawConfirm">確認</button>`);
@@ -3637,18 +3641,22 @@ function openDrawSelectionModal(p,drawnItems,roomId){
   }));
   updateCount();
   document.getElementById("drawConfirm").onclick=()=>{
-    const newInv=[];
+    const newInv=[], droppedHere=[], droppedGone=[];
     rowMeta.forEach(r=>{
       const [kind,idxStr]=r.key.split(":"); const idx=+idxStr;
       const keep = r.free || !!document.querySelector('.drawChk[data-key="'+r.key+'"]:checked');
       if(kind==="old"){
-        if(keep) newInv.push(r.item); else STATE.discardPile.push(r.item);
+        if(keep) newInv.push(r.item);
+        else if(isFunctionlessRoom(ROOMS[roomId])) droppedGone.push(r.item);   // 無功能房間：丟下的道具直接消失
+        else { ROOMS[roomId].stock[r.item]=(ROOMS[roomId].stock[r.item]||0)+1; droppedHere.push(r.item); } // 丟在當前房間（之後可被搜到）
       } else {
         if(keep) newInv.push(r.item); else ROOMS[roomId].stock[r.item]=(ROOMS[roomId].stock[r.item]||0)+1;
       }
     });
     p.inv=newInv;
     log(p.name+" 整理背包：保留了選擇的道具。");
+    if(droppedHere.length) log(p.name+" 把「"+droppedHere.map(i=>ITEMS[i].name).join("、")+"」丟在「"+(ROOMS[roomId].name||roomId)+"」。");
+    if(droppedGone.length) log(p.name+" 丟棄的「"+droppedGone.map(i=>ITEMS[i].name).join("、")+"」在無功能的「"+(ROOMS[roomId].name||roomId)+"」中消失了。");
     closeModal(); renderAll();
   };
 }
