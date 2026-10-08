@@ -281,6 +281,14 @@
   .card{box-shadow:var(--shadow-sm)}
   #modal{box-shadow:var(--shadow-md)}
   #modal-bg{backdrop-filter:blur(2px)}
+  /* technical-art pass: backdrop blur re-samples the whole page behind it every frame it moves;
+     skip it on touch / low-end devices (the dim overlay alone reads the same). The full-viewport
+     canvas and flash layers get their own compositor layer so they never repaint the page. */
+  @media (pointer:coarse){ #modal-bg{backdrop-filter:none} }
+  html[data-fx-tier="low"] #modal-bg{backdrop-filter:none}
+  #fxCanvas,#fxLayer{will-change:transform;contain:strict}
+  html[data-fx-tier="low"] .fx-flash.speed{background:rgba(80,200,255,.18)}
+  html[data-fx-tier="low"] .room-chip.fx-floor{animation:none}
   /* selection must not rely on colour alone */
   .prof-card{position:relative}
   .prof-card.selected::after{content:"✓ 已選";position:absolute;top:8px;right:10px;font-size:10.5px;font-weight:700;
@@ -1938,15 +1946,30 @@ function fxChipCenter(room){
   return {x:r.left+r.width/2,y:r.top+r.height/2,chip:c};
 }
 const FXP={list:[],raf:0,cv:null,cx:null};
+// Technical-art budget: the canvas FX had no ceiling, so a burst plus a fly-to plus a floor pulse
+// could stack 100+ emoji glyphs (each a fillText with font parse). Cap live particles per tier
+// (low = touch / <=4 cores / <=4GB, high = desktop) and clamp DPR so a 3x phone screen doesn't
+// triple the fill cost of a full-viewport canvas. Decorative "dot" sparks are shed first.
+const FX_BUDGET=(()=>{
+  let low=false;
+  try{
+    low=matchMedia("(pointer:coarse)").matches || (navigator.hardwareConcurrency||8)<=4 || (navigator.deviceMemory||8)<=4;
+  }catch(e){}
+  return low?{max:160,dots:60,dpr:1.5,tier:"low"}:{max:600,dots:240,dpr:2,tier:"high"};
+})();
+document.documentElement.dataset.fxTier=FX_BUDGET.tier;
 function fxCanvas(){
   if(FXP.cv) return FXP.cv;
   const cv=document.createElement("canvas"); cv.id="fxCanvas";
-  const fit=()=>{ const d=window.devicePixelRatio||1; cv.width=innerWidth*d; cv.height=innerHeight*d; FXP.cx.setTransform(d,0,0,d,0,0); };
+  const fit=()=>{ const d=Math.min(window.devicePixelRatio||1,FX_BUDGET.dpr); cv.width=innerWidth*d; cv.height=innerHeight*d; FXP.cx.setTransform(d,0,0,d,0,0); };
   document.body.appendChild(cv); FXP.cv=cv; FXP.cx=cv.getContext("2d"); fit();
   window.addEventListener("resize",fit);
   return cv;
 }
 function fxAdd(o){
+  const n=FXP.list.length;
+  if(n>=FX_BUDGET.max) return;                                   // hard ceiling
+  if(o.kind==="dot" && n>=FX_BUDGET.dots) return;                // shed cheap sparks first
   FXP.list.push(Object.assign({x:0,y:0,vx:0,vy:0,gy:0,t:0,max:60,delay:0,size:24,rot:0,vr:0,glyph:"",color:"#fff",kind:"glyph",grow:0,drag:1},o));
   if(!FXP.raf){ fxCanvas(); FXP.raf=requestAnimationFrame(fxStep); }
 }
@@ -1976,6 +1999,9 @@ function fxStep(){
   FXP.raf=FXP.list.length?requestAnimationFrame(fxStep):0;
   if(!FXP.raf) cx.clearRect(0,0,innerWidth,innerHeight);
 }
+document.addEventListener("visibilitychange",()=>{
+  if(document.hidden){ FXP.list.length=0; if(FXP.cx) FXP.cx.clearRect(0,0,innerWidth,innerHeight); }
+});
 const fxR=(a,b)=>a+Math.random()*(b-a);
 function fxEmit(s,x,y,full){
   const W=innerWidth,H=innerHeight,pick=()=>s.g[Math.floor(Math.random()*s.g.length)];
