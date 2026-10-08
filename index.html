@@ -1,5 +1,6 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0a0e17">
 <title>禁閉逃殺</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -11,10 +12,16 @@
 <style>
   :root{
     --bg:#0a0e17; --bg-deep:#05070c; --panel:#121a2c; --panel-2:#0e1524; --line:#263252;
-    --cyan:#4cd6e0; --cyan-bright:#9df3fa; --violet:#7c6cf0; --amber:#e0a83c; --amber-bright:#ffce6b;
+    --cyan:#4cd6e0; --cyan-bright:#9df3fa; --violet:#8b7df5; --amber:#e0a83c; --amber-bright:#ffce6b;
     --toxic:#6ee06b; --toxic-bright:#a8ffa0; --ember:#e0524c; --ember-bright:#ff8a7a;
     --ink:#e7edf7; --muted:#7c8bab; --gold:#e8c15a;
     --floor-up:#161a28; --floor-down:#0e1a2a; /* subtle 1F/2F vs 地下樓層 room-chip tint */
+    /* ---- design tokens (spacing 4px base, radius, elevation, motion, focus) ---- */
+    --space-1:4px; --space-2:8px; --space-3:12px; --space-4:16px; --space-6:24px;
+    --radius-sm:6px; --radius-md:8px; --radius-lg:12px;
+    --shadow-sm:0 1px 2px rgba(0,0,0,.35); --shadow-md:0 10px 28px -8px rgba(0,0,0,.65);
+    --ease:cubic-bezier(.2,.8,.2,1); --t-fast:.12s; --t-normal:.2s;
+    --focus-ring:var(--cyan-bright);
   }
   /* ---- light theme: same variable set, swapped by a data-theme attribute on <html> so every
      rule below (including inline style="color:var(--x)" in the markup) repaints for free. ---- */
@@ -22,8 +29,9 @@
     --bg:#eef2fa; --bg-deep:#f6f8fd; --panel:#ffffff; --panel-2:#eef1f9; --line:#d7deec;
     --cyan:#0e8a94; --cyan-bright:#036672; --violet:#6952d6; --amber:#b9790a; --amber-bright:#8a5a00;
     --toxic:#2f9e3b; --toxic-bright:#1f7a29; --ember:#d1453f; --ember-bright:#b23029;
-    --ink:#1b2333; --muted:#5b6478; --gold:#a9790a;
+    --ink:#1b2333; --muted:#5b6478; --gold:#8a6200;
     --floor-up:#f5f1e9; --floor-down:#e9f1f7; /* subtle 1F/2F vs 地下樓層 room-chip tint */
+    --shadow-sm:0 1px 2px rgba(27,35,51,.14); --shadow-md:0 10px 28px -10px rgba(27,35,51,.3);
   }
   html[data-theme="light"] body{
     background:radial-gradient(ellipse 900px 500px at 50% -8%,#e2ebfc 0%,transparent 60%),
@@ -255,6 +263,83 @@
   .sr-tabbar{display:flex;gap:2px;background:#f3f2f1;border-top:1px solid #d0d0d0;padding:6px 10px;font-size:12px;color:#666}
   .sr-tabbar span{padding:4px 12px;border-radius:3px 3px 0 0}
   .sr-tabbar span.on{background:#fff;color:#106ebe;font-weight:600;border:1px solid #d0d0d0;border-bottom:none}
+
+  /* =====================================================================
+     UI 設計系統層 (UI Designer pass): tokens-driven polish, WCAG AA contrast fixes,
+     keyboard focus, touch targets, reduced motion, responsive order. Kept in one block at the
+     end of the stylesheet so it overrides earlier rules without rewriting them.
+     ===================================================================== */
+  .sr-only{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+  /* keyboard focus: one consistent, high-contrast ring (cyan on dark 13.7:1, teal on light 6.7:1) */
+  :focus{outline:none}
+  :focus-visible{outline:2px solid var(--focus-ring);outline-offset:2px}
+  .btn:focus-visible,.skillbtn:focus-visible{outline-offset:3px}
+  input[type=checkbox]:focus-visible,input[type=range]:focus-visible{outline-offset:3px}
+  input[type=number]:focus-visible,input[type=text]:focus-visible,select:focus-visible{outline:none;border-color:var(--cyan-bright);box-shadow:0 0 0 3px rgba(76,214,224,.28)}
+  .prof-card[tabindex]:focus-visible,.room-chip[tabindex]:focus-visible{outline:2px solid var(--focus-ring);outline-offset:2px;z-index:6}
+  /* elevation: cards sit above the page, the modal above the cards */
+  .card{box-shadow:var(--shadow-sm)}
+  #modal{box-shadow:var(--shadow-md)}
+  #modal-bg{backdrop-filter:blur(2px)}
+  /* selection must not rely on colour alone */
+  .prof-card{position:relative}
+  .prof-card.selected::after{content:"✓ 已選";position:absolute;top:8px;right:10px;font-size:10.5px;font-weight:700;
+    font-family:"JetBrains Mono",monospace;color:var(--cyan-bright)}
+  /* poison also gets a glyph so colour-blind players can tell green (毒) from amber (你) */
+  .room-chip.poison::before{content:"☠";position:absolute;top:-7px;left:-5px;font-size:10px;line-height:1;
+    color:var(--toxic-bright);background:var(--bg);border-radius:999px;padding:0 1px}
+  /* HP bar: colour reflects how much health is left, instead of a fixed red->green gradient */
+  .hpbar-inner{background:var(--toxic);transition:width .4s var(--ease),background-color .3s ease}
+  .hpbar-inner[data-level="mid"]{background:var(--amber)}
+  .hpbar-inner[data-level="low"]{background:var(--ember);animation:hpPulse 1.1s ease-in-out infinite}
+  @keyframes hpPulse{0%,100%{filter:none}50%{filter:brightness(1.35)}}
+  /* buttons: consistent disabled affordance + tokens-based motion */
+  .btn{transition:transform var(--t-fast) var(--ease),box-shadow var(--t-fast) var(--ease),filter var(--t-fast) ease}
+  .skillbtn{border-radius:var(--radius-md)}
+  /* light theme: the dark button label failed contrast on the darker light-theme fills
+     (2.8:1 on cyan, 3.0:1 on red) -> white labels on deepened fills, all >= 4.5:1 */
+  html[data-theme="light"] .btn:not(.ghost):not(.warn):not(.toxic):not(.gold):not(:disabled){
+    background:linear-gradient(180deg,#0b7f8a,#036672);color:#fff;box-shadow:0 4px 0 #024a54}
+  html[data-theme="light"] .btn:not(.ghost):not(.warn):not(.toxic):not(.gold):active:not(:disabled){box-shadow:0 1px 0 #024a54}
+  html[data-theme="light"] .btn.ghost:not(:disabled){background:transparent;color:var(--ink);box-shadow:none}
+  html[data-theme="light"] .btn.warn:not(:disabled){background:linear-gradient(180deg,#c9403a,#a82c27);color:#fff;box-shadow:0 4px 0 #6e1a17}
+  html[data-theme="light"] .btn.toxic:not(:disabled){background:linear-gradient(180deg,#278033,#1f6a28);color:#fff;box-shadow:0 4px 0 #14481a}
+  html[data-theme="light"] .btn.gold:not(:disabled){background:linear-gradient(180deg,#ffe8a0,#e8c15a);color:#2a1e02;box-shadow:0 4px 0 #8a6200}
+  html[data-theme="light"] .btn.warn:active:not(:disabled){box-shadow:0 1px 0 #6e1a17}
+  html[data-theme="light"] .btn.toxic:active:not(:disabled){box-shadow:0 1px 0 #14481a}
+  html[data-theme="light"] .btn.gold:active:not(:disabled){box-shadow:0 1px 0 #8a6200}
+  html[data-theme="light"] .hpbar-inner[data-level="mid"]{background:var(--amber)}
+
+  /* touch devices: 44px minimum targets (WCAG 2.5.5 / Apple HIG) */
+  @media (pointer:coarse){
+    .btn{min-height:44px}
+    .btn.small{min-height:44px;padding:10px 14px}
+    .skillbtn{min-height:44px;padding:10px 12px}
+    input[type=number],input[type=text],select{min-height:44px;font-size:16px}
+    input[type=checkbox]{width:22px;height:22px;vertical-align:middle;margin-right:6px}
+    input[type=range]{min-height:32px}
+    .inv-item{padding:8px 10px}
+  }
+  /* narrow screens: map + actions first (that's what you play with), single column */
+  @media (max-width:1000px){
+    #game>div:nth-child(2){order:-1}
+  }
+  @media (max-width:640px){
+    body{padding:10px;padding-bottom:48px}
+    .topbar{gap:var(--space-2)}
+    .topbar .btn.small{flex:1 1 auto}
+    #setup .prof-grid,#spawnSelect .prof-grid,#bossSelect .prof-grid{grid-template-columns:repeat(auto-fill,minmax(160px,1fr))}
+    #log{height:190px}
+    #modal{max-height:86vh}
+    .card{padding:var(--space-3)}
+  }
+  /* reduced motion: no shake, flashes, particles or pulsing for users who ask the OS for it */
+  @media (prefers-reduced-motion:reduce){
+    *,*::before,*::after{animation-duration:.01ms !important;animation-iteration-count:1 !important;
+      transition-duration:.01ms !important;scroll-behavior:auto !important}
+    body.laser-shake{animation:none}
+    #fxCanvas,#fxLayer{display:none !important}
+  }
 </style>
 
 <div class="wrap">
@@ -347,7 +432,7 @@
         <div id="youName" style="font-size:15px;color:var(--cyan-bright);font-weight:700"></div>
         <div class="muted mono" id="youProf" style="font-size:11px;margin-bottom:6px"></div>
         <div class="mono hidden" id="bossHenchmenStatus" style="font-size:11px;color:var(--amber-bright);margin-bottom:6px"></div>
-        <div class="hpbar-outer"><div class="hpbar-inner" id="hpBar" style="width:100%"></div></div>
+        <div class="hpbar-outer" role="progressbar" aria-label="生命值" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100" id="hpBarWrap"><div class="hpbar-inner" id="hpBar" style="width:100%"></div></div>
         <div class="mono" id="hpText" style="font-size:12px;margin:4px 0 8px">HP 10/10</div>
         <div class="row mono" style="font-size:11px;gap:14px">
           <span>武力 <b id="stPower"></b></span><span>速度 <b id="stSpeed"></b></span><span>負重 <b id="stCarry"></b></span>
@@ -399,7 +484,7 @@
     <div>
       <div class="card">
         <div class="panel-title">事件紀錄</div>
-        <div id="log"></div>
+        <div id="log" role="log" aria-live="polite" aria-label="事件紀錄"></div>
       </div>
       <div class="card" style="margin-top:12px">
         <div class="panel-title">全體玩家</div>
@@ -844,13 +929,28 @@ const PROFESSIONS = {
     {name:"臨終祝禱", desc:"（被動）死亡變成暗影後，只要吸取1點生命就能復活（一般暗影需2點）；整局可發動兩次，復活後生命為3。", passive:true},
     {name:"安魂儀式", desc:"（被動）每次復活後，速度永久+1。", passive:true}
   ]},
+  suzhenchang:{name:"蘇貞昌", skills:[
+    {name:"衝衝衝", desc:"（被動）第1輪速度+1，第2輪速度+2，以此類推（第N輪速度+N）。", passive:true}
+  ]},
+  jiangwanan:{name:"蔣萬安", skills:[
+    {name:"作秀", desc:"（被動）所有玩家隨時都可以知道他目前在哪個房間。", passive:true},
+    {name:"廢死", desc:"（被動）自身生命永遠至少保留1點（任何傷害都不會死亡）；與他同房間的玩家不會因為戰鬥而死亡（戰鬥傷害最多把生命扣到1點）。", passive:true}
+  ]},
+  shenboyang:{name:"沈柏楊（台灣黑熊）", skills:[
+    {name:"賺紅錢", desc:"（被動）每回合開始時自動回血+1（不超過上限）。", passive:true},
+    {name:"被圍毆", desc:"（被動）戰鬥時，如果受傷，傷害+1。", passive:true}
+  ]},
+  laiqingde:{name:"賴清德（青鳥領袖）", skills:[
+    {name:"萊爾校長", desc:"（被動）每輪開始時，由你決定所有玩家（含暗影）本輪的行動順位。", passive:true},
+    {name:"網軍青鳥飛出來", desc:"（被動）你投毒時，等於5票。", passive:true}
+  ]},
   guardian:{name:"守護者", skills:[
     {name:"庇護結界", desc:"（被動）所處房間內所有戰鬥傷害-1（含你與同房間所有人）。", passive:true},
     {name:"絕對防禦", desc:"整局限用1次：本回合可選擇不移動，自身無視戰鬥、毒氣、火箭筒等任何傷害，且可直接使用房間功能；飢餓仍需繳交水/糧。", uses:1}
   ]},
   lucky:{name:"幸運兒", skills:[
-    {name:"吉星高照", desc:"（被動）每輪輪到自己行動時，先自動擲骰：擲到1：本回合免疫所有傷害（戰鬥、毒氣、火箭筒等；飢餓與暗影吸血除外），且房間搜索多抽1張；擲到4：本回合可多移動兩步，且房間搜索多抽1張；擲到6：立即恢復2點生命（不超過上限）；擲到2：重擲（見幸運重擲）；擲到3、5：沒有效果。", passive:true},
-    {name:"幸運重擲", desc:"（被動）吉星高照擲到2時，可以重擲，次數不限，以最後一次的結果為準。", passive:true}
+    {name:"吉星高照", desc:"（被動）每輪行動階段開始時先自動擲骰：擲到1：從水塔獲得1份水（水塔沒存貨則失效）；擲到2：從糧倉獲得1份糧（糧倉沒存貨則失效）；擲到3：從大倉庫抽取1張道具卡（大倉庫沒存貨則失效）；擲到4：從垃圾場抽取1張道具卡（垃圾場沒存貨則失效）；擲到5：本回合移動步數+2；擲到6：立即恢復1點生命（不超過上限）。", passive:true},
+    {name:"幸運加持", desc:"（被動）吉星高照的骰值與上一回合相同時，可以額外自選一項其他效果發動（不能選當回合已擲到的那項）。", passive:true}
   ]},
   hermit:{name:"隱士", skills:[
     {name:"離群索居", desc:"（被動）房間內只有你1人（無其他玩家、無暗影）時，戰鬥／中毒／飢餓傷害各-1。", passive:true},
@@ -881,7 +981,7 @@ const PROFESSIONS = {
     {name:"火場老手", desc:"（被動）你所在房間（含你）有3名以上存活玩家時，你受到的戰鬥傷害-3。", passive:true}
   ]},
   vampire:{name:"吸血鬼", skills:[
-    {name:"吸血", desc:"（被動）戰鬥中對其他玩家造成傷害時，回復該傷害一半（捨去小數）的生命；每輪最多回復2點。", passive:true},
+    {name:"吸血", desc:"（被動）武力+1；戰鬥中對其他玩家造成傷害時，回復該傷害一半（捨去小數）的生命；每輪最多回復2點。", passive:true},
     {name:"畏光", desc:"（被動）結算時若停留在頂樓房間（基因庫、停機坪），生命-2。", passive:true}
   ]},
   assassin:{name:"刺客", skills:[
@@ -903,7 +1003,7 @@ const PROF_ICON={
   shopper:"🛍️", runner:"🏃", herbalist:"🌿", veteran:"🎖️", pickpocket:"🥷",
   diver:"🤿", courier:"📦", gourmet:"🍽️", farmer:"🌾", miner:"⛏️", hunter:"🏹",
   mediocre:"🤷", boss:"🕴️", collector:"📿", butcher:"🥩", exorcist:"🕯️", guardian:"🛡️", lucky:"🍀",
-  hermit:"🏚️", prepper:"🥫", witch:"🧙", toxic:"☣️", arsonist:"🔥", vampire:"🧛", assassin:"🗡️", detective:"🕵️", oracle:"☠️"
+  hermit:"🏚️", prepper:"🥫", witch:"🧙", toxic:"☣️", arsonist:"🔥", vampire:"🧛", assassin:"🗡️", laiqingde:"🐦", shenboyang:"🐻", jiangwanan:"🎤", suzhenchang:"🏃‍♂️", detective:"🕵️", oracle:"☠️"
 };
 // ===================== 三國模式 (SANGUO_MODE) =====================
 // 40 characters across 4 kingdoms. Added directly into PROFESSIONS (not a separate object) so
@@ -1359,63 +1459,171 @@ function restoreGame(){
 /* ===================== SOUND EFFECTS ===================== */
 // All synthesized on the fly with the Web Audio API — no audio files, no network, no cost.
 // Browsers block audio before a user gesture, so the AudioContext is created lazily on first use.
+// Audio-engineering structure (adapted from the Game Audio Engineer spec to a single-page Web Audio build):
+//  - Bus architecture: every voice -> category bus (ui / state / combat / skill) -> master -> compressor (limiter) -> out,
+//    so simultaneous hits can never clip and categories can be re-balanced in one place (BUS_LEVEL).
+//  - Voice budget: MAX_VOICES concurrent voices; when full, a new voice steals the lowest-priority/oldest one,
+//    and is dropped if nothing of lower priority exists. prio 0 = never stolen (round/death/victory), 1 = combat/heal, 2 = skill, 3 = UI/footsteps.
+//  - Per-event cooldowns stop log spam (e.g. a round summary printing 8 damage lines) from machine-gunning one sound.
+//  - Randomized containers: every trigger jitters pitch and volume a little — nothing sounds identical twice.
+//  - Layered synthesis: transient (noise) + body (pitched sweep) + tail, instead of one bare oscillator.
 const SFX=(()=>{
-  let ctx=null, muted=localStorage.getItem("sfxMuted")==="1";
+  let ctx=null, master=null, comp=null, noiseBuf=null, muted=localStorage.getItem("sfxMuted")==="1";
+  const buses={}, BUS_LEVEL={ui:0.7,state:0.9,combat:1,skill:0.8};
+  const MAX_VOICES=24, COOLDOWN={click:35,move:70,hit:90,heal:140,skill:120};
+  let voices=[], dropped=0; const lastAt={};
+  const rnd=()=>Math.random();
+  const J=(x,p)=>x*(1+(rnd()*2-1)*p);              // +-p random variation
   function ensureCtx(){
-    if(!ctx){ const AC=window.AudioContext||window.webkitAudioContext; if(!AC) return null; ctx=new AC(); }
+    if(!ctx){
+      const AC=window.AudioContext||window.webkitAudioContext; if(!AC) return null;
+      ctx=new AC();
+      master=ctx.createGain(); master.gain.value=muted?0:0.85;
+      comp=ctx.createDynamicsCompressor();
+      comp.threshold.value=-14; comp.knee.value=18; comp.ratio.value=8; comp.attack.value=0.003; comp.release.value=0.2;
+      master.connect(comp); comp.connect(ctx.destination);
+      Object.keys(BUS_LEVEL).forEach(k=>{ const g=ctx.createGain(); g.gain.value=BUS_LEVEL[k]; g.connect(master); buses[k]=g; });
+      noiseBuf=ctx.createBuffer(1,ctx.sampleRate,ctx.sampleRate);
+      const d=noiseBuf.getChannelData(0); for(let i=0;i<d.length;i++) d[i]=rnd()*2-1;
+    }
     if(ctx.state==="suspended") ctx.resume();
     return ctx;
   }
-  function tone(freq,dur,type,peak,delay){
-    if(muted) return;
+  function ready(name){
+    if(muted) return false;
+    const now=performance.now();
+    if(COOLDOWN[name] && now-(lastAt[name]||0)<COOLDOWN[name]) return false;
+    lastAt[name]=now;
+    return !!ensureCtx();
+  }
+  function alloc(bus,prio,tEnd){
+    const t=ctx.currentTime;
+    voices=voices.filter(v=>v.end>t);
+    if(voices.length>=MAX_VOICES){
+      let cand=null;
+      voices.forEach(v=>{ if(v.prio>prio && (!cand || v.prio>cand.prio || (v.prio===cand.prio && v.end<cand.end))) cand=v; });
+      if(!cand){ dropped++; return null; }
+      try{ cand.g.gain.cancelScheduledValues(t); cand.g.gain.setTargetAtTime(0,t,0.01); cand.stop(t+0.06); }catch(e){}
+      voices=voices.filter(v=>v!==cand);
+    }
+    const g=ctx.createGain(); g.connect(buses[bus]);
+    const v={g,prio,end:tEnd,stop:()=>{}}; voices.push(v); return v;
+  }
+  function env(param,t0,peak,atk,dur){
+    param.setValueAtTime(0.0001,t0);
+    param.linearRampToValueAtTime(Math.max(0.0002,peak),t0+atk);
+    param.exponentialRampToValueAtTime(0.0001,t0+dur);
+  }
+  // pitched voice: optional glide f0->f1 and low-pass
+  function osc(o){
     try{
-      const c=ensureCtx(); if(!c) return;
-      const t0=c.currentTime+(delay||0);
-      const osc=c.createOscillator(), gain=c.createGain();
-      osc.type=type||"sine"; osc.frequency.setValueAtTime(freq,t0);
-      gain.gain.setValueAtTime(0,t0);
-      gain.gain.linearRampToValueAtTime(peak||0.15,t0+0.012);
-      gain.gain.exponentialRampToValueAtTime(0.0001,t0+dur);
-      osc.connect(gain); gain.connect(c.destination);
-      osc.start(t0); osc.stop(t0+dur+0.02);
+      const t0=ctx.currentTime+(o.delay||0), dur=o.dur;
+      const v=alloc(o.bus,o.prio,t0+dur+0.05); if(!v) return;
+      const n=ctx.createOscillator(); n.type=o.type||"sine"; n.frequency.setValueAtTime(o.f0,t0);
+      if(o.f1) n.frequency.exponentialRampToValueAtTime(Math.max(20,o.f1),t0+dur);
+      let out=n;
+      if(o.lp){ const f=ctx.createBiquadFilter(); f.type="lowpass"; f.frequency.value=o.lp; n.connect(f); out=f; }
+      out.connect(v.g); env(v.g.gain,t0,o.peak,o.atk||0.006,dur);
+      n.start(t0); n.stop(t0+dur+0.03); v.stop=w=>{ try{ n.stop(w); }catch(e){} };
     }catch(e){}
   }
-  function sweep(f0,f1,dur,type,peak,delay){
-    if(muted) return;
+  // filtered-noise voice: transients, swishes, impacts
+  function noise(o){
     try{
-      const c=ensureCtx(); if(!c) return;
-      const t0=c.currentTime+(delay||0);
-      const osc=c.createOscillator(), gain=c.createGain();
-      osc.type=type||"sine"; osc.frequency.setValueAtTime(f0,t0);
-      osc.frequency.exponentialRampToValueAtTime(Math.max(1,f1),t0+dur);
-      gain.gain.setValueAtTime(0,t0);
-      gain.gain.linearRampToValueAtTime(peak||0.18,t0+0.01);
-      gain.gain.exponentialRampToValueAtTime(0.0001,t0+dur);
-      osc.connect(gain); gain.connect(c.destination);
-      osc.start(t0); osc.stop(t0+dur+0.02);
+      const t0=ctx.currentTime+(o.delay||0), dur=o.dur;
+      const v=alloc(o.bus,o.prio,t0+dur+0.05); if(!v) return;
+      const s=ctx.createBufferSource(); s.buffer=noiseBuf;
+      const f=ctx.createBiquadFilter(); f.type=o.ftype||"lowpass"; f.Q.value=o.q||0.8;
+      f.frequency.setValueAtTime(o.f0,t0); if(o.f1) f.frequency.exponentialRampToValueAtTime(Math.max(40,o.f1),t0+dur);
+      s.connect(f); f.connect(v.g); env(v.g.gain,t0,o.peak,o.atk||0.003,dur);
+      s.start(t0,rnd()*0.5); s.stop(t0+dur+0.03); v.stop=w=>{ try{ s.stop(w); }catch(e){} };
     }catch(e){}
   }
   return {
     isMuted:()=>muted,
-    setMuted(v){ muted=v; localStorage.setItem("sfxMuted",v?"1":"0"); },
+    setMuted(v){
+      muted=v; localStorage.setItem("sfxMuted",v?"1":"0");
+      if(master && ctx){ master.gain.cancelScheduledValues(ctx.currentTime); master.gain.setTargetAtTime(v?0:0.85,ctx.currentTime,0.02); }
+    },
+    stats:()=>({active:ctx?voices.filter(v=>v.end>ctx.currentTime).length:0,max:MAX_VOICES,dropped}),
     // 技能特效版: one short synthesized cue per effect motion (matches FX_STYLE[].m)
     skill(m){
+      if(!ready("skill")) return;
+      const p=J(1,0.05), v=J(1,0.12);
+      const k=(f,dur,type,peak,delay,lp)=>osc({bus:"skill",prio:2,f0:f,dur,type,peak,delay,lp});
       switch(m){
-        case "burst": sweep(300,60,0.3,"sawtooth",0.2); tone(880,0.12,"square",0.07,0.02); tone(1320,0.1,"triangle",0.06,0.08); break;
-        case "rain": for(let i=0;i<7;i++) tone(1400-i*110,0.07,"square",0.045,i*0.055); break;
-        case "rise": [0,1,2,3].forEach(i=>tone(440*Math.pow(1.26,i),0.18,"sine",0.09,i*0.07)); break;
-        case "ring": tone(660,0.35,"sine",0.1); tone(990,0.45,"sine",0.07,0.06); sweep(400,900,0.3,"triangle",0.06); break;
-        case "streak": sweep(200,1400,0.32,"sawtooth",0.1); sweep(1400,300,0.22,"triangle",0.05,0.28); break;
-        case "spiral": for(let i=0;i<8;i++) tone(500+i*90,0.09,"triangle",0.07,i*0.05); break;
+        case "burst":
+          osc({bus:"skill",prio:2,f0:300*p,f1:60,dur:0.3,type:"sawtooth",peak:0.18*v,lp:2200});
+          noise({bus:"skill",prio:2,dur:0.22,peak:0.12*v,ftype:"lowpass",f0:3000,f1:400});
+          k(880*p,0.12,"square",0.06*v,0.02); k(1320*p,0.1,"triangle",0.05*v,0.08); break;
+        case "rain": for(let i=0;i<7;i++) k((1400-i*110)*p,0.07,"square",0.04*v,i*0.055,4000); break;
+        case "rise": [0,1,2,3].forEach(i=>k(440*p*Math.pow(1.26,i),0.2,"sine",0.085*v,i*0.07)); break;
+        case "ring":
+          k(660*p,0.38,"sine",0.09*v); k(990*p,0.48,"sine",0.06*v,0.06);
+          osc({bus:"skill",prio:2,f0:400,f1:900,dur:0.3,type:"triangle",peak:0.05*v}); break;
+        case "streak":
+          osc({bus:"skill",prio:2,f0:200*p,f1:1400,dur:0.32,type:"sawtooth",peak:0.09*v,lp:3500});
+          noise({bus:"skill",prio:2,dur:0.3,peak:0.07*v,ftype:"bandpass",f0:600,f1:3500,q:1.2});
+          osc({bus:"skill",prio:2,f0:1400,f1:300,dur:0.22,type:"triangle",peak:0.04*v,delay:0.28}); break;
+        case "spiral": for(let i=0;i<8;i++) k((500+i*90)*p,0.1,"triangle",0.065*v,i*0.05); break;
       }
     },
-    click(){ tone(1500,0.045,"square",0.045); },
-    move(){ tone(520,0.06,"triangle",0.08); tone(700,0.07,"triangle",0.07,0.05); },
-    hit(){ sweep(220,80,0.18,"sawtooth",0.2); },
-    heal(){ tone(660,0.09,"sine",0.13); tone(880,0.12,"sine",0.13,0.08); },
-    death(){ sweep(300,55,0.5,"sawtooth",0.18); },
-    roundStart(){ tone(440,0.1,"triangle",0.11); tone(660,0.12,"triangle",0.11,0.1); },
-    victory(){ [523,659,784,1047].forEach((f,i)=>tone(f,0.28,"triangle",0.15,i*0.14)); }
+    click(){
+      if(!ready("click")) return;
+      const p=J(1,0.06);
+      osc({bus:"ui",prio:3,f0:1500*p,dur:0.04,type:"square",peak:J(0.04,0.15),lp:5000});
+      noise({bus:"ui",prio:3,dur:0.015,peak:0.03,ftype:"highpass",f0:3000});
+    },
+    // footstep pair: soft thump + scuff, second step slightly different so it reads as walking
+    move(){
+      if(!ready("move")) return;
+      const p=J(1,0.08), v=J(1,0.15);
+      [0,0.09].forEach((d,i)=>{
+        const q=p*(i?0.93:1);
+        osc({bus:"ui",prio:3,f0:170*q,f1:70,dur:0.09,type:"sine",peak:0.14*v,delay:d});
+        noise({bus:"ui",prio:3,dur:0.07,peak:0.07*v,ftype:"lowpass",f0:1500*q,f1:500,delay:d});
+      });
+    },
+    // impact = noise crack + low body thump
+    hit(){
+      if(!ready("hit")) return;
+      const p=J(1,0.1), v=J(1,0.12);
+      noise({bus:"combat",prio:1,dur:0.14,peak:0.22*v,ftype:"lowpass",f0:2600,f1:300});
+      osc({bus:"combat",prio:1,f0:200*p,f1:55,dur:0.2,type:"sine",peak:0.26*v});
+      osc({bus:"combat",prio:1,f0:140*p,f1:50,dur:0.12,type:"sawtooth",peak:0.08*v,lp:900});
+    },
+    heal(){
+      if(!ready("heal")) return;
+      const p=J(1,0.04), v=J(1,0.1);
+      [660,880,1175].forEach((f,i)=>{
+        osc({bus:"state",prio:1,f0:f*p,dur:0.2,type:"sine",peak:0.1*v,delay:i*0.07,atk:0.012});
+        osc({bus:"state",prio:1,f0:f*p*2,dur:0.14,type:"sine",peak:0.025*v,delay:i*0.07,atk:0.012});
+      });
+    },
+    death(){
+      if(!ready("death")) return;
+      const v=J(1,0.06);
+      osc({bus:"state",prio:0,f0:300,f1:45,dur:0.6,type:"sawtooth",peak:0.16*v,lp:1200});
+      osc({bus:"state",prio:0,f0:62,f1:38,dur:0.7,type:"sine",peak:0.3*v});
+      noise({bus:"state",prio:0,dur:0.5,peak:0.1*v,ftype:"lowpass",f0:1400,f1:120});
+    },
+    // bell-like round marker (fundamental + an inharmonic partial)
+    roundStart(){
+      if(!ready("roundStart")) return;
+      const v=J(1,0.05);
+      [[440,0],[660,0.1]].forEach(([f,d])=>{
+        osc({bus:"state",prio:0,f0:f,dur:0.4,type:"triangle",peak:0.1*v,delay:d,atk:0.01});
+        osc({bus:"state",prio:0,f0:f*2.76,dur:0.18,type:"sine",peak:0.025*v,delay:d,atk:0.01});
+      });
+    },
+    victory(){
+      if(!ready("victory")) return;
+      [523,659,784,1047].forEach((f,i)=>{
+        osc({bus:"state",prio:0,f0:f,dur:0.34,type:"triangle",peak:0.14,delay:i*0.14});
+        osc({bus:"state",prio:0,f0:f*2,dur:0.26,type:"sine",peak:0.04,delay:i*0.14});
+      });
+      [523,659,784,1047].forEach(f=>osc({bus:"state",prio:0,f0:f,dur:1.1,type:"sine",peak:0.05,delay:0.6,atk:0.04}));
+    }
   };
 })();
 // generic tactile feedback for any button press (capture phase so it always fires)
@@ -1428,6 +1636,25 @@ document.addEventListener("click",e=>{
   const syncMuteLabel=()=>{ muteBtn.textContent = SFX.isMuted()? "🔇 音效已關閉" : "🔊 音效"; };
   syncMuteLabel();
   muteBtn.addEventListener("click",()=>{ SFX.setMuted(!SFX.isMuted()); syncMuteLabel(); });
+})();
+
+/* ---------- accessibility: language + keyboard access for div-based clickables ---------- */
+(()=>{
+  document.documentElement.lang="zh-Hant";   // correct CJK glyph variant + screen-reader language
+  const SEL=".prof-card, #mapArea .room-chip:not(.dead)";
+  const mark=n=>{
+    if(n.nodeType!==1) return;
+    const list=(n.matches&&n.matches(SEL))?[n]:[];
+    if(n.querySelectorAll) n.querySelectorAll(SEL).forEach(x=>list.push(x));
+    list.forEach(x=>{ if(!x.hasAttribute("tabindex")){ x.tabIndex=0; x.setAttribute("role","button"); } });
+  };
+  new MutationObserver(ms=>ms.forEach(m=>m.addedNodes.forEach(mark))).observe(document.body,{childList:true,subtree:true});
+  mark(document.body);
+  document.addEventListener("keydown",e=>{
+    if((e.key==="Enter"||e.key===" ") && e.target.matches && e.target.matches(".prof-card[role=button], .room-chip[role=button]")){
+      e.preventDefault(); e.target.click();
+    }
+  });
 })();
 
 /* ---------- light/dark theme toggle, persisted across sessions ---------- */
@@ -1618,6 +1845,10 @@ const FX_STYLE={
   mediocre:{c:"#ff7a7a",g:["🩸","💔","🤷"],m:"burst"},
   collector:{c:"#c58bff",g:["📿","💍","🏺"],m:"spiral"},
   guardian:{c:"#ffd75a",g:["🛡️","✨","◈"],m:"ring"},
+  suzhenchang:{c:"#e85a4a",g:["💨","🏃‍♂️","🔥"],m:"streak"},
+  jiangwanan:{c:"#4aa8e8",g:["🎤","📸","🕊️"],m:"ring"},
+  shenboyang:{c:"#e8c24a",g:["💸","🧧","💰"],m:"burst"},
+  laiqingde:{c:"#2fbf71",g:["🐦","🕊️","🗳️"],m:"burst"},
   hermit:{c:"#9aa5b1",g:["🌫️","·","☁️"],m:"ring"},
   prepper:{c:"#d98c3a",g:["🥫","🥖","💧"],m:"burst"},
   witch:{c:"#a64dff",g:["🧙","☠️","🔮","☣️"],m:"rise"},
@@ -1821,6 +2052,10 @@ const SELECT_QUOTES={
   exorcist:"就算死了，我也能把你請回來。",
   guardian:"站在我旁邊，我會扛下這一切。",
   lucky:"我這個人，運氣一向不差。",
+  laiqingde:"順序，由我來排。",
+  shenboyang:"紅包收一收，被打也值得。",
+  jiangwanan:"鏡頭在哪，我就在哪。",
+  suzhenchang:"衝衝衝，不要停！",
   oracle:"毒往哪裡流，我比誰都先知道。",
   detective:"每個人的行蹤，我都有辦法查到。",
   arsonist:"火一點著，誰都別想全身而退。",
@@ -2165,7 +2400,6 @@ function makePlayer(id,isAI,profId,stats,name){
       detectiveUses:0, detectiveTarget:null, detectiveTracked:[],
       oracleUses:0, oracleReverse:false, oraclePredict:null, oracleHit:false,
       collectorTradeUses:0, exorcistRiteUsed:false, exorcistGhostUses:0, guardianDefenseUsed:false, guardianDefenseActive:false,
-      luckyImmuneActive:false,
       hermitCloakUses:0, hermitCloakActive:false, prepperCopyUses:0, witchSprinkleUsed:false,
       poisonImmune:false, lotteryDodgeActive:false,
       bossHenchmen:[], bossHenchmenPool:[], bossHenchmanOf:null,
@@ -2245,6 +2479,7 @@ function combatPower(p){
   // 屠夫的屠宰專精: flat +2 while a (single-bladed) 刀 is in the backpack — 雙刀 is its own
   // separate item with its own power value, so it doesn't trigger this bonus.
   if(p.prof==="butcher" && p.inv.includes("knife")) base+=2;
+  if(p.prof==="vampire") base+=1; // 吸血鬼的吸血: 武力+1
   // ---- 三國模式：武力相關被動 ----
   if(p.prof==="guanyu" && p.inv.includes("knife")) base+=2; // 青龍偃月刀
   if(p.prof==="zhangfei" && p.hp<=5) base+=2; // 燕人之勇
@@ -2717,6 +2952,7 @@ function beginRound(){
     if(p.prof==="machao" && p.hp<p.maxhp/2) p.stepsLeft+=1; // 西涼血脈
     if(p.prof==="simayi" && p.hp<=4) p.stepsLeft+=2; // 韜光養晦
     if(p.prof==="sunce" || p.prof==="mateng") p.stepsLeft+=1; // 小霸王／西涼鐵騎（簡化：每輪速度+1）
+    if(p.prof==="suzhenchang") p.stepsLeft+=STATE.round; // 衝衝衝: 第N輪速度+N
     p.roundStartRoom = p.room; // lets 回手 undo all movement made so far this round, for free
     p.roundStartSteps = p.stepsLeft;
     p.roundEvents=[]; // cleared for the new round — showRoundSummary already read last round's
@@ -2730,8 +2966,6 @@ function beginRound(){
     p.flags.vampireHealRound=0; // 吸血鬼的吸血: per-round heal cap
     p.flags.hunterAmbushActive=false; // 獵人的埋伏: the must-move waiver only covers the round it's used
     p.flags.guardianDefenseActive=false; // 守護者的絕對防禦: the must-move waiver + damage immunity only covers the round it's used
-    p.flags.luckyImmuneActive=false; // 幸運兒的吉星高照: the immunity/extra-draw only cover the round they were rolled
-    p.flags.luckyDrawBonus=false;
     p.flags.hermitCloakActive=false; // 隱士的遁世: the invisibility + room-function lockout only covers the round it's used
     p.flags.lotteryDodgeActive=false; // 樂透房's "本輪躲避毒氣" outcome: re-armed fresh each round it's rolled
     p.flags.smokeActive=false; // 煙霧彈: exempts this round's combat only, declared fresh each round it's used
@@ -2839,9 +3073,30 @@ function beginRound(){
   // 順序牌: a fresh random turn order each round, over everyone still taking turns — alive
   // players AND 暗影 (ghosts get a real turn to move, not an auto-skip).
   STATE.turnOrder=shuffleArr(STATE.players.filter(p=>p.alive||p.ghost).map(p=>p.id));
-  STATE.turnIndex=0;
-  STATE.phase="positioning";
-  advanceTurn();
+  // 賴清德的萊爾校長: a living 賴清德 decides the whole turn order. AI puts himself first, everyone else stays shuffled.
+  const lai=STATE.players.find(x=>x.prof==="laiqingde" && x.alive && !x.ghost);
+  const startTurns=()=>{ STATE.turnIndex=0; STATE.phase="positioning"; advanceTurn(); };
+  if(lai){
+    if(lai.isAI){
+      STATE.turnOrder=[lai.id,...STATE.turnOrder.filter(id=>id!==lai.id)];
+      log(lai.name+"（萊爾校長）決定了本輪行動順位，由自己排第一。");
+    } else {
+      const remaining=[...STATE.turnOrder], chosen=[];
+      const ask=()=>{
+        if(!remaining.length){
+          STATE.turnOrder=chosen; log(lai.name+"（萊爾校長）決定了本輪行動順位："+chosen.map(id=>STATE.players.find(x=>x.id===id).name).join(" → "));
+          closeModal(); startTurns(); return;
+        }
+        openModal(`<h3>萊爾校長：決定本輪行動順位</h3><p>目前順位：${chosen.map(id=>STATE.players.find(x=>x.id===id).name).join(" → ")||"（尚未選擇）"}</p>
+          <p>請選擇第 ${chosen.length+1} 順位：</p>${remaining.map(id=>{ const x=STATE.players.find(q=>q.id===id); return `<button class="btn small" data-id="${id}">${x.name}${x.ghost?"（暗影）":""}</button>`; }).join(" ")}`);
+        document.querySelectorAll("#modal button[data-id]").forEach(btn=>{
+          btn.onclick=()=>{ const id=btn.dataset.id; const k=remaining.findIndex(r=>String(r)===id); chosen.push(remaining.splice(k,1)[0]); ask(); };
+        });
+      };
+      ask(); return;
+    }
+  }
+  startTurns();
 }
 function isMyTurn(){
   return STATE.phase==="positioning" && !STATE.gameOver && STATE.turnOrder &&
@@ -2864,6 +3119,10 @@ function advanceTurn(){
     const p=STATE.players.find(x=>x.id===pid);
     if(!p || (!p.alive && !p.ghost)){ STATE.turnIndex++; continue; }
     luckyTurnRoll(p); // 幸運兒 rolls at the very start of their own turn
+    if(p.prof==="shenboyang" && p.alive && !p.ghost && p.flags.shenHealRound!==STATE.round){
+      p.flags.shenHealRound=STATE.round; p.hp=Math.min(p.maxhp,p.hp+1);
+      log(p.name+"（賺紅錢）回血+1（HP→"+p.hp+"）。","heal");
+    }
     if(p.isAI){
       if(p.ghost) resolveGhostAITurn(p); else resolveAITurn(p);
       checkRunnerEndurance(p);
@@ -3149,34 +3408,66 @@ function isFlatWeightless(p,item){
 // Human draw: reveal everything, auto-keep it all if it fits, otherwise let the player choose
 // which to keep up to remaining carry space (weightless items are always kept for free).
 // 幸運兒的吉星高照: the die is rolled once at the start of the player's own turn (luckyTurnRoll
-// below); a roll of 1 sets luckyDrawBonus, which gives every search that turn +1 card drawn.
-function rollLuckyBonus(p){
-  if(p.prof!=="lucky" || !p.flags.luckyDrawBonus) return 0;
-  log(p.name+"（吉星高照）本回合抽取道具多抽1張！");
-  return 1;
-}
-// 幸運兒's start-of-turn roll: 1 = 本回合無敵＋抽取多1張, 4 = 多移動兩步＋抽取多1張, 6 = 回血2, 2 = reroll (幸運重擲), 3/5 = nothing.
+// below); see luckyTurnRoll for the roll table.
+// 幸運兒's start-of-turn roll: 1 = 水塔取1水, 2 = 糧倉取1糧 (no stock = nothing), 3 = 大倉庫(B501)抽1張道具, 4 = 垃圾場(B503)抽1張道具,
+// 5 = 步數+2, 6 = 回血1.
 function luckyTurnRoll(p){
   if(p.prof!=="lucky" || !p.alive || p.ghost || p.flags.luckyRolledRound===STATE.round) return;
   p.flags.luckyRolledRound=STATE.round;
-  let roll=Math.floor(Math.random()*6)+1;
-  // 幸運重擲: a 2 may be rolled again, no limit on how many times — always worth taking, so it is automatic.
-  while(roll===2){
-    log(p.name+"（幸運重擲）擲骰2，重擲。");
-    roll=Math.floor(Math.random()*6)+1;
+  const roll=Math.floor(Math.random()*6)+1;
+  luckyApply(p,roll,"吉星高照");
+  // 幸運加持: same number as last turn's roll -> pick one more effect (any 1~6) to trigger as well.
+  if(p.flags.luckyLastRoll===roll){
+    log(p.name+"（幸運加持）與上回合骰值相同（"+roll+"），可額外自選一項其他效果！");
+    if(p.isAI){ luckyApply(p,luckyAIPick(p,roll),"幸運加持"); }
+    else {
+      const names={1:"水塔：1份水",2:"糧倉：1份糧",3:"大倉庫：抽1張道具",4:"垃圾場：抽1張道具",5:"移動步數+2",6:"恢復1點生命"};
+      openModal(`<h3>幸運加持：骰值相同，額外自選一項其他效果</h3>${[1,2,3,4,5,6].filter(k=>k!==roll).map(k=>`<button class="btn small" data-k="${k}">${k}：${names[k]}</button>`).join(" ")}`);
+      document.querySelectorAll("#modal button[data-k]").forEach(btn=>{
+        btn.onclick=()=>{ closeModal(); luckyApply(p,+btn.dataset.k,"幸運加持"); renderAll(); };
+      });
+    }
   }
-  if(roll===1){
-    p.flags.luckyImmuneActive=true; p.flags.luckyDrawBonus=true;
-    log(p.name+"（吉星高照）擲骰1：本回合免疫所有傷害（飢餓除外），抽取道具多抽1張！"); speakSkill(p,"lucky:1");
-  } else if(roll===4){
+  p.flags.luckyLastRoll=roll;
+}
+// AI choice for 幸運加持: heal when hurt, otherwise whichever stocked resource it is shortest of, else extra steps.
+function luckyAIPick(p,rolled){
+  const stock=(r,k)=>(ROOMS[r].stock[k]||0)>0;
+  const order=[];
+  if(p.maxhp-p.hp>=1) order.push(6);
+  if(countItem(p,"water")<1 && stock("101","water")) order.push(1);
+  if(countItem(p,"food")<1 && stock("B505","food")) order.push(2);
+  if(stock("B501","pistol")||stock("B501","shotgun")||stock("B501","pill")||stock("B501","adrenaline")) order.push(3);
+  order.push(5,6,1,2,3,4);
+  return order.find(k=>k!==rolled);
+}
+function luckyApply(p,roll,src){
+  if(roll===1 || roll===2){
+    const roomId=roll===1?"101":"B505", item=roll===1?"water":"food", from=roll===1?"水塔":"糧倉";
+    if((ROOMS[roomId].stock[item]||0)>0 && !(itemCostsCarry(p,item) && carryRoom(p)<=0)){
+      ROOMS[roomId].stock[item]--; p.inv.push(item);
+      log(p.name+"（"+src+"）擲骰"+roll+"：從"+from+"獲得1份"+ITEMS[item].name+"（"+from+"剩餘"+ROOMS[roomId].stock[item]+"）。","heal");
+      if(roll===1) speakSkill(p,"lucky:1");
+    } else {
+      log(p.name+"（"+src+"）擲骰"+roll+"："+from+"沒有存貨（或背包已滿），沒有效果。");
+    }
+  } else if(roll===3 || roll===4){
+    const roomId=roll===3?"B501":"B503", from=roll===3?"大倉庫":"垃圾場";
+    const st=ROOMS[roomId].stock, pool=[];
+    Object.keys(st).forEach(k=>{ for(let n=0;n<(st[k]||0);n++) pool.push(k); });
+    const pick=pool.length?pool[Math.floor(Math.random()*pool.length)]:null;
+    if(pick && canHoldItem(p,pick) && !(itemCostsCarry(p,pick) && carryRoom(p)<=0)){
+      st[pick]--; p.inv.push(pick);
+      log(p.name+"（"+src+"）擲骰"+roll+"：從"+from+"抽到1張「"+ITEMS[pick].name+"」。","heal");
+    } else {
+      log(p.name+"（"+src+"）擲骰"+roll+"："+from+"沒有存貨（或背包已滿），沒有效果。");
+    }
+  } else if(roll===5){
     p.stepsLeft=Math.min(10,p.stepsLeft+2); p.roundStartSteps=Math.min(10,p.roundStartSteps+2);
-    p.flags.luckyDrawBonus=true;
-    log(p.name+"（吉星高照）擲骰4：本回合可以多移動兩步，抽取道具多抽1張！");
+    log(p.name+"（"+src+"）擲骰5：本回合移動步數+2！");
   } else if(roll===6){
-    p.hp=Math.min(p.maxhp,p.hp+2);
-    log(p.name+"（吉星高照）擲骰6：立即恢復2點生命（HP→"+p.hp+"）。","heal");
-  } else {
-    log(p.name+"（吉星高照）擲骰"+roll+"：本回合沒有加成。");
+    p.hp=Math.min(p.maxhp,p.hp+1);
+    log(p.name+"（"+src+"）擲骰6：恢復1點生命（HP→"+p.hp+"）。","heal");
   }
 }
 function resolveHumanDraw(p,roomId,maxDraw){
@@ -3190,7 +3481,7 @@ function resolveHumanDraw(p,roomId,maxDraw){
   // shopper-only return-1 modal below. One-shot: consumed the instant a search happens.
   const mediocreExtra = (p.prof==="mediocre" && p.flags.mediocreExtraDraw) ? 1 : 0;
   if(mediocreExtra) p.flags.mediocreExtraDraw=false;
-  const keepCap=maxDraw+mediocreExtra+rollLuckyBonus(p);
+  const keepCap=maxDraw+mediocreExtra;
   const drawnItems=drawItemsFromStock(p,roomId,keepCap+extra);
   if(!drawnItems.length){ log("在「"+(room.name||roomId)+"」搜索到: （無收穫）"); return; }
   if(mediocreExtra) log(p.name+"（以命換命）本次搜索多抽了1張。");
@@ -3290,7 +3581,7 @@ function resolveAIDraw(p,roomId,maxDraw){
   // 庸才的以命換命 (抽卡選項): see resolveHumanDraw's matching comment.
   const mediocreExtra = (p.prof==="mediocre" && p.flags.mediocreExtraDraw) ? 1 : 0;
   if(mediocreExtra) p.flags.mediocreExtraDraw=false;
-  const keepCap=maxDraw+mediocreExtra+rollLuckyBonus(p);
+  const keepCap=maxDraw+mediocreExtra;
   let drawnItems=drawItemsFromStock(p,roomId,keepCap+extra);
   if(extra && drawnItems.length>keepCap){
     // 精挑細選: keep the best maxDraw of what was revealed, put the single worst back.
@@ -3483,11 +3774,21 @@ function collectAirdrop(p){
 
 /* ---- modals ---- */
 const MODAL_EL=document.getElementById("modal"), MODAL_BG_EL=document.getElementById("modal-bg");
+// Modal a11y: announced as a dialog, focus moves in on open and goes back to the opener on close.
+let modalReturnFocus=null;
 function openModal(html){
+  if(MODAL_BG_EL.classList.contains("hidden")) modalReturnFocus=document.activeElement;
   MODAL_EL.innerHTML=html;
+  MODAL_EL.setAttribute("role","dialog"); MODAL_EL.setAttribute("aria-modal","true");
+  const h=MODAL_EL.querySelector("h2,h3"); if(h){ if(!h.id) h.id="modalTitle"; MODAL_EL.setAttribute("aria-labelledby",h.id); }
   MODAL_BG_EL.classList.remove("hidden");
+  setTimeout(()=>{ const f=MODAL_EL.querySelector("button:not(:disabled),select,input,[tabindex]"); if(f) f.focus({preventScroll:true}); },0);
 }
-function closeModal(){ MODAL_BG_EL.classList.add("hidden"); }
+function closeModal(){
+  MODAL_BG_EL.classList.add("hidden");
+  const r=modalReturnFocus; modalReturnFocus=null;
+  if(r && r.isConnected && r.focus) try{ r.focus({preventScroll:true}); }catch(e){}
+}
 // Nearly every modal's cancel/close button is just this one-liner — a tiny helper instead of
 // repeating `document.getElementById(id).onclick=closeModal;` at each of its ~17 call sites.
 function bindModalClose(id){ document.getElementById(id).onclick=closeModal; }
@@ -4967,7 +5268,7 @@ document.getElementById("voteBtn").addEventListener("click",()=>{
     <button class="btn small warn" id="voteOk">投票</button> <button class="btn small ghost" id="voteCancel">取消</button>`);
   document.getElementById("voteOk").onclick=()=>{
     const f=+document.getElementById("voteSel").value;
-    const weight=p.flags.voteWeight||1;
+    const weight=Math.max(p.flags.voteWeight||1, p.prof==="laiqingde"?5:1);
     STATE.voteCounts[f]=(STATE.voteCounts[f]||0)+weight;
     STATE.voteLog.push({name:p.name, floor:f, weight});
     p.flags.voteWeight=1;
@@ -5533,7 +5834,7 @@ function resolveAITurn(p){
   }
   if(floorOpts.length){
     const voteFloor=floorOpts[Math.floor(Math.random()*floorOpts.length)];
-    const voteWeight=p.flags.voteWeight||1;
+    const voteWeight=Math.max(p.flags.voteWeight||1, p.prof==="laiqingde"?5:1);
     STATE.voteCounts[voteFloor]=(STATE.voteCounts[voteFloor]||0)+voteWeight;
     STATE.voteLog.push({name:p.name, floor:voteFloor, weight:voteWeight});
     p.flags.voteWeight=1;
@@ -5609,6 +5910,16 @@ function damagePlayer(p,amount,cause,killerId){
     }
   }
   if(p.flags.adrenalineActive){ p.hp=Math.max(1,p.hp-amount); p.roundEvents.push({cause,amount}); return; }
+  // 蔣萬安的廢死: he never drops below 1 HP from any source; anyone sharing his room can't be killed by COMBAT
+  // (cause strings of the form "與XX戰鬥"), their HP bottoms out at 1 instead.
+  if(p.alive && (p.prof==="jiangwanan" ||
+     (/^與.*戰鬥$/.test(cause) && STATE.players.some(x=>x.prof==="jiangwanan" && x.alive && !x.ghost && x.room===p.room)))){
+    const lost=Math.min(amount,Math.max(0,p.hp-1));
+    p.dmgTaken=(p.dmgTaken||0)+lost;
+    if(killerId!==undefined && lost>0){ const atk=STATE.players.find(x=>x.id===killerId); if(atk) atk.dmgDealt=(atk.dmgDealt||0)+lost; }
+    p.hp-=lost; p.roundEvents.push({cause:cause+"〔廢死：保留1血〕",amount:lost});
+    return;
+  }
   // Already eliminated this round (e.g. a 3+-fighter free-for-all where an earlier fighter's hit
   // already killed the target) — record the hit for the log, but don't re-run killPlayer's
   // side effects (item drop, embalmer bonus, shade's speed+2, ...) a second time on the same death.
@@ -5761,7 +6072,6 @@ function ghostDrainNeeded(p){ return (p.prof==="exorcist" && (p.flags.exorcistGh
 function damageWard(target,dmg,opts){
   if(dmg<=0) return {dmg,note:""};
   const isHunger = opts&&opts.hunger;
-  if(!isHunger && !(opts&&opts.drain) && target.prof==="lucky" && target.flags.luckyImmuneActive) return {dmg:0,note:"〔吉星高照：無敵〕"}; // 吉星高照擋不住暗影吸血
   if(!isHunger && target.prof==="guardian" && target.flags.guardianDefenseActive) return {dmg:0,note:"〔絕對防禦〕"};
   return {dmg,note:""};
 }
@@ -6318,6 +6628,7 @@ function resolveCombat(a,b,roomId,frozenA){
     if(p.prof==="chengpu" && p.flags.chengpuGuardActive && d>0){ const before=d; d=Math.max(0,d-3); note+="〔老將持重 -"+(before-d)+"〕"; }
     if(p.flags.pangtongVulnerable && d>0){ d+=2; note+="〔連環計 +2〕"; }
     if(p.prof==="xuchu" && p.flags.xuchuActive && d>0){ d+=1; note+="〔裸衣惡戰 +1〕"; } // 裸衣惡戰：受到傷害+1（沒受傷就不加）
+    if(p.prof==="shenboyang" && d>0){ d+=1; note+="〔被圍毆 +1〕"; }
     const gc=damageWard(p,d); d=gc.dmg; note+=gc.note;
     return {d,note};
   };
@@ -6633,6 +6944,12 @@ function renderAll(){
   EL.youProf.textContent=profIcon(p.prof)+" "+PROFESSIONS[p.prof].name;
   // 黑社會老大的你們先上: shows how many 小弟 charges are left to soak a hit for him — 0 means
   // the skill has stopped doing anything and damage is back to hitting him directly.
+  // 蔣萬安的作秀: everyone can see where he is at all times.
+  let showEl=document.getElementById("showStatus");
+  if(!showEl){ showEl=document.createElement("div"); showEl.id="showStatus"; showEl.className="mono"; showEl.style.cssText="font-size:11px;color:var(--amber-bright);margin-bottom:6px"; EL.bossHenchmenStatus.parentNode.insertBefore(showEl,EL.bossHenchmenStatus); }
+  const showman=STATE.players.find(x=>x.prof==="jiangwanan" && x.alive && !x.ghost);
+  if(showman){ showEl.textContent="🎤 作秀｜"+showman.name+" 目前在："+showman.room+" "+(ROOMS[showman.room].name||""); showEl.classList.remove("hidden"); }
+  else showEl.classList.add("hidden");
   if(p.prof==="boss"){
     const left=(p.flags.bossHenchmenPool||[]).length;
     EL.bossHenchmenStatus.textContent="你們先上｜剩餘小弟數量: "+left+(left===0?"（已用完，此技能失效）":"");
@@ -6642,10 +6959,13 @@ function renderAll(){
   }
   if(p.ghost){
     const needed=ghostDrainNeeded(p);
-    EL.hpBar.style.width=Math.min(100,(p.ghostDrainTotal/needed*100))+"%";
+    EL.hpBar.style.width=Math.min(100,(p.ghostDrainTotal/needed*100))+"%"; EL.hpBar.dataset.level="mid";
     EL.hpText.textContent="暗影吸血進度 "+p.ghostDrainTotal+"/"+needed+"（吸滿"+needed+"點復活）";
   } else {
     EL.hpBar.style.width=Math.max(0,(p.hp/p.maxhp*100))+"%";
+    { const pct=Math.max(0,Math.min(100,p.hp/p.maxhp*100));
+      EL.hpBar.dataset.level = pct<=30 ? "low" : (pct<=60 ? "mid" : "high");
+      const w=document.getElementById("hpBarWrap"); if(w) w.setAttribute("aria-valuenow",String(Math.round(pct))); }
     EL.hpText.textContent="HP "+p.hp+"/"+p.maxhp;
   }
   EL.stPower.textContent=combatPower(p);
