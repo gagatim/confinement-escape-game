@@ -1885,6 +1885,15 @@ const VOICE=(()=>{
   };
 })();
 function speakSkill(p,key,opts){ VOICE.speak(SKILL_QUOTES[key],p.prof,{queue:true,hype:true}); skillFX(p,key,opts); }
+// 被動技能「發動時」的視覺特效（不念台詞）：每個觸發點呼叫一次；同一個技能 1.2 秒內只播一次，避免結算時連播。
+const __passiveFxAt={};
+function passiveFX(p,key){
+  try{
+    const now=Date.now(), k=p.id+key;
+    if(__passiveFxAt[k] && now-__passiveFxAt[k]<1200) return;
+    __passiveFxAt[k]=now; skillFX(p,key);
+  }catch(e){}
+}
 // 技能特效版 v2: off by default (see #fxToggle on the setup screen). Each profession has its own
 // colour / glyph / motion (FX_STYLE); anything without an entry (incl. every 三國 general, tinted by
 // kingdom) falls back to a category look picked from the skill's own description text. Triggered
@@ -1937,7 +1946,11 @@ const FX_STYLE={
   arsonist:{c:"#ff6a1a",g:["🔥","🔥","💥"],m:"rise"},
   medic:{c:"#5aff96",g:["🩺","✚","💊"],m:"ring"},
   demolitions:{c:"#ff5a2a",g:["🧨","💥","🔥"],m:"burst"},
-  butcher:{c:"#c0392b",g:["🥩","🔪","🩸"],m:"burst"}
+  butcher:{c:"#c0392b",g:["🥩","🔪","🩸"],m:"burst"},
+  engineer:{c:"#f0a830",g:["⚙️","🔧","🔩","♻️"],m:"spiral"},
+  bartender:{c:"#ff7ad9",g:["🍸","🍹","🥂","🫧"],m:"rise"},
+  bomb:{c:"#ff9a3c",g:["🏀","💥","✦"],m:"bounce"},
+  merc:{c:"#ff6b3a",g:["🔫","🎯","💥","✦"],m:"burst"}
 };
 const FX_KINGDOM_C={"魏":"#5a9bff","蜀":"#4ade80","吳":"#ff6b6b"};
 function fxStyleFor(p,sk,type){
@@ -1996,7 +2009,10 @@ function fxStep(){
     const k=p.t/p.max;
     if(p.to){ const e=1-Math.pow(1-k,3); p.x=p.fx+(p.to.x-p.fx)*e; p.y=p.fy+(p.to.y-p.fy)*e-Math.sin(k*Math.PI)*p.arc; }
     else if(p.orb){ p.a+=p.va; p.r+=p.vr; p.x=p.ox+Math.cos(p.a)*p.r; p.y=p.oy+Math.sin(p.a)*p.r; }
-    else { p.vx*=p.drag; p.vy=p.vy*p.drag+p.gy; p.x+=p.vx; p.y+=p.vy; }
+    else {
+      p.vx*=p.drag; p.vy=p.vy*p.drag+p.gy; p.x+=p.vx; p.y+=p.vy;
+      if(p.floor!=null && p.y>p.floor && p.vy>0){ p.y=p.floor; p.vy*=-.72; } // 橡膠人的彈跳: 落地反彈
+    }
     p.rot+=p.vr; p.size+=p.grow;
     cx.globalAlpha=Math.max(0,Math.min(1,k<.12?k/.12:(1-k)/.55));
     if(p.kind==="ring"){ cx.strokeStyle=p.color; cx.lineWidth=3; cx.beginPath(); cx.arc(p.x,p.y,Math.max(1,p.size),0,7); cx.stroke(); }
@@ -2042,6 +2058,12 @@ function fxEmit(s,x,y,full){
       for(let i=0;i<34;i++){ const yy=full?fxR(0,H):y+fxR(-90,90); fxAdd({kind:"line",x:fxR(-100,W*.6),y:yy,vx:fxR(24,40),vy:0,size:fxR(2,4),color:s.c,max:34,delay:i%14}); }
       for(let i=0;i<8;i++) gl({x:-40,y:(full?fxR(H*.2,H*.8):y+fxR(-60,60)),vx:fxR(16,24),size:fxR(26,38),max:55,delay:i*3});
       break;
+    case "bounce": {
+      const fl=full?H*.82:y+80;
+      ring(0,0,5);
+      for(let i=0;i<16;i++) gl({x:x+fxR(-40,40),y:y-fxR(0,30),vx:fxR(-3.2,3.2),vy:fxR(-9,-4),gy:.55,drag:.995,floor:fl,size:fxR(22,36),vr:fxR(-.15,.15),max:fxR(60,85)|0,delay:i});
+      break;
+    }
     case "spiral":
       for(let i=0;i<24;i++) gl({orb:1,ox:x,oy:y,a:i/24*12.56,r:6,va:.13,vr:fxR(1.6,2.8),size:fxR(18,32),max:70,delay:i});
       ring(0,0,6);
@@ -3432,7 +3454,7 @@ function drawItemsFromStock(p,roomId,maxDraw){
     }
   }
   if(scavengerRolls>0){
-    log(p.name+"（拾荒嗅覺）"+(scavengerHits>0?"額外獲得"+scavengerHits+"個垃圾":"本次搜索未觸發")+"。");
+    log(p.name+"（拾荒嗅覺）"+(scavengerHits>0?"額外獲得"+scavengerHits+"個垃圾":"本次搜索未觸發")+"。"); if(scavengerHits>0) passiveFX(p,"scavenger:0");
   }
   // 走私客的熟悉門路: at 金庫/武器庫/藥房/垃圾場, 40% chance to pull one extra item from the same
   // room's stock, once per round — unlike 拾荒嗅覺 above this isn't a free weightless bonus, it
@@ -3568,7 +3590,7 @@ function luckyAIPick(p,rolled){
   order.push(5,6,1,2,3,4);
   return order.find(k=>k!==rolled);
 }
-function luckyApply(p,roll,src){
+function luckyApply(p,roll,src){ passiveFX(p,"lucky:0");
   if(roll===1 || roll===2){
     const roomId=roll===1?"101":"B505", item=roll===1?"water":"food", from=roll===1?"水塔":"糧倉";
     if((ROOMS[roomId].stock[item]||0)>0 && !(itemCostsCarry(p,item) && carryRoom(p)<=0)){
@@ -3636,7 +3658,7 @@ function resolveHumanKeep(p,drawnItems,roomId){
 }
 // 精挑細選／唯才是用's shared modal: pick exactly 1 of the extra-revealed items to put back into
 // the room's stock before the normal keep/carry-limit flow (resolveHumanKeep) runs on what's left.
-function openShopperReturnModal(p,drawnItems,roomId,maxDraw){
+function openShopperReturnModal(p,drawnItems,roomId,maxDraw){ if(p.prof==="shopper") passiveFX(p,"shopper:0");
   const skillName = p.prof==="caocao" ? "唯才是用" : "精挑細選";
   const names=drawnItems.map(g=>ITEMS[g].name).join("、");
   const opts=drawnItems.map((item,idx)=>`<option value="${idx}">${ITEMS[item].name}</option>`).join("");
@@ -4218,7 +4240,7 @@ function openBartenderWineModal(p){
     // full 1-6 pool, including the "excluded" results, once the shared flag had already been consumed).
     target.flags.wineExcludedQueue.push(excluded);
     target.flags.pendingItemUses.push("wine");
-    log(p.name+(isSelf?" 為自己調製了特調果汁":" 舉杯共飲，請 "+target.name+" 喝了一杯果汁")+"（結算階段公開生效）。");
+    log(p.name+(isSelf?" 為自己調製了特調果汁":" 舉杯共飲，請 "+target.name+" 喝了一杯果汁")+"（結算階段公開生效）。"); passiveFX(p,isSelf?"bartender:0":"bartender:1");
     closeModal(); renderAll();
   };
   bindModalClose("wineTargetCancel");
@@ -4388,6 +4410,7 @@ function doRecycle(p){
   const item=STATE.discardPile.splice(idx,1)[0];
   p.inv.push(item);
   p.flags.recycleUsedThisRound=true;
+  if(p.prof==="engineer") passiveFX(p,"engineer:0");
   log(p.name+" 使用循環回收裝置，獲得: "+ITEMS[item].name);
   renderAll();
 }
@@ -6291,7 +6314,7 @@ function killPlayer(p,cause,killerId){
     if(killer && killer.alive && killer.prof==="assassin") killer.flags.assassinSpeedNext=true; // 無聲離場
     if(killer && killer.alive && killer.prof==="butcher"){
       killer.hp=Math.min(killer.maxhp,killer.hp+2);
-      log(killer.name+"（鮮血盛宴）擊殺 "+p.name+"，恢復2點生命（HP→"+killer.hp+"）。","heal");
+      log(killer.name+"（鮮血盛宴）擊殺 "+p.name+"，恢復2點生命（HP→"+killer.hp+"）。","heal"); passiveFX(killer,"butcher:1");
     }
     // 姜維的繼志北伐: +1 永久武力／每次由自己擊殺，上限+2 — combatPower() reads the累積值.
     if(killer && killer.alive && killer.prof==="jiangwei"){
@@ -6351,7 +6374,7 @@ function killPlayer(p,cause,killerId){
   // pickup is offered), so a full backpack doesn't make the embalmer miss the very slot this
   // death just earned them. Taken straight from the dead player's inventory wherever they died —
   // no trip to the mortuary (B701) is needed.
-  embalmers.forEach(em=>{ em.carry++; log(em.name+"（蠱耗感應）負重永久+1（現為 "+em.carry+"）。"); });
+  embalmers.forEach(em=>{ em.carry++; log(em.name+"（蠱耗感應）負重永久+1（現為 "+em.carry+"）。"); passiveFX(em,"embalmer:0"); });
   // automatic passive pickup: a truly RANDOM pick among the items the embalmer can still carry
   // (mid-settlement, so there's no moment to ask what to drop; anything unpicked, or that doesn't
   // fit, goes to the mortuary instead rather than silently exceeding carry).
@@ -6747,7 +6770,7 @@ function* settleRoundCore(){
       if(p.prof==="mediocre"){ dmg+=1; note+="〔脆弱體質 +1〕"; }
       if(p.prof==="zhouyu" && dmg>0){ dmg=Math.max(0,dmg-2); note+="〔赤壁奇謀 -2〕"; } // 三國模式
       if(shooter && shooter.prof==="luxun"){ dmg+=1; note+="〔夷陵奇謀 +1〕"; } // 三國模式
-      if(p.prof==="bomb" && dmg>0){ const before=dmg; dmg=Math.max(0,dmg-4); note+="〔橡膠身軀 -"+(before-dmg)+"〕"; } // same flat -4 as vs a gun
+      if(p.prof==="bomb" && dmg>0){ passiveFX(p,"bomb:0"); const before=dmg; dmg=Math.max(0,dmg-4); note+="〔橡膠身軀 -"+(before-dmg)+"〕"; } // same flat -4 as vs a gun
       { const gc=damageWard(p,dmg); dmg=gc.dmg; note+=gc.note; }
       damagePlayer(p,dmg,"火箭筒");
       log(p.name+" 被火箭筒轟炸於「"+r+"」，受到 "+dmg+" 點傷害"+note+"。","dmg");
@@ -6862,7 +6885,7 @@ function* settleRoundCore(){
     if(p.prof!=="vampire" || !p.alive || p.ghost || !ROOMS[p.room] || ROOMS[p.room].floor!==0) return;
     const gc=damageWard(p,2);
     damagePlayer(p,gc.dmg,"畏光");
-    log(p.name+"（畏光）停留在頂樓房間，受到 "+gc.dmg+" 點傷害"+(gc.note||"")+"。","dmg");
+    log(p.name+"（畏光）停留在頂樓房間，受到 "+gc.dmg+" 點傷害"+(gc.note||"")+"。","dmg"); passiveFX(p,"vampire:1");
   });
 
   // 結算流程 3.3 步驟4：此時才詢問玩家是否繳交水糧（戰鬥、毒氣結果已公示）。
@@ -6926,7 +6949,7 @@ function* settleRoundCore(){
       // protected victim 0 HP instead of 1.
       // 還魂師的亡靈庇護: the drain still lands for the ghost (counts toward its revival), the exorcist just loses 0 HP.
       const drainGc=v.prof==="exorcist" ? {dmg:0, note:"〔亡靈庇護〕"} : damageWard(v, 1, {drain:true});
-      const drainDmg=drainGc.dmg;
+      const drainDmg=drainGc.dmg; if(v.prof==="exorcist") passiveFX(v,"exorcist:2");
       damagePlayer(v,drainDmg,"暗影吸血");
       g.ghostDrainTotal++;
       log(g.name+"（暗影）吸取了 "+v.name+" "+drainDmg+"點生命"+(drainGc.note?"（"+drainGc.note+"抵銷）":"")+"。","dmg");
@@ -6935,7 +6958,7 @@ function* settleRoundCore(){
     });
     if(g.ghostDrainTotal>=ghostDrainNeeded(g)){
       const needN=ghostDrainNeeded(g);
-      if(g.prof==="exorcist" && needN===1) g.flags.exorcistGhostUses=(g.flags.exorcistGhostUses||0)+1; // 臨終祝禱 is good for 2 revivals per game
+      if(g.prof==="exorcist" && needN===1){ g.flags.exorcistGhostUses=(g.flags.exorcistGhostUses||0)+1; passiveFX(g,"exorcist:0"); } // 臨終祝禱 is good for 2 revivals per game
       g.flags.reviveSafeRound=STATE.round+1; // 基本規則（所有玩家）：靠暗影吸血復活後的下一輪，結算時免繳水糧、不怕毒氣（戰鬥仍有效）
       g.ghost=false; g.alive=true; g.hp=Math.min(g.maxhp, Math.max(3,g.ghostDrainTotal));
       if(g.prof==="exorcist"){ g.speed+=1; log(g.name+"（安魂儀式）復活後速度永久+1（現為 "+g.speed+"）。"); speakSkill(g,"exorcist:1"); } // 安魂儀式: 復活後速度永久+1
@@ -7033,7 +7056,7 @@ function* settleRoundCore(){
 function resolveCombat(a,b,roomId,frozenA){
   // 華雄的關前挑戰: a declared duel strips both sides' guns — only 武力 counts.
   const duel=(a.flags.huaxiongDuelTarget===b.id) || (b.flags.huaxiongDuelTarget===a.id);
-  const aGun=duel?false:(frozenA?frozenA.aGun:hasGun(a)), bGun=duel?false:hasGun(b);
+  const aGun=duel?false:(frozenA?frozenA.aGun:hasGun(a)), bGun=duel?false:hasGun(b); if(a.prof==="merc" && aGun) passiveFX(a,"merc:0"); if(b.prof==="merc" && bGun) passiveFX(b,"merc:0");
   // 顏良的斬將 (+3 vs 生命較高者)、張遼的突襲 (+2, 本輪第一次攻擊且本輪有進入新房間).
   const sgBonus=(p,opp)=>{
     let x=0;
@@ -7060,7 +7083,7 @@ function resolveCombat(a,b,roomId,frozenA){
   const reduce=(p,dmg,attackerHasGun)=>{
     let d=dmg, note="";
     if(p.prof==="fatty" && d>0){ const before=d; d=Math.max(0,d-2); note+="〔肥肉坦克 -"+(before-d)+"〕"; }
-    if(p.prof==="bomb" && attackerHasGun && d>0){ const before=d; d=Math.max(0,d-4); note+="〔橡膠身軀 -"+(before-d)+"〕"; }
+    if(p.prof==="bomb" && attackerHasGun && d>0){ passiveFX(p,"bomb:0"); const before=d; d=Math.max(0,d-4); note+="〔橡膠身軀 -"+(before-d)+"〕"; }
     if(p.prof==="arsonist" && d>0 && playersInRoom(roomId,true).length>=3){ const before=d; d=Math.max(0,d-3); note+="〔火場老手 -"+(before-d)+"〕"; }
     // 守護者的庇護結界: every combat hit taken inside a room that holds a (living) 守護者 is -1,
     // for everyone there including him — combat only, other damage sources no longer get it.
@@ -7094,7 +7117,7 @@ function resolveCombat(a,b,roomId,frozenA){
     const h=Math.min(2-(v.flags.vampireHealRound||0), Math.floor(dealt/2));
     if(h<=0) return;
     v.hp=Math.min(v.maxhp,v.hp+h); v.flags.vampireHealRound=(v.flags.vampireHealRound||0)+h;
-    log(v.name+"（吸血）造成 "+dealt+" 點傷害，恢復 "+h+" 點生命（HP→"+v.hp+"）。","heal");
+    log(v.name+"（吸血）造成 "+dealt+" 點傷害，恢復 "+h+" 點生命（HP→"+v.hp+"）。","heal"); if(h>0) passiveFX(v,"vampire:0");
   });
   // ---- 三國模式：戰鬥後結算的一次性被動 ----
   if(a.prof==="xiahoudun" && dmgToA>0 && !bGun && b.alive){ damagePlayer(b,1,"剛烈反擊",a.id); log(b.name+" 近戰打中 "+a.name+"（剛烈），反被打回 1 點傷害。","dmg"); }
