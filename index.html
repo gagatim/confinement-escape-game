@@ -3339,8 +3339,9 @@ function openEndTurnDiscardModal(p,done){
     return `<label style="display:block;margin:4px 0"><input type="checkbox" class="dcChk" data-i="${r.i}" checked> ${ITEMS[r.item].name}</label>`;
   }).join("");
   const dropNote=isFunctionlessRoom(room)?"取消勾選即為丟棄；這間房間沒有功能，丟下的道具會直接消失。":"取消勾選即為丟棄；丟下的道具會留在「"+(room.name||p.room)+"」。";
+  const courierNote=p.prof==="courier" ? "<div class='muted' style='margin-bottom:8px;font-size:12.5px;color:var(--amber-bright)'>超載快遞：容量+1只撐到這一輪；若下一輪開始時道具仍超過原本上限（"+(cap-(p.courierBonusCarry||0))+"），系統會強制丟棄1張。</div>" : "";
   openModal(`<h3>回合結束：背包超過負重上限，請丟棄道具</h3>
-    <div class="muted" style="margin-bottom:8px;font-size:12.5px">${dropNote}</div>
+    <div class="muted" style="margin-bottom:8px;font-size:12.5px">${dropNote}</div>${courierNote}
     <div>${html}</div>
     <div class="mono muted" id="dcCount" style="margin:8px 0"></div>
     <button class="btn small" id="dcOk">確認</button>`);
