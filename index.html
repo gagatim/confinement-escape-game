@@ -814,7 +814,7 @@ const PROFESSIONS = {
     {name:"肥宅味", desc:"（被動）所有玩家都知道你所在的房間。", passive:true}
   ]},
   bomb:{name:"橡膠人", skills:[
-    {name:"橡膠身軀", desc:"（被動）<br>・受到持槍對手的戰鬥傷害時，傷害永久-4<br>・代價：你無法持有槍（手槍／霰彈槍），抽到槍時放回房間，並補抽一張（不會抽到槍）。", passive:true},
+    {name:"橡膠身軀", desc:"（被動）<br>・受到持槍對手的戰鬥傷害、以及火箭筒傷害時，傷害永久-4<br>・代價：你無法持有槍（手槍／霰彈槍），抽到槍時放回房間，並補抽一張（不會抽到槍）。", passive:true},
     {name:"隔空取物", desc:"（主動，整場限用2次）移動後、使用房間功能前發動：<br>・放棄本房間的行動<br>・改為從「同樓層、相鄰」的房間抽取1張道具（須有庫存）。"}
   ]},
   gambler:{name:"賭徒", skills:[
@@ -6636,6 +6636,7 @@ function settleRoundCore(){
       if(p.prof==="mediocre"){ dmg+=1; note+="〔脆弱體質 +1〕"; }
       if(p.prof==="zhouyu" && dmg>0){ dmg=Math.max(0,dmg-2); note+="〔赤壁奇謀 -2〕"; } // 三國模式
       if(shooter && shooter.prof==="luxun"){ dmg+=1; note+="〔夷陵奇謀 +1〕"; } // 三國模式
+      if(p.prof==="bomb" && dmg>0){ const before=dmg; dmg=Math.max(0,dmg-4); note+="〔橡膠身軀 -"+(before-dmg)+"〕"; } // same flat -4 as vs a gun
       { const gc=damageWard(p,dmg); dmg=gc.dmg; note+=gc.note; }
       damagePlayer(p,dmg,"火箭筒");
       log(p.name+" 被火箭筒轟炸於「"+r+"」，受到 "+dmg+" 點傷害"+note+"。","dmg");
