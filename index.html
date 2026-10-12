@@ -3710,6 +3710,36 @@ function openDrawSelectionModal(p,drawnItems,roomId){
 }
 // AI draw: reveal everything, then greedily keep the most useful items up to carry space
 // (weapons and meds first), returning whatever doesn't fit to the room's stock.
+// AI used to hoard 金條 forever (only the human 「用於本房」 button ever spent one), so the shared
+// 棄牌堆 never received any gold and 工程師's 回收裝置A could never pull one back. Mirror
+// useGoldAtRoom: spend 1 gold per round at the current room to take one more item from its stock
+// (the gold lands in 棄牌堆 immediately). Only spent when the pick is something the AI actually
+// needs — a missing water/food, a heal when hurt, or a gun — otherwise the gold stays in the bag
+// for the end-of-game +1 HP conversion.
+function aiUseGold(p){
+  if(p.ghost || p.hp<=0) return false;
+  const room=ROOMS[p.room];
+  if(!room || room.noGold || p.flags.goldUsedThisRound || countItem(p,"gold")<1) return false;
+  const stockKeys=Object.keys(room.stock||{}).filter(k=>room.stock[k]>0 && k!=="gold" && canHoldItem(p,k));
+  if(!stockKeys.length) return false;
+  const freedByGold=itemRemovalFrees(p,"gold")?1:0;
+  const fits=k=>!itemCostsCarry(p,k) || carryRoom(p)+freedByGold>0;
+  const want=[];
+  if(countItem(p,"water")===0) want.push("water");
+  if(countItem(p,"food")===0) want.push("food");
+  if(p.hp<=5) want.push("pill","adrenaline");
+  if(!hasGun(p)) want.push("shotgun","pistol");
+  const pick=want.find(k=>stockKeys.includes(k) && fits(k));
+  if(!pick) return false;
+  if(!removeItem(p,"gold")) return false;
+  p.flags.goldUsedThisRound=true;
+  STATE.discardPile.push("gold");
+  room.stock[pick]--;
+  p.inv.push(pick);
+  log(p.name+" 使用金條額外獲得: "+ITEMS[pick].name);
+  if(typeof dlog==="function") dlog(p.name+" 用金條換 "+ITEMS[pick].name+"（金條進棄牌堆）");
+  return true;
+}
 function resolveAIDraw(p,roomId,maxDraw){
   const priority=(it)=>(ITEMS[it].weapon?0:(it==="pill"||it==="adrenaline")?1:(it==="water"||it==="food")?2:3);
   const extra = (p.prof==="shopper" || p.prof==="caocao") ? 1 : 0;
@@ -4232,7 +4262,10 @@ function resolvePendingItemUses(p){
         }
         break;
       case "adrenaline":
-        p.flags.adrenalineActive=true; log(p.name+" 結算：注射腎上腺素，下輪速度變10，本輪不會致死。","heal"); break;
+        // 腎上腺素 resolves in the 「使用道具」 step (after hunger), see settleRoundCore step 7: it
+        // gives next round's speed 10 and keeps the holder from dying until NEXT round's hunger
+        // (水糧) settlement is done. Here it's only queued.
+        p.flags.__adrenalineQueued=true; break;
     }
   });
   p.flags.pendingItemUses=pillsPending; // pill(s)/wine(s) stay queued until after combat/hunger
@@ -5981,6 +6014,7 @@ function resolveAITurn(p){
   // 張角的黃天之世（三國模式）: AI 也一樣拿不到被封印房間的功能。
   const roomDisabled = (STATE.sanguoDisabledRooms && STATE.sanguoDisabledRooms.has(p.room)) || aiConsiderBombReach(p);
   if(!roomDisabled && room.draw>0){ resolveAIDraw(p,p.room,room.draw); }
+  if(!roomDisabled) aiUseGold(p);
   if(!roomDisabled && room.special==="gene"){ p.power++; p.speed++; p.carry++; }
   if(!roomDisabled && room.special==="respec"){ /* AI keeps stats */ }
   if(!roomDisabled && room.special==="lottery"){ doLottery(p); }
@@ -6533,8 +6567,18 @@ function spawnSettlement(){
 // An exception anywhere in settlement used to abort it before the round-summary modal opened,
 // leaving phase==="settlement" forever so every click said "尚未輪到你的回合". Catch it, log it,
 // and still show the summary so the game can continue to the next round.
-function settleRound(){
-  try { settleRoundCore(); }
+// settleRoundCore is a generator so settlement can PAUSE at the two official asking points
+// (規則 3.3: 步驟4 先問「繳交水糧」，步驟6 才問「使用道具」) while a human answers a modal, then
+// resume exactly where it stopped. It only yields when a human actually has something to answer;
+// with no prompt needed (all-AI games, sims) the whole settlement still runs synchronously.
+function settleRound(){ driveSettle(settleRoundCore()); }
+function driveSettle(gen){
+  try {
+    const r=gen.next();
+    if(!r.done && r.value && typeof r.value.ask==="function"){
+      r.value.ask(()=>driveSettle(gen));
+    }
+  }
   catch(err){
     console.error("[settleRound]",err); reportError("結算",err);
     log("⚠ 結算過程發生錯誤："+(err&&err.message||err)+"（已略過，繼續下一步）");
@@ -6543,7 +6587,66 @@ function settleRound(){
     }
   }
 }
-function settleRoundCore(){
+// ---- 結算階段詢問（官方流程 3.3）----
+function humansToPay(){
+  if(STATE.round<2) return [];
+  return STATE.players.filter(p=>!p.isAI && p.alive && !p.ghost && !p.flags.dietThisRound && p.room!=="B204"
+    && p.flags.reviveSafeRound!==STATE.round
+    && (countItem(p,"water")>0||countItem(p,"food")>0||countItem(p,"waterfood")>0));
+}
+function humansToUseItems(){
+  return STATE.players.filter(p=>!p.isAI && p.alive && !p.ghost
+    && (countItem(p,"pill")>0||countItem(p,"adrenaline")>0||(countItem(p,"wine")>0 && p.prof!=="bartender")));
+}
+// Sequentially shows one modal per listed human; `build(p)` returns {title,note,rows:[{item,label,checked}]},
+// `commit(p,chosenItems)` applies the answer. The modal has no cancel: settlement can't continue without it.
+function askSettleModals(list,build,commit,resume){
+  const next=(i)=>{
+    if(i>=list.length){ closeModal(); resume(); return; }
+    const p=list[i], b=build(p);
+    openModal(`<h3>${b.title}</h3><div style="margin:6px 0">${b.note}</div>`+
+      b.rows.map((r,k)=>`<label style="display:block;margin:4px 0"><input type="checkbox" data-k="${k}"${r.checked?" checked":""}> ${r.label}</label>`).join("")+
+      `<br><button class="btn small" id="settleAskOk">確認</button>`);
+    document.getElementById("settleAskOk").onclick=()=>{
+      const chosen=[...document.querySelectorAll("#modal input[data-k]")].filter(c=>c.checked).map(c=>b.rows[+c.dataset.k].item);
+      try { commit(p,chosen); } catch(err){ console.error(err); reportError("結算詢問",err); }
+      next(i+1);
+    };
+  };
+  next(0);
+}
+function askPayModals(resume){
+  askSettleModals(humansToPay(), p=>{
+    const rows=[];
+    const hasW=countItem(p,"water")>0, hasF=countItem(p,"food")>0, hasWF=countItem(p,"waterfood")>0;
+    if(hasWF && !(hasW&&hasF)) rows.push({item:"waterfood",label:"水糧包（抵1水＋1糧）",checked:true});
+    else if(hasWF) rows.push({item:"waterfood",label:"水糧包（抵1水＋1糧）",checked:false});
+    if(hasW) rows.push({item:"water",label:"水（"+countItem(p,"water")+"）",checked:!(hasWF&&!hasF)});
+    if(hasF) rows.push({item:"food",label:"糧（"+countItem(p,"food")+"）",checked:!(hasWF&&!hasW)});
+    return {title:"結算：繳交水糧", note:p.name+"：本輪需繳交1水＋1糧，只繳其一扣1點生命，都沒繳扣2點生命（目前生命 "+p.hp+"）。"+(p.prof==="chef"?"（廚師：水或糧擇一即可）":""), rows};
+  }, (p,chosen)=>{
+    chosen.forEach(it=>{ if(removeItem(p,it)) p.flags.pendingItemUses.push(it); });
+    resolvePendingItemUses(p);
+  }, resume);
+}
+function askUseItemModals(resume){
+  askSettleModals(humansToUseItems(), p=>{
+    const rows=[];
+    for(let i=0;i<countItem(p,"pill");i++) rows.push({item:"pill",label:"藥片（結算後回血）",checked:false});
+    if(countItem(p,"adrenaline")>0) rows.push({item:"adrenaline",label:"腎上腺素（下輪速度10，下輪飢餓結算完前不會死）",checked:false});
+    if(p.prof!=="bartender") for(let i=0;i<countItem(p,"wine");i++) rows.push({item:"wine",label:"酒（6種結果隨機）",checked:false});
+    return {title:"結算：使用道具", note:p.name+"：是否使用藥片／腎上腺素／酒？（目前生命 "+p.hp+"）", rows};
+  }, (p,chosen)=>{
+    chosen.forEach(it=>{
+      if(!removeItem(p,it)) return;
+      if(it==="wine") p.flags.wineExcludedQueue.push(null);
+      p.flags.pendingItemUses.push(it);
+      log(p.name+" 結算：使用「"+ITEMS[it].name+"」。");
+    });
+    resolvePendingItemUses(p);
+  }, resume);
+}
+function* settleRoundCore(){
   STATE.phase="settlement";
   log("<b>── 進入結算階段 ──</b>");
   STATE.__report={combat:[], rocket:[], hunger:[], drain:[], poison:"", poisonDamage:[]};
@@ -6591,6 +6694,8 @@ function settleRoundCore(){
   });
 
   releaseHoundItems(); // 馴獸師: 獵犬帶回的道具在結算階段才可使用
+  // 腎上腺素（上輪結算使用）：本輪結算開始起保底1血，撐到本輪飢餓結算完（見步驟4之後）。
+  STATE.players.forEach(p=>{ if(p.flags.adrenalineShieldNext){ p.flags.adrenalineShieldNext=false; if(p.alive && !p.ghost) p.flags.adrenalineActive=true; } });
   // 1) queued item-card effects (水/糧/腎上腺素 — "結算階段公開使用"；酒與藥片 resolve later, see step 7)
   STATE.players.forEach(p=>{ if(p.alive) resolvePendingItemUses(p); });
 
@@ -6755,6 +6860,8 @@ function settleRoundCore(){
     log(p.name+"（畏光）停留在頂樓房間，受到 "+gc.dmg+" 點傷害"+(gc.note||"")+"。","dmg");
   });
 
+  // 結算流程 3.3 步驟4：此時才詢問玩家是否繳交水糧（戰鬥、毒氣結果已公示）。
+  if(humansToPay().length) yield {ask:askPayModals};
   // 4) hunger (round>=2)
   if(STATE.round>=2){
     STATE.players.forEach(p=>{
@@ -6786,6 +6893,9 @@ function settleRoundCore(){
       }
     });
   }
+
+  // 腎上腺素的保底1血在水糧（飢餓）結算完後失效。
+  STATE.players.forEach(p=>{ p.flags.adrenalineActive=false; });
 
   // 5) laser room
   STATE.players.forEach(p=>{
@@ -6830,6 +6940,19 @@ function settleRoundCore(){
 
   // 7) 酒 then 藥片 resolve LAST — after combat/poison/hunger/laser/暗影吸血 — so it reflects
   // this round's final HP instead of being overwritten by damage that comes later in settlement.
+  // 結算流程 3.3 步驟6：水糧處理完後，才詢問是否使用藥片／腎上腺素／酒。
+  if(humansToUseItems().length) yield {ask:askUseItemModals};
+  // 結算流程 3.3 步驟6「使用道具」：腎上腺素在此生效——下輪速度變10，且到「下一輪」的水糧（飢餓）
+  // 結算完之前不會死亡（保底1血）。例：第5輪結算使用，第6輪戰鬥／毒氣／飢餓都不會死。
+  STATE.players.forEach(p=>{
+    if(p.flags.__adrenalineQueued){
+      p.flags.__adrenalineQueued=false;
+      if(p.alive && !p.ghost){
+        p.flags.adrenalineJustUsed=true; p.flags.adrenalineShieldNext=true;
+        log(p.name+" 結算：注射腎上腺素，下輪速度變10，下輪飢餓結算完之前不會致死。","heal");
+      }
+    }
+  });
   STATE.players.forEach(p=>resolvePendingWines(p)); // 酒: after combat/poison/hunger
   STATE.players.forEach(p=>resolvePillHealing(p));
   // 黃蓋的詐降: after the round, take 1 random item from the named target (if any, and if it fits).
@@ -6845,12 +6968,12 @@ function settleRoundCore(){
 
   // adrenaline: apply next-round speed, then clear
   STATE.players.forEach(p=>{
-    if(p.flags.adrenalineActive){
+    if(p.flags.adrenalineJustUsed){
       p.flags.adrenalineNextSpeed=10;
     } else {
       p.flags.adrenalineNextSpeed=null;
     }
-    p.flags.adrenalineActive=false;
+    p.flags.adrenalineJustUsed=false;
     p.flags.consumed_water=false; p.flags.consumed_food=false;
     p.flags.roomLocked=false; p.flags.voteWeight=1;
     p.flags.climberVertical=false;
@@ -7380,7 +7503,10 @@ function renderAll(){
     const div=document.createElement("div"); div.className="inv-item";
     let actions="";
     const dis = id==="rope" ? "" : (needsCommit ? " disabled title=\"請先移動並確定停留在房間後，才能使用道具\"" : "");
-    if(["water","food","waterfood","pill","adrenaline","wine"].includes(id)) actions+=`<button class="btn small" data-use="${id}"${dis}>使用</button>`;
+    if(["water","food","waterfood","pill","adrenaline","wine"].includes(id)){
+      if(id==="wine" && p.prof==="bartender") actions+=`<button class="btn small" data-use="${id}"${dis}>倒酒</button>`;
+      else actions+=`<span class="muted" style="font-size:11px">結算時詢問</span>`;
+    }
     if(id==="gold") actions+=`<button class="btn small gold" data-gold="1"${dis}>用於本房</button>`;
     if(id==="rocket"){
       const rocketDisabled=needsCommit||p.flags.rocketShotsThisRound>=rocketShotCap(p);
