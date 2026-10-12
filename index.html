@@ -352,6 +352,13 @@
   .howto th,.howto td{border:1px solid var(--line);padding:5px 8px;text-align:center}
   .howto th{background:var(--panel-2);color:var(--muted);font-weight:600}
   .howto .tip{color:var(--amber-bright)}
+  .histToggle{display:inline-flex;gap:4px}
+  .histToggle .btn.on{background:var(--cyan);color:#04141a;border-color:var(--cyan)}
+  html[data-theme="light"] .histToggle .btn.on{background:#0b7f8a;color:#fff;border-color:#0b7f8a}
+  .rhDetail{margin-top:6px}
+  .rhSub{color:var(--violet);font-weight:700;margin:8px 0 4px}
+  .rhRoom{margin:4px 0;padding:4px 8px;border-left:2px solid var(--line)}
+  .rhDmg{color:var(--ember-bright)}
   /* reduced motion: no shake, flashes, particles or pulsing for users who ask the OS for it */
   @media (prefers-reduced-motion:reduce){
     *,*::before,*::after{animation-duration:.01ms !important;animation-iteration-count:1 !important;
@@ -525,7 +532,7 @@
     <div id="rankList"></div>
     <h2 style="color:var(--gold);font-family:Orbitron;font-size:15px;margin-top:20px">大家的移動路線</h2>
     <div id="routeList" class="mono" style="font-size:12.5px;line-height:1.9"></div>
-    <h2 style="color:var(--gold);font-family:Orbitron;font-size:15px;margin-top:20px">每輪回顧</h2>
+    <h2 style="color:var(--gold);font-family:Orbitron;font-size:15px;margin-top:20px">每輪回顧 <span id="histToggleHost" style="font-family:'Noto Sans TC',sans-serif;font-weight:400;margin-left:8px"></span></h2>
     <div id="roundHistoryList" class="mono" style="font-size:12.5px;line-height:1.7"></div>
     <button class="btn" id="replayBtn" style="margin-top:12px">重新開始</button>
   </div>
@@ -841,7 +848,7 @@ const PROFESSIONS = {
     {name:"暗影親和", desc:"（被動）成為暗影時，移動速度永久+2。", passive:true}
   ]},
   tamer:{name:"馴獸師", skills:[
-    {name:"巡迴獵犬", desc:"武力與負重永久+1。（主動，整局限用4次）須在房間行動結束後才能使用（所在房間無功能可用時不受限）：指定距離5步以內、尚有庫存的房間，派遣獵犬隨機抽取1張道具（不可超過負重）。獵犬帶回的道具要到結算階段才能使用。", uses:4}
+    {name:"巡迴獵犬", desc:"武力與負重永久+1。（主動，整局限用4次）須在房間行動結束後才能使用（所在房間無功能可用時不受限）：指定距離5步以內、尚有庫存的房間（停機坪則看本輪空投袋是否還有道具），派遣獵犬隨機抽取1張道具（不可超過負重）。獵犬帶回的道具要到結算階段才能使用。", uses:4}
   ]},
   merc:{name:"雇傭兵", skills:[
     {name:"武器精通", desc:"（被動）所有武器（刀/雙刀/手槍/霰彈槍）不佔負重；火箭筒不算武器，仍佔負重。你的刀與手槍效果相同，武力數值不變。", passive:true}
@@ -1280,7 +1287,7 @@ function recordGameResult(){
     bounty:!!(document.getElementById("bountyToggle")||{}).checked,
     players:STATE.players.map(p=>({
       prof:p.prof, name:PROFESSIONS[p.prof].name, ai:!!p.isAI, rank:ranks[p.id],
-      hp:p.hp, alive:!!p.alive, deathRound:p.deathRound||null,
+      hp:p.hp, alive:!!p.alive, deathRound:p.deathRound||null, deathCause:p.deathCause||null,
       kills:p.kills||0, dealt:p.dmgDealt||0, taken:p.dmgTaken||0,
       power:p.power, speed:p.speed, carry:p.carry
     }))
@@ -2153,6 +2160,34 @@ const LOG_EL=document.getElementById("log");
 // #log would keep piling up DOM nodes for the rest of the session, so trim the oldest once it
 // passes a generous cap — well past what anyone scrolls back to read mid-game.
 const LOG_MAX_ENTRIES=500;
+// Visible error bar: keeps the last errors pinned on screen (the game log scrolls away) with a
+// copy button, so a stuck game can be reported with the exact message + stack.
+const ERROR_LOG=[];
+function reportError(ctx,err){
+  try {
+    const msg=(err&&err.message)||String(err);
+    const stack=(err&&err.stack)||"";
+    ERROR_LOG.push("["+new Date().toLocaleTimeString()+"] R"+(window.STATE&&STATE.round)+" "+ctx+": "+msg+"\n"+stack);
+    if(ERROR_LOG.length>10) ERROR_LOG.shift();
+    let bar=document.getElementById("errBar");
+    if(!bar){
+      bar=document.createElement("div"); bar.id="errBar";
+      bar.style.cssText="position:fixed;left:8px;right:8px;bottom:8px;z-index:99999;background:#7a1020;color:#fff;font:12px/1.4 sans-serif;padding:8px 10px;border-radius:8px;box-shadow:0 2px 12px #000a;white-space:pre-wrap;word-break:break-all;max-height:40vh;overflow:auto";
+      document.body.appendChild(bar);
+    }
+    bar.innerHTML="";
+    const t=document.createElement("div");
+    t.textContent="⚠ 錯誤（共 "+ERROR_LOG.length+" 筆）— "+ctx+"：" +msg;
+    const copy=document.createElement("button"), close=document.createElement("button");
+    copy.textContent="複製全部"; close.textContent="關閉";
+    [copy,close].forEach(b=>b.style.cssText="margin:6px 6px 0 0;padding:3px 10px");
+    copy.onclick=()=>{ const s=ERROR_LOG.join("\n\n"); (navigator.clipboard?navigator.clipboard.writeText(s):Promise.reject()).then(()=>{copy.textContent="已複製";}).catch(()=>{ prompt("請手動複製：",s); }); };
+    close.onclick=()=>bar.remove();
+    bar.append(t,copy,close);
+  } catch(e){ console.error(e); }
+}
+window.addEventListener("error",e=>reportError("未捕捉錯誤",e.error||e.message));
+window.addEventListener("unhandledrejection",e=>reportError("未捕捉的 Promise",e.reason));
 function log(msg,cls){
   const d=document.createElement("div");
   if(cls) d.className=cls;
@@ -3203,8 +3238,14 @@ function advanceTurn(){
       log(p.name+"（賺紅錢）回血+1（HP→"+p.hp+"）。","heal");
     }
     if(p.isAI){
-      if(p.ghost) resolveGhostAITurn(p); else resolveAITurn(p);
-      checkRunnerEndurance(p);
+      try {
+        if(p.ghost) resolveGhostAITurn(p); else resolveAITurn(p);
+        checkRunnerEndurance(p);
+      } catch(err){
+        // A throwing AI turn must not freeze the whole round (turnIndex stuck on the AI).
+        console.error("[AI turn]",p.name,err); reportError("AI回合 "+p.name,err);
+        log("⚠ "+p.name+" 的回合發生錯誤，已略過："+(err&&err.message||err));
+      }
       p.actedThisRound=true;
       STATE.turnIndex++;
       continue;
@@ -4821,13 +4862,22 @@ function useSanguoSkill(p,idx){
 // random item type from it. The item is held in flags.houndPending (counted against carry) and only
 // joins the real inventory when this round's settlement begins (see releaseHoundItems), so it can't be used during the action phase.
 function tamerCandidates(p){
-  return Object.keys(ROOMS).filter(r=>{ const d=bfsDist(p.room,r); return d>0 && d<=5 && Object.values(ROOMS[r].stock).some(v=>v>0); });
+  // 停機坪(202)沒有一般庫存，它的道具放在本輪空投袋裡 — 袋子還有東西就也算有庫存。
+  return Object.keys(ROOMS).filter(r=>{ const d=bfsDist(p.room,r); return d>0 && d<=5 && (Object.values(ROOMS[r].stock).some(v=>v>0) || helipadBagHas(r)); });
 }
+function helipadBagHas(r){ return r==="202" && !!(ROOMS[r].airdropBag && ROOMS[r].airdropBag.length); }
 function houndPendingCost(p){ return (p.flags.houndPending||[]).filter(it=>itemCostsCarry(p,it)).length; }
 function tamerDispatch(p,target){
   p.flags.skillUsedThisRound=true; p.flags.tamerUses++; speakSkill(p,"tamer:0");
   const stockKeys=Object.keys(ROOMS[target].stock).filter(k=>ROOMS[target].stock[k]>0 && canHoldItem(p,k));
-  if(stockKeys.length && carryRoom(p)-houndPendingCost(p)>0){
+  // 停機坪: 獵犬從本輪空投袋隨機叼 1 張（與一般庫存房間二選一，優先空投袋）
+  const bag=helipadBagHas(target)?ROOMS[target].airdropBag:null;
+  const bagIdx=bag?bag.map((it,i)=>canHoldItem(p,it)?i:-1).filter(i=>i>=0):[];
+  if(bagIdx.length && carryRoom(p)-houndPendingCost(p)>0){
+    const pick=bag.splice(bagIdx[Math.floor(Math.random()*bagIdx.length)],1)[0];
+    p.flags.houndPending=(p.flags.houndPending||[]).concat(pick);
+    log(p.name+" 派遣巡迴獵犬前往「"+target+" "+(ROOMS[target].name||"")+"」，從空投帶回: "+ITEMS[pick].name+"（結算階段才能使用）。");
+  } else if(stockKeys.length && carryRoom(p)-houndPendingCost(p)>0){
     const pick=stockKeys[Math.floor(Math.random()*stockKeys.length)];
     ROOMS[target].stock[pick]--;
     p.flags.houndPending=(p.flags.houndPending||[]).concat(pick);
@@ -5429,13 +5479,26 @@ function aiChooseTarget(p){
     if(movable.length) cands=movable; // only forced to move if it's actually possible this round
   }
   let best=cands[0], bestScore=-Infinity;
+  // 水糧壓力：第2輪起每輪結算都要繳1水+1糧，缺一份就扣1血。持有越少越急；第1輪也先為第2輪備糧。
+  const haveW=countItem(p,"water")+countItem(p,"waterfood"), haveF=countItem(p,"food")+countItem(p,"waterfood");
+  const rationWeight=(have)=> have<1 ? (STATE.round>=2?6:3) : have<2 ? (STATE.round>=2?2.5:1.5) : 0.5;
+  const ballotFloors=(STATE.voteBallot||[]).filter(f=>!STATE.poisoned.has(f));
+  const poisonDmgNow=poisonDamageForRound();
   for(const r of cands){
     let score=Math.random()*2;
     const room=ROOMS[r];
     if(p.hp<=5 && (room.stock.pill||room.stock.adrenaline)) score+=5;
     if(p.prof==="medic" && p.hp<=6 && room.special==="surgery") score+=5; // 醫者仁心: solo 4-HP heal
+    // Non-medic AI: a modest lure when hurt, based ONLY on its own HP — it never peeks at who else is
+    // in the room (that would be omniscience). Whether a partner shows up is luck, same as for a human.
+    if(p.prof!=="medic" && p.hp<=6 && room.special==="surgery") score+=4;
     if(!hasGun(p) && (room.stock.pistol||room.stock.shotgun||room.stock.knife)) score+=3;
-    if(STATE.round>=2 && (room.stock.water||room.stock.food)) score+=2;
+    if(room.stock.water) score+=rationWeight(haveW);
+    if(room.stock.food) score+=rationWeight(haveF);
+    // 餐廳(節食)免繳本輪水糧：缺水糧時是安全的補救落點。
+    if(STATE.round>=2 && r==="B204") score+=1.5*((haveW<1?1:0)+(haveF<1?1:0));
+    // 本輪候選毒氣樓層會在本輪結算立即生效：停留在候選樓層有機率吃毒，按傷害折算期望扣分。
+    if(!roomIsPoisoned(room) && !room.poisonRequires && ballotFloors.includes(room.floor)) score-=poisonDmgNow*1.5/ballotFloors.length;
     if(room.draw>0) score+=1.5;
     // Drift bonuses: same needs as above, but scored by distance-to-nearest-match across the
     // WHOLE map (not just this round's reachable set) so the AI still leans toward a useful room
@@ -5445,9 +5508,10 @@ function aiChooseTarget(p){
     if(p.hp<=5){ const d=nearestRoomDistance(r,x=>x.stock.pill||x.stock.adrenaline); if(isFinite(d)) score+=5/(d+2); }
     if(p.prof==="medic" && p.hp<=6){ const d=nearestRoomDistance(r,x=>x.special==="surgery"); if(isFinite(d)) score+=5/(d+2); }
     if(!hasGun(p)){ const d=nearestRoomDistance(r,x=>x.stock.pistol||x.stock.shotgun||x.stock.knife); if(isFinite(d)) score+=3/(d+2); }
-    if(STATE.round>=2){ const d=nearestRoomDistance(r,x=>x.stock.water||x.stock.food); if(isFinite(d)) score+=2/(d+2); }
+    { const d=nearestRoomDistance(r,x=>x.stock.water); if(isFinite(d)) score+=rationWeight(haveW)/(d+2); }
+    { const d=nearestRoomDistance(r,x=>x.stock.food); if(isFinite(d)) score+=rationWeight(haveF)/(d+2); }
     { const d=nearestRoomDistance(r,x=>x.draw>0); if(isFinite(d)) score+=1.5/(d+2); }
-    if(roomIsPoisoned(room)) score-=6;
+    if(roomIsPoisoned(room)) score-=6+poisonDmgNow*2;
     if(r==="102") score-=4;
     // 操作室(重新分配點數) is a no-op for the AI — it always keeps its stats as rolled rather
     // than actually re-speccing (see aiConsiderSkillAfterMove's 基因重組 comment for the same
@@ -5786,6 +5850,12 @@ function resolveAITurn(p){
   // free-for-all combat at 3+) already apply via settleRound's roomGroups pass — granting a heal
   // here regardless of headcount would give an AI medic a free 4 HP even inside a crowded-room
   // brawl a human medic in the same spot could never trigger.
+  // Same 2-person mutual treatment a human triggers via doSpecialRoom: exactly 2 present → both heal.
+  // Counts whoever is physically here at the moment the AI acts, like the human path does.
+  if(!roomDisabled && room.special==="surgery" && p.prof!=="medic"){
+    const here=playersInRoom(p.room,true);
+    if(here.length===2){ here.forEach(pl=>pl.flags.__surgeryHeal=true); log(p.room+" 手術室：2人在場，結算階段將各恢復4點生命。"); }
+  }
   if(room.special==="surgery" && p.prof==="medic" && playersInRoom(p.room,true).length===1){
     p.flags.__surgeryHeal=true;
     log(p.room+" 手術室：醫官獨自坐診，結算階段將恢復4點生命。");
@@ -5957,7 +6027,7 @@ function damagePlayer(p,amount,cause,killerId){
   if(p.flags.sanguoDamageNullifyNext){
     p.flags.sanguoDamageNullifyNext=false;
     log(p.name+"（妖術）本輪第一次傷害被轉化為0（原"+amount+"點，來源："+cause+"）。");
-    p.roundEvents.push({cause:cause+"〔妖術歸零〕",amount:0});
+    p.roundEvents.push({room:p.room,cause:cause+"〔妖術歸零〕",amount:0});
     return;
   }
   if(p.prof==="dianwei" && p.flags.dianweiDeathStandActive && amount>0){
@@ -5996,7 +6066,7 @@ function damagePlayer(p,amount,cause,killerId){
       amount=bossShare; // fall through below to apply the boss's own remaining share as normal
     }
   }
-  if(p.flags.adrenalineActive){ p.hp=Math.max(1,p.hp-amount); p.roundEvents.push({cause,amount}); return; }
+  if(p.flags.adrenalineActive){ p.hp=Math.max(1,p.hp-amount); p.roundEvents.push({room:p.room,cause,amount}); return; }
   // 蔣萬安的廢死: he never drops below 1 HP from any source; anyone sharing his room can't be killed by COMBAT
   // (cause strings of the form "與XX戰鬥"), their HP bottoms out at 1 instead.
   if(p.alive && (p.prof==="jiangwanan" ||
@@ -6004,13 +6074,13 @@ function damagePlayer(p,amount,cause,killerId){
     const lost=Math.min(amount,Math.max(0,p.hp-1));
     p.dmgTaken=(p.dmgTaken||0)+lost;
     if(killerId!==undefined && lost>0){ const atk=STATE.players.find(x=>x.id===killerId); if(atk) atk.dmgDealt=(atk.dmgDealt||0)+lost; }
-    p.hp-=lost; p.roundEvents.push({cause:cause+"〔廢死：保留1血〕",amount:lost});
+    p.hp-=lost; p.roundEvents.push({room:p.room,cause:cause+"〔廢死：保留1血〕",amount:lost});
     return;
   }
   // Already eliminated this round (e.g. a 3+-fighter free-for-all where an earlier fighter's hit
   // already killed the target) — record the hit for the log, but don't re-run killPlayer's
   // side effects (item drop, embalmer bonus, shade's speed+2, ...) a second time on the same death.
-  if(!p.alive){ p.roundEvents.push({cause,amount}); return; }
+  if(!p.alive){ p.roundEvents.push({room:p.room,cause,amount}); return; }
   // 對局統計: 只計實際扣到血的傷害；攻擊方只有戰鬥直擊才會帶 killerId，故 dmgDealt 僅含 PVP 戰鬥傷害
   p.dmgTaken=(p.dmgTaken||0)+Math.min(amount,p.hp);
   if(killerId!==undefined){
@@ -6018,7 +6088,7 @@ function damagePlayer(p,amount,cause,killerId){
     if(atk) atk.dmgDealt=(atk.dmgDealt||0)+Math.min(amount,p.hp);
   }
   p.hp-=amount;
-  p.roundEvents.push({cause,amount});
+  p.roundEvents.push({room:p.room,cause,amount});
   if(p.hp<=0){ p.hp=0; killPlayer(p,cause,killerId); }
 }
 function killPlayer(p,cause,killerId){
@@ -6309,7 +6379,20 @@ function spawnSettlement(){
   }
   renderAll();
 }
+// An exception anywhere in settlement used to abort it before the round-summary modal opened,
+// leaving phase==="settlement" forever so every click said "尚未輪到你的回合". Catch it, log it,
+// and still show the summary so the game can continue to the next round.
 function settleRound(){
+  try { settleRoundCore(); }
+  catch(err){
+    console.error("[settleRound]",err); reportError("結算",err);
+    log("⚠ 結算過程發生錯誤："+(err&&err.message||err)+"（已略過，繼續下一步）");
+    if(STATE.phase==="settlement" && !STATE.gameOver && !document.getElementById("sumOk")){
+      try { renderAll(); showRoundSummary(); } catch(e2){ console.error(e2); advanceAfterRoundSummary(); }
+    }
+  }
+}
+function settleRoundCore(){
   STATE.phase="settlement";
   log("<b>── 進入結算階段 ──</b>");
   STATE.__report={combat:[], rocket:[], hunger:[], drain:[], poison:"", poisonDamage:[]};
@@ -6362,7 +6445,7 @@ function settleRound(){
 
   // surgery healing (triggered earlier when the room was visited; resolves alongside items)
   STATE.players.forEach(p=>{
-    if(p.flags.__surgeryHeal){ p.hp=Math.min(p.maxhp,p.hp+4); p.flags.__surgeryHeal=false; log(p.name+" 於手術室恢復4點生命。","heal"); }
+    if(p.flags.__surgeryHeal){ p.hp=Math.min(p.maxhp,p.hp+4); p.flags.__surgeryHeal=false; window.__surgeryHealCount=(window.__surgeryHealCount||0)+1; if(p.prof!=="medic") window.__surgeryHealNonMedic=(window.__surgeryHealNonMedic||0)+1; log(p.name+" 於手術室恢復4點生命。","heal"); }
   });
 
   // 馬拉松跑者的耐力訓練: whether they earned this is decided by checkRunnerEndurance the moment
@@ -6651,7 +6734,8 @@ function settleRound(){
     rocket: rep.rocket.slice(),
     combat: rep.combat.slice(),
     hunger: rep.hunger.slice(),
-    drain: rep.drain.slice()
+    drain: rep.drain.slice(),
+    detail: snapshotRoundDetail()
   });
 
   // snapshot each player's HP change this round, for the 每輪血量變化 table
@@ -6765,17 +6849,76 @@ function resolveCombat(a,b,roomId,frozenA){
   }
 }
 
+// 超細節回顧: per-room damage ledger for the round just settled. Every damage event carries the room it was
+// taken in (damagePlayer tags it), so a player who walked A->B shows their hits under the room they
+// actually stood in. Deaths are filed under deathRoom, not the B701 morgue they get moved to.
+function snapshotRoundDetail(){
+  const rooms={}, players=[];
+  const slot=id=>rooms[id]||(rooms[id]={id, name:(ROOMS[id]&&ROOMS[id].name)||"", present:[], hits:[], total:0});
+  STATE.players.forEach(p=>{
+    const died = p.ghost && p.room==="B701" && p.roundStartRoom!=="B701";
+    const endRoom = died ? (p.deathRoom||p.room) : p.room;
+    const prev = p.hpLog.length ? p.hpLog[p.hpLog.length-1].hp : p.maxhp; // hpLog gets this round's row only after this runs
+    slot(endRoom).present.push({id:p.id,name:p.name,prof:p.prof,hp:p.hp,alive:p.alive,ghost:!!p.ghost});
+    const evs=(p.roundEvents||[]).map(e=>({room:e.room||endRoom,cause:e.cause,amount:e.amount}));
+    // HP that left without a damagePlayer event (skill HP costs, item side effects, damage taken before
+    // this round's events were reset) would silently vanish from the ledger — book it as 其他 so the
+    // per-room numbers still add up to what each player actually lost. Overkill (event sum > HP lost) needs no entry.
+    const recorded=evs.reduce((n,e)=>n+e.amount,0), lost=prev-p.hp;
+    if(lost>recorded) evs.push({room:endRoom,cause:"其他（技能代價／道具效果）",amount:lost-recorded});
+    evs.forEach(e=>{ const r=slot(e.room); r.hits.push({name:p.name,prof:p.prof,cause:e.cause,amount:e.amount}); r.total+=e.amount; });
+    players.push({id:p.id,name:p.name,prof:p.prof,hpBefore:prev,hpAfter:p.hp,alive:p.alive,ghost:!!p.ghost,
+      from:p.roundStartRoom||null,to:endRoom,events:evs});
+  });
+  return {rooms:Object.values(rooms), players};
+}
+// Shared renderer for the 超細節 view (end-screen 每輪回顧 and the live round-summary modal).
+function roundDetailHtml(d){
+  if(!d) return "<div class='muted'>（這輪沒有超細節資料）</div>";
+  const icon=pr=>iconsOff()?"":profIcon(pr)+" ";
+  const rooms=d.rooms.slice().sort((a,b)=>b.total-a.total || a.id.localeCompare(b.id));
+  const totalAll=rooms.reduce((n,r)=>n+r.total,0);
+  let h="<div class='rhDetail'><div class='rhSub'>各房間受傷（全場合計 "+totalAll+" 點）</div>";
+  rooms.forEach(r=>{
+    const by={};
+    r.hits.forEach(x=>{ (by[x.name]=by[x.name]||{prof:x.prof,total:0,parts:[]}); by[x.name].total+=x.amount; by[x.name].parts.push(x.cause+" -"+x.amount); });
+    const victims=Object.keys(by);
+    const safe=r.present.filter(q=>!by[q.name]).map(q=>q.name+(q.ghost?"[暗影]":""));
+    h+="<div class='rhRoom'><b>"+r.id+" "+(r.name||"")+"</b>　<span class='"+(r.total?"rhDmg":"muted")+"'>"+(r.total?"共受傷 "+r.total+" 點":"無人受傷")+"</span>"+
+       (r.present.length?"　<span class='muted'>停留："+r.present.map(q=>q.name).join("、")+"</span>":"");
+    if(victims.length) h+="<ul class='loglist'>"+victims.map(n=>"<li>"+icon(by[n].prof)+n+" -"+by[n].total+"（"+by[n].parts.join("、")+"）</li>").join("")+"</ul>";
+    if(victims.length && safe.length) h+="<div class='muted' style='margin-left:20px'>未受傷："+safe.join("、")+"</div>";
+    h+="</div>";
+  });
+  h+="<div class='rhSub'>各玩家本輪</div><ul class='loglist'>"+d.players.map(q=>{
+    const path=q.from&&q.from!==q.to?q.from+"→"+q.to:q.to+"（未移動）";
+    const dmg=q.events.filter(e=>e.amount>0).map(e=>e.room+" "+e.cause+" -"+e.amount).join("、")||"無扣血";
+    return "<li>"+icon(q.prof)+q.name+"：HP "+q.hpBefore+"→"+q.hpAfter+(q.ghost?" [暗影]":q.alive?"":" 💀")+"　路徑 "+path+"　"+dmg+"</li>";
+  }).join("")+"</ul></div>";
+  return h;
+}
+function histMode(){ try{ return localStorage.getItem("histDetail")==="1"?"detail":"basic"; }catch(e){ return "basic"; } }
+function setHistMode(m){ try{ localStorage.setItem("histDetail",m==="detail"?"1":"0"); }catch(e){} }
+function histToggleHtml(){
+  const m=histMode();
+  return "<span class='histToggle' role='group' aria-label='回顧明細版本'>"+
+    "<button type='button' class='btn small ghost"+(m==="basic"?" on":"")+"' data-hist='basic' aria-pressed='"+(m==="basic")+"'>原始版本</button>"+
+    "<button type='button' class='btn small ghost"+(m==="detail"?" on":"")+"' data-hist='detail' aria-pressed='"+(m==="detail")+"'>超細節版本</button></span>";
+}
 function showRoundSummary(){
   // 歷史回顧: for each player, where they ended up, who else was there, and exactly what
   // damaged them this round — built from the {cause,amount} events damagePlayer recorded.
-  let html="<h3>第 "+STATE.round+" 輪結算</h3><div class='mono' style='font-size:12px'>";
+  const detailOn=histMode()==="detail";
+  const _rh=STATE.roundHistory.find(x=>x.round===STATE.round);
+  let html="<h3>第 "+STATE.round+" 輪結算</h3><div style='margin-bottom:8px'>"+histToggleHtml()+"</div><div class='mono' style='font-size:12px'>";
   const voteLines=STATE.voteLog.map(v=>v.name+" → "+FLOOR_LABEL[v.floor]+(v.weight>1?"（權重"+v.weight+"）":"")).join("、")||"無人投票";
   const poisonedList=[...STATE.poisoned].map(f=>FLOOR_LABEL[f]).join("、")||"無";
   html+="<div style='margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--line)'>"+
     (iconsOff()?"":"☠ ")+"本輪投票明細："+voteLines+"<br>"+
     "目前已中毒樓層：<span style='color:var(--ember-bright)'>"+poisonedList+"</span>"+
     "</div>";
-  STATE.players.forEach(p=>{
+  if(detailOn) html+=roundDetailHtml(_rh&&_rh.detail);
+  else STATE.players.forEach(p=>{
     const companions=playersInRoom(p.room,false).filter(x=>x.id!==p.id).map(x=>x.name+(x.ghost?"[暗影]":"")).join("、")||"（無）";
     const events=(p.roundEvents||[]).map(e=>e.cause+" -"+e.amount).join("、")||"無扣血";
     // 死亡一律被搬到 B701 停屍間，跟死因/實際挨打地點無關 (見 killPlayer) — 路徑欄位改用
@@ -6794,6 +6937,7 @@ function showRoundSummary(){
   });
   html+="</div><button class='btn small' id='sumOk'>繼續</button>";
   openModal(html);
+  document.querySelectorAll("#modal .histToggle [data-hist]").forEach(b=>b.onclick=()=>{ setHistMode(b.dataset.hist); showRoundSummary(); });
   document.getElementById("sumOk").onclick=()=>{
     closeModal();
     // 入殮師的亡者遺贈: a pending pick takes priority over advancing the round — the player
@@ -6977,7 +7121,11 @@ function renderEndScreen(){
   // prints live during play) from the persistent STATE.roundHistory snapshots, so the full game's
   // round-by-round events are still readable in one place after the scrolling log has moved on.
   const histEl=document.getElementById("roundHistoryList");
+  const renderHist=()=>{
   histEl.innerHTML="";
+  const host=document.getElementById("histToggleHost"); host.innerHTML=histToggleHtml();
+  host.querySelectorAll("[data-hist]").forEach(b=>b.onclick=()=>{ setHistMode(b.dataset.hist); renderHist(); });
+  const detailOn=histMode()==="detail";
   const bulletList=(label,items,emptyText)=>
     label+": "+(items.length? "<ul class='loglist'>"+items.map(x=>"<li>"+x+"</li>").join("")+"</ul>" : emptyText);
   STATE.roundHistory.forEach(rh=>{
@@ -6991,9 +7139,13 @@ function renderEndScreen(){
     lines.push(bulletList("戰鬥", rh.combat, "無"));
     lines.push(bulletList("飢餓扣血", rh.hunger, "無"));
     lines.push(bulletList("暗影吸血", rh.drain, "無"));
-    div.innerHTML=`<div class="rhRound">第 ${rh.round} 輪</div>`+lines.join("<br>");
+    div.innerHTML=`<div class="rhRound">第 ${rh.round} 輪</div>`+(detailOn
+      ? lines.slice(0,3).join("<br>")+roundDetailHtml(rh.detail)
+      : lines.join("<br>"));
     histEl.appendChild(div);
   });
+  };
+  renderHist();
   document.getElementById("endScreen").classList.remove("hidden");
 }
 
