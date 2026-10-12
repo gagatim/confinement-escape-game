@@ -513,6 +513,11 @@
         <div class="panel-title">事件紀錄</div>
         <div id="log" role="log" aria-live="polite" aria-label="事件紀錄"></div>
       </div>
+      <details class="card" id="aiDebugBox" style="margin-top:12px">
+        <summary class="muted" style="cursor:pointer;font-size:12px">🛠 除錯：AI 互動記錄（一般玩家不必展開）</summary>
+        <div style="margin:6px 0"><button class="btn small ghost" id="aiDebugCopy">複製</button> <button class="btn small ghost" id="aiDebugClear">清空</button></div>
+        <div id="aiDebugLog" class="mono" style="font-size:11px;max-height:260px;overflow:auto;white-space:pre-wrap;word-break:break-all"></div>
+      </details>
       <div class="card" style="margin-top:12px">
         <div class="panel-title">全體玩家</div>
         <div id="allPlayers" class="mono" style="font-size:12px"></div>
@@ -5469,6 +5474,25 @@ function nearestRoomDistance(from, predicate){
 // AI 內建分組：開局把所有 AI 隨機分成每組最多3人（真人不編入）。組員互通情報（位置、血量），
 // 協調：①兩人湊手術室互療 ②不擠同一房間 ③毒氣投票集中到同一層、並避開組員所在樓層。
 // 對手AI／真人的位置依然不可見，這裡只共享「自己人」的資訊。
+// 除錯用：AI 組內互動（分組／手術約定／私下互通／投票協調／移動）記在這裡，不進公開事件紀錄。
+const AI_DEBUG_MAX=500;
+function dlog(msg){
+  const line="R"+(typeof STATE!=="undefined"&&STATE?STATE.round:"?")+" "+msg;
+  const el=document.getElementById("aiDebugLog");
+  if(!el) return;
+  const d=document.createElement("div"); d.textContent=line; el.appendChild(d);
+  while(el.childElementCount>AI_DEBUG_MAX) el.removeChild(el.firstChild);
+  el.scrollTop=el.scrollHeight;
+}
+(function(){
+  const bind=()=>{
+    const c=document.getElementById("aiDebugCopy"), x=document.getElementById("aiDebugClear"), el=document.getElementById("aiDebugLog");
+    if(!c||!x||!el) return;
+    c.onclick=()=>{ const t=[...el.children].map(d=>d.textContent).join("\n"); (navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(()=>{c.textContent="已複製";}).catch(()=>prompt("請手動複製：",t)); };
+    x.onclick=()=>{ el.innerHTML=""; };
+  };
+  bind();
+})();
 function ensureAIGroups(){
   if(STATE.aiGroupOf) return;
   const ais=shuffleArr(STATE.players.filter(x=>x.isAI).map(x=>x.id));
@@ -5476,7 +5500,8 @@ function ensureAIGroups(){
   ais.forEach((id,i)=>{ map[id]=i%groups; }); // round-robin keeps sizes even and ≤3 (7 AIs → 3,2,2)
   STATE.aiGroupOf=map; STATE.aiGroupVote={}; STATE.aiSurgeryPlan={};
   const names=[]; for(let g=0;g<groups;g++) names.push("第"+(g+1)+"組："+ais.filter(id=>map[id]===g).map(id=>STATE.players.find(x=>x.id===id).name).join("、"));
-  log("AI 分組："+names.join("　"));
+  { const el=document.getElementById("aiDebugLog"); if(el) el.innerHTML=""; } // new game → fresh debug log
+  dlog("AI 分組 → "+names.join("　"));
 }
 function aiMates(p){
   ensureAIGroups();
@@ -5492,7 +5517,9 @@ function aiSurgeryPlan(p){
   cand.sort((a,b)=>a.hp-b.hp);
   const plan = cand.length>=2 ? [cand[0].id,cand[1].id] : null;
   STATE.aiSurgeryPlan[key]=plan;
-  if(plan) log("AI 組內安排：「"+STATE.players.find(x=>x.id===plan[0]).name+"」與「"+STATE.players.find(x=>x.id===plan[1]).name+"」約好本輪一起去手術室。");
+  { const nm=id=>STATE.players.find(x=>x.id===id).name, hp=id=>STATE.players.find(x=>x.id===id).hp;
+    dlog(plan ? "手術約定 → "+nm(plan[0])+"(HP"+hp(plan[0])+") + "+nm(plan[1])+"(HP"+hp(plan[1])+") 一起去 B202"
+              : "手術約定 → 第"+(g+1)+"組本輪無人符合條件（需2人HP≤7且走得到B202）"); }
   return plan;
 }
 // AI 組員私下互通有無（不需同房、不寫入公開紀錄）：行動前，自己有多餘的水/糧(留1份自用)就分給
@@ -5503,7 +5530,7 @@ function aiShareWithMates(p){
   const give=(m,item)=>{
     if(itemCostsCarry(m,item) && carryRoom(m)<=0) return false;
     if(!removeItem(p,item)) return false;
-    m.inv.push(item); window.__aiShareCount=(window.__aiShareCount||0)+1; return true;
+    m.inv.push(item); window.__aiShareCount=(window.__aiShareCount||0)+1; dlog("私下互通 → "+p.name+" 給 "+m.name+" 「"+ITEMS[item].name+"」（"+m.name+" HP"+m.hp+"）"); return true;
   };
   for(const kind of ["water","food"]){
     while(countItem(p,kind)>=2){
@@ -5888,8 +5915,10 @@ function resolveAITurn(p){
   aiConsiderRunnerSprint(p);
   aiConsiderHunterSprint(p);
   if(p.flags.detectiveTarget==null){
+    const fromRoom=p.room;
     const target=aiChooseTarget(p);
     tryMove(p,target);
+    if(aiMates(p).length) dlog("移動 → "+p.name+"(HP"+p.hp+") "+fromRoom+" → "+p.room+"　組員所在："+aiMates(p).map(m=>m.name+"@"+m.room+(m.actedThisRound?"":"(未行動)")).join("、"));
   }
   if(p.room==="102") applyLaser(p);
   const room=ROOMS[p.room];
@@ -6056,6 +6085,7 @@ function resolveAITurn(p){
   if(floorOpts.length){
     let voteFloor=(voteKey!==null && STATE.aiGroupVote && floorOpts.includes(STATE.aiGroupVote[voteKey])) ? STATE.aiGroupVote[voteKey] : floorOpts[Math.floor(Math.random()*floorOpts.length)];
     if(voteKey!==null && STATE.aiGroupVote && !(voteKey in STATE.aiGroupVote)) STATE.aiGroupVote[voteKey]=voteFloor;
+    if(voteKey!==null) dlog("毒氣投票 → "+p.name+" 投 "+FLOOR_LABEL[voteFloor]+"（候選："+floorOpts.map(f=>FLOOR_LABEL[f]).join("、")+"）");
     const voteWeight=Math.max(p.flags.voteWeight||1, p.prof==="laiqingde"?5:1);
     STATE.voteCounts[voteFloor]=(STATE.voteCounts[voteFloor]||0)+voteWeight;
     STATE.voteLog.push({name:p.name, floor:voteFloor, weight:voteWeight});
