@@ -4157,9 +4157,10 @@ function openHackerMonitorModal(p){
 }
 
 /* ===================== ITEM USE ===================== */
-// 附錄二: 水/糧/藥片/腎上腺素/酒 are all "結算階段公開使用" — clicking them during the action
-// phase only DECLARES intent; the actual effect is resolved publicly during settlement
-// (resolvePendingItemUses), same pattern as the rocket launcher's queued targeting.
+// 附錄二: 水/糧/藥片/腎上腺素/酒 are all "結算階段公開使用". Human players are now ASKED at settlement
+// itself (askPayModals at 步驟4 for 水糧, askUseItemModals at 步驟6 for 藥片/腎上腺素/酒 — see
+// settleRoundCore); the inventory 使用 buttons for them are gone. useItem()/pendingItemUses below
+// remain the declare-in-action path for AI players and for the bartender's 倒酒 (which needs a target).
 const SETTLEMENT_TIMED_ITEMS=["water","food","waterfood","pill","adrenaline","wine"];
 function useItem(p,item){
   if(!SETTLEMENT_TIMED_ITEMS.includes(item)) return; // passive-hold items are never "used" via click
@@ -4223,8 +4224,9 @@ function openBartenderWineModal(p){
   bindModalClose("wineTargetCancel");
 }
 // 酒 and 藥片 resolve LAST (see resolvePendingWines / resolvePillHealing below, after 戰鬥 → 飢餓) —
-// 水/糧/腎上腺素 resolve here, early, since water/food's hunger-flags and adrenaline's death-floor
-// must already be in effect before combat/poison/hunger damage are calculated.
+// 水/糧 resolve through here: AI-declared ones early in settlement, a human's the moment they answer
+// the 步驟4 pay prompt (still before the hunger step itself reads the consumed_* flags).
+// 腎上腺素 only gets QUEUED here and takes effect at 步驟6 (see settleRoundCore).
 function resolvePendingItemUses(p){
   const uses=p.flags.pendingItemUses||[];
   const pillsPending=[];
@@ -6621,8 +6623,10 @@ function askPayModals(resume){
     const hasW=countItem(p,"water")>0, hasF=countItem(p,"food")>0, hasWF=countItem(p,"waterfood")>0;
     if(hasWF && !(hasW&&hasF)) rows.push({item:"waterfood",label:"水糧包（抵1水＋1糧）",checked:true});
     else if(hasWF) rows.push({item:"waterfood",label:"水糧包（抵1水＋1糧）",checked:false});
+    const chefOne=p.prof==="chef"; // 一餐抵兩餐: 1份水或糧即可，預設只勾其中一種，別浪費第二份
     if(hasW) rows.push({item:"water",label:"水（"+countItem(p,"water")+"）",checked:!(hasWF&&!hasF)});
-    if(hasF) rows.push({item:"food",label:"糧（"+countItem(p,"food")+"）",checked:!(hasWF&&!hasW)});
+    if(hasF) rows.push({item:"food",label:"糧（"+countItem(p,"food")+"）",checked:!(hasWF&&!hasW) && !(chefOne&&hasW)});
+    if(chefOne && hasWF) rows.forEach(r=>{ r.checked=(r.item==="waterfood"); });
     return {title:"結算：繳交水糧", note:p.name+"：本輪需繳交1水＋1糧，只繳其一扣1點生命，都沒繳扣2點生命（目前生命 "+p.hp+"）。"+(p.prof==="chef"?"（廚師：水或糧擇一即可）":""), rows};
   }, (p,chosen)=>{
     chosen.forEach(it=>{ if(removeItem(p,it)) p.flags.pendingItemUses.push(it); });
@@ -6696,7 +6700,8 @@ function* settleRoundCore(){
   releaseHoundItems(); // 馴獸師: 獵犬帶回的道具在結算階段才可使用
   // 腎上腺素（上輪結算使用）：本輪結算開始起保底1血，撐到本輪飢餓結算完（見步驟4之後）。
   STATE.players.forEach(p=>{ if(p.flags.adrenalineShieldNext){ p.flags.adrenalineShieldNext=false; if(p.alive && !p.ghost) p.flags.adrenalineActive=true; } });
-  // 1) queued item-card effects (水/糧/腎上腺素 — "結算階段公開使用"；酒與藥片 resolve later, see step 7)
+  // 1) queued item-card effects declared in the action phase (AI's 水/糧/腎上腺素, bartender wine); a
+  // human's 水糧 / 藥片 / 腎上腺素 / 酒 are asked later at 步驟4 / 步驟6 instead. 酒與藥片 resolve at step 7.
   STATE.players.forEach(p=>{ if(p.alive) resolvePendingItemUses(p); });
 
   // surgery healing (triggered earlier when the room was visited; resolves alongside items)
