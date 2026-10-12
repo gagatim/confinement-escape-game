@@ -2596,7 +2596,13 @@ function usedCarry(p,invOverride){
   if(chefRation>0) n+=Math.ceil(chefRation/2);
   return n;
 }
-function carryRoom(p){ return effectiveCarryCap(p)-usedCarry(p); }
+// 負重規則（玩家本人）：行動階段中背包滿了仍可繼續取得道具，只在「回合結束」時才需丟棄到負重範圍內
+// （見 openEndTurnDiscardModal）。所以玩家自己的行動回合中，各處「還有沒有空位」的檢查一律放行。
+function humanOverflowAllowed(p){ return p===STATE.players[0] && !p.isAI && !p.ghost && STATE.phase==="positioning" && !p.actedThisRound; }
+function carryRoom(p){
+  const r=effectiveCarryCap(p)-usedCarry(p);
+  return humanOverflowAllowed(p) ? Math.max(r,0)+99 : r;
+}
 function addItem(p,item,qty){
   qty=qty||1;
   for(let i=0;i<qty;i++){
@@ -3100,7 +3106,7 @@ function beginRound(){
     p.roundStartSteps = p.stepsLeft;
     p.roundEvents=[]; // cleared for the new round — showRoundSummary already read last round's
     p.flags.goldUsedThisRound=false;
-    p.flags.heliLeftThisRound=false; p.flags.airdropCollectedRound=0;
+    p.flags.heliLeftThisRound=false; p.flags.airdropCollectedRound=0; p.flags.usedLockedItems=[];
     p.flags.rocketShotsThisRound=0; // 火箭筒 is reusable now — capped per round (拆彈教官 gets 2 instead of 1)
     p.flags.rocketRoomsThisRound=[]; // 拆彈教官's 2 shots must hit 2 different rooms
     p.flags.recycleUsedThisRound=false; // 循環回收裝置 is a durable item too — limited to once per round
@@ -3312,11 +3318,47 @@ document.getElementById("endTurnBtn").addEventListener("click",()=>{
     flashMsg("每輪必須先移動到不同的房間，才能結束回合（不能原地不動）。");
     return;
   }
-  checkRunnerEndurance(p);
-  p.actedThisRound=true;
-  STATE.turnIndex++;
-  advanceTurn();
+  const finishTurn=()=>{
+    checkRunnerEndurance(p);
+    p.actedThisRound=true;
+    STATE.turnIndex++;
+    advanceTurn();
+  };
+  if(usedCarry(p)>effectiveCarryCap(p)){ openEndTurnDiscardModal(p,finishTurn); return; }
+  finishTurn();
 });
+// 回合結束的負重整理：超出負重上限就必須丟棄到範圍內。本回合使用過的火箭筒／循環回收裝置／繩索不能丟。
+// 丟下的道具留在當前房間（無功能房間則直接消失），與抽卡時的丟棄規則相同。
+function openEndTurnDiscardModal(p,done){
+  const cap=effectiveCarryCap(p), locked=p.flags.usedLockedItems||[];
+  const rows=p.inv.map((item,i)=>({i,item,free:isFlatWeightless(p,item),lock:locked.includes(item)}));
+  const room=ROOMS[p.room];
+  const html=rows.map(r=>{
+    if(r.free) return `<label style="display:block;margin:4px 0"><input type="checkbox" checked disabled> ${ITEMS[r.item].name}（不佔負重，自動保留）</label>`;
+    if(r.lock) return `<label style="display:block;margin:4px 0"><input type="checkbox" checked disabled> ${ITEMS[r.item].name}（本回合已使用，無法丟棄）</label>`;
+    return `<label style="display:block;margin:4px 0"><input type="checkbox" class="dcChk" data-i="${r.i}" checked> ${ITEMS[r.item].name}</label>`;
+  }).join("");
+  const dropNote=isFunctionlessRoom(room)?"取消勾選即為丟棄；這間房間沒有功能，丟下的道具會直接消失。":"取消勾選即為丟棄；丟下的道具會留在「"+(room.name||p.room)+"」。";
+  openModal(`<h3>回合結束：背包超過負重上限，請丟棄道具</h3>
+    <div class="muted" style="margin-bottom:8px;font-size:12.5px">${dropNote}</div>
+    <div>${html}</div>
+    <div class="mono muted" id="dcCount" style="margin:8px 0"></div>
+    <button class="btn small" id="dcOk">確認</button>`);
+  const boxes=[...document.querySelectorAll(".dcChk")];
+  const kept=()=>rows.filter(r=>r.free||r.lock||document.querySelector('.dcChk[data-i="'+r.i+'"]:checked')).map(r=>r.item);
+  const stuck=()=>boxes.every(b=>!b.checked); // 能丟的都丟了還是超重（例如全是不能丟的）→ 允許確認
+  const update=()=>{ const u=usedCarry(p,kept()); document.getElementById("dcCount").textContent="目前 "+u+" / 可帶 "+(cap>=9000?"∞":cap)+(u>cap?"（還需丟棄）":""); document.getElementById("dcOk").disabled=u>cap && !stuck(); };
+  boxes.forEach(b=>b.addEventListener("change",update)); update();
+  document.getElementById("dcOk").onclick=()=>{
+    const keepSet=new Set(rows.filter(r=>r.free||r.lock||document.querySelector('.dcChk[data-i="'+r.i+'"]:checked')).map(r=>r.i));
+    const dropped=[];
+    rows.forEach(r=>{ if(!keepSet.has(r.i)) dropped.push(r.item); });
+    p.inv=rows.filter(r=>keepSet.has(r.i)).map(r=>r.item);
+    dropped.forEach(it=>{ if(!isFunctionlessRoom(room)) room.stock[it]=(room.stock[it]||0)+1; });
+    if(dropped.length) log(p.name+" 回合結束整理背包，丟棄「"+dropped.map(i=>ITEMS[i].name).join("、")+"」"+(isFunctionlessRoom(room)?"（無功能房間，直接消失）":"，留在「"+(room.name||p.room)+"」")+"。");
+    closeModal(); renderAll(); done();
+  };
+}
 
 /* ---------- movement ---------- */
 // 潛水員的地下水道: if the shortest path between from/to passes through ANY underground
@@ -4031,7 +4073,7 @@ function openScavengerModal(p){
   const max=Math.min(countItem(p,"trash"),carryRoom(p));
   openModal(`<h3>變廢為寶：選擇要轉換的垃圾數量</h3>
     <div class="statbar"><label>數量</label><input type="number" id="swQty" min="1" max="${max}" value="${max}"></div>
-    <div class="muted">背包垃圾：${countItem(p,"trash")}　可用空間：${carryRoom(p)}</div>
+    <div class="muted">背包垃圾：${countItem(p,"trash")}（背包滿了仍可轉換，回合結束時再丟棄超出的道具）</div>
     <div id="swErr" class="muted" style="color:var(--ember-bright);min-height:1.2em"></div>
     <button class="btn small" id="swOk">確認轉換</button> <button class="btn small ghost" id="swCancel">取消</button>`);
   document.getElementById("swOk").onclick=()=>{
@@ -4101,6 +4143,7 @@ function openRopeModal(p){
   document.getElementById("ropeOk").onclick=()=>{
     if(p.flags.roomCommitted){ flashMsg("本輪已確定停留於此房間，無法再移動。"); closeModal(); return; }
     if(!carrySpendStep(p)){ closeModal(); return; }
+    lockUsedItem(p,"rope");
     p.room=document.getElementById("ropeSel").value; closeModal(); renderAll();
     log(p.name+" 使用繩索直接上下樓，前往 "+p.room+"。");
   };
@@ -4381,6 +4424,8 @@ function useGoldAtRoom(p){
 // own skill description, so a 2nd shot can't just double up on the 1st's target (which combined
 // with 防爆演練's self-immunity would make one round-consequence-free room a guaranteed 8 damage).
 function rocketShotCap(p){ return p.prof==="demolitions"?2:1; }
+// 火箭筒／循環回收裝置／繩索：本回合使用過後，回合結束的負重丟棄不能丟掉它。
+function lockUsedItem(p,item){ p.flags.usedLockedItems=(p.flags.usedLockedItems||[]); if(!p.flags.usedLockedItems.includes(item)) p.flags.usedLockedItems.push(item); }
 function useRocket(p){
   if(!p.flags.roomCommitted){ flashMsg("請先移動並確定停留在房間後，才能使用道具。"); return; }
   if(p.flags.rocketShotsThisRound>=rocketShotCap(p)){ flashMsg("火箭筒每回合限用"+rocketShotCap(p)+"次"); return; }
@@ -4391,7 +4436,7 @@ function useRocket(p){
   document.getElementById("rkOk").onclick=()=>{
     const target=document.getElementById("rkSel").value;
     // 每回合限用次數(見 rocketShotCap)，但發射後不會消耗掉這張道具卡——留在背包裡，下輪還能再用
-    p.flags.rocketShotsThisRound++;
+    p.flags.rocketShotsThisRound++; lockUsedItem(p,"rocket");
     p.flags.rocketRoomsThisRound=(p.flags.rocketRoomsThisRound||[]).concat(target);
     STATE.rocketTargets=STATE.rocketTargets||[];
     STATE.rocketTargets.push({room:target, shooterId:p.id});
@@ -4428,6 +4473,7 @@ function doRecycle(p){
 }
 function useRecycleDevice(p){
   if(!recycleChecks(p)) return;
+  lockUsedItem(p,"recycledevice");
   doRecycle(p);
 }
 function useEngineerRecycle(p){
