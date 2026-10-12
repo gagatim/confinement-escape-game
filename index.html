@@ -3334,6 +3334,7 @@ function moveDist(p,from,to){
 }
 function tryMove(p,target){
   if(p.ghost){ const d=ghostReach(p.room,p.stepsLeft)[target]; if(d===undefined) return false; p.room=target; p.stepsLeft-=d; return true; } // 暗影穿牆，但步數有限
+  if(heliMustStay(p) && target!==p.room) return false; // 剛抵達停機坪：本輪必須停留
   const dist=moveDist(p,p.room,target);
   let steps = p.stepsLeft;
   if(dist===Infinity || dist>steps) return false;
@@ -3363,6 +3364,7 @@ function onRoomClick(roomId){
     SFX.move(); renderAll(); return;
   }
   const fromRoom=p.room;
+  if(heliMustStay(p) && roomId!==fromRoom){ flashMsg("抵達停機坪的當輪必須停留（領取空投），下一輪才能搭機或離開。"); return; }
   const dist=moveDist(p,fromRoom,roomId);
   if(dist===Infinity || dist>p.stepsLeft){ flashMsg("步數不足或無法到達"); return; }
   if(dist>0){
@@ -3942,6 +3944,8 @@ function carrySpendStep(p){
 // very round they land, skipping that wait entirely.
 // 搭機資格：上一輪就停留在停機坪（roundStartRoom==="202"），或飛行員（熟練起降，抵達當輪即可）。
 // 本輪只要離開過停機坪（走開、或已搭機飛走），即使又走回來也不能再搭一次（heliLeftThisRound）。
+// 抵達停機坪的當輪必須停留（不能再往別處移動），下一輪才能搭機；飛行員（熟練起降）不受限。
+function heliMustStay(p){ return p.room==="202" && p.roundStartRoom!=="202" && p.prof!=="pilot" && !p.ghost; }
 function canBoardHeliNow(p){ return !p.flags.heliLeftThisRound && (p.roundStartRoom==="202" || p.prof==="pilot"); }
 function collectAirdrop(p){
   // The round's schedule is stocked into the bag exactly once, by beginRound() — this only
@@ -4087,6 +4091,7 @@ function verticalNeighborRooms(room){
   );
 }
 function openRopeModal(p){
+  if(heliMustStay(p)){ flashMsg("抵達停機坪的當輪必須停留。"); return; }
   const room=ROOMS[p.room];
   const dests=verticalNeighborRooms(room);
   if(!dests.length){ flashMsg("此房間正上/下方沒有可直接前往的目標。"); return; }
@@ -4106,6 +4111,7 @@ function openRopeModal(p){
 // item — kept in sync with 繩索's own reach (verticalNeighborRooms) so the skill isn't strictly
 // stronger than the item it's explicitly meant to mirror.
 function openClimberVerticalModal(p){
+  if(heliMustStay(p)){ flashMsg("抵達停機坪的當輪必須停留。"); return; }
   const room=ROOMS[p.room];
   const dests=verticalNeighborRooms(room);
   if(!dests.length){ flashMsg("此房間正上/下方沒有可直接前往的目標。"); return; }
