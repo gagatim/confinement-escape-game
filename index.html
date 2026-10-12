@@ -981,8 +981,8 @@ const PROFESSIONS = {
     {name:"絕對防禦", desc:"整局限用1次：本回合可選擇不移動，自身無視戰鬥、毒氣、火箭筒等任何傷害，且可直接使用房間功能；飢餓仍需繳交水/糧。", uses:1}
   ]},
   lucky:{name:"幸運兒", skills:[
-    {name:"吉星高照", desc:"（被動）每輪行動階段開始時先自動擲骰：擲到1：從水塔獲得1份水（水塔沒存貨則失效）；擲到2：從糧倉獲得1份糧（糧倉沒存貨則失效）；擲到3：從大倉庫抽取1張道具卡（大倉庫沒存貨則失效）；擲到4：從垃圾場抽取1張道具卡（垃圾場沒存貨則失效）；擲到5：本回合移動步數+2；擲到6：立即恢復1點生命（不超過上限）。", passive:true},
-    {name:"幸運加持", desc:"（被動）吉星高照的骰值與上一回合相同時，可以額外自選一項其他效果發動（不能選當回合已擲到的那項）。", passive:true}
+    {name:"吉星高照", desc:"（被動）每輪行動階段開始時，先自動擲骰：<br>・1｜水塔：獲得1份水<br>・2｜糧倉：獲得1份糧<br>・3｜大倉庫：抽取1張道具卡<br>・4｜垃圾場：抽取1張道具卡<br>・5｜本回合移動步數+2<br>・6｜立即恢復1點生命（不超過上限），且負重上限永久+1<br><i>1～4：該房間沒有存貨則失效。</i>", passive:true},
+    {name:"幸運加持", desc:"（被動）吉星高照的骰值與上一回合相同時，可以額外自選一項其他效果發動。<br><i>不能選當回合已擲到的那項。</i>", passive:true}
   ]},
   hermit:{name:"隱士", skills:[
     {name:"離群索居", desc:"（被動）房間內只有你1人（無其他玩家、無暗影）時，戰鬥／中毒／飢餓傷害各-1。", passive:true},
@@ -3546,7 +3546,7 @@ function luckyTurnRoll(p){
     log(p.name+"（幸運加持）與上回合骰值相同（"+roll+"），可額外自選一項其他效果！");
     if(p.isAI){ luckyApply(p,luckyAIPick(p,roll),"幸運加持"); }
     else {
-      const names={1:"水塔：1份水",2:"糧倉：1份糧",3:"大倉庫：抽1張道具",4:"垃圾場：抽1張道具",5:"移動步數+2",6:"恢復1點生命"};
+      const names={1:"水塔：1份水",2:"糧倉：1份糧",3:"大倉庫：抽1張道具",4:"垃圾場：抽1張道具",5:"移動步數+2",6:"恢復1點生命＋負重+1"};
       openModal(`<h3>幸運加持：骰值相同，額外自選一項其他效果</h3>${[1,2,3,4,5,6].filter(k=>k!==roll).map(k=>`<button class="btn small" data-k="${k}">${k}：${names[k]}</button>`).join(" ")}`);
       document.querySelectorAll("#modal button[data-k]").forEach(btn=>{
         btn.onclick=()=>{ closeModal(); luckyApply(p,+btn.dataset.k,"幸運加持"); renderAll(); };
@@ -3591,8 +3591,8 @@ function luckyApply(p,roll,src){
     p.stepsLeft=Math.min(10,p.stepsLeft+2); p.roundStartSteps=Math.min(10,p.roundStartSteps+2);
     log(p.name+"（"+src+"）擲骰5：本回合移動步數+2！");
   } else if(roll===6){
-    p.hp=Math.min(p.maxhp,p.hp+1);
-    log(p.name+"（"+src+"）擲骰6：恢復1點生命（HP→"+p.hp+"）。","heal");
+    p.hp=Math.min(p.maxhp,p.hp+1); p.carry++;
+    log(p.name+"（"+src+"）擲骰6：恢復1點生命（HP→"+p.hp+"），負重上限永久+1（→"+p.carry+"）。","heal");
   }
 }
 function resolveHumanDraw(p,roomId,maxDraw){
