@@ -5466,6 +5466,35 @@ function nearestRoomDistance(from, predicate){
   }
   return Infinity;
 }
+// AI 內建分組：開局把所有 AI 隨機分成每組最多3人（真人不編入）。組員互通情報（位置、血量），
+// 協調：①兩人湊手術室互療 ②不擠同一房間 ③毒氣投票集中到同一層、並避開組員所在樓層。
+// 對手AI／真人的位置依然不可見，這裡只共享「自己人」的資訊。
+function ensureAIGroups(){
+  if(STATE.aiGroupOf) return;
+  const ais=shuffleArr(STATE.players.filter(x=>x.isAI).map(x=>x.id));
+  const groups=Math.ceil(ais.length/3), map={};
+  ais.forEach((id,i)=>{ map[id]=i%groups; }); // round-robin keeps sizes even and ≤3 (7 AIs → 3,2,2)
+  STATE.aiGroupOf=map; STATE.aiGroupVote={}; STATE.aiSurgeryPlan={};
+  const names=[]; for(let g=0;g<groups;g++) names.push("第"+(g+1)+"組："+ais.filter(id=>map[id]===g).map(id=>STATE.players.find(x=>x.id===id).name).join("、"));
+  log("AI 分組："+names.join("　"));
+}
+function aiMates(p){
+  ensureAIGroups();
+  const g=STATE.aiGroupOf[p.id]; if(g===undefined) return [];
+  return STATE.players.filter(x=>x.id!==p.id && x.isAI && x.alive && !x.ghost && STATE.aiGroupOf[x.id]===g);
+}
+// One surgery plan per group per round, made by whichever member acts first: the two most hurt
+// members who can BOTH reach B202 this round go together (exactly 2 → mutual 4-HP heal).
+function aiSurgeryPlan(p){
+  const g=STATE.aiGroupOf[p.id], key=g+"-"+STATE.round;
+  if(key in STATE.aiSurgeryPlan) return STATE.aiSurgeryPlan[key];
+  const cand=[p,...aiMates(p)].filter(x=>!x.actedThisRound && x.hp<=x.maxhp-3 && x.hp<=7 && (x.room==="B202" || reachableRooms(x.room,x.stepsLeft)["B202"]!==undefined));
+  cand.sort((a,b)=>a.hp-b.hp);
+  const plan = cand.length>=2 ? [cand[0].id,cand[1].id] : null;
+  STATE.aiSurgeryPlan[key]=plan;
+  if(plan) log("AI 組內安排：「"+STATE.players.find(x=>x.id===plan[0]).name+"」與「"+STATE.players.find(x=>x.id===plan[1]).name+"」約好本輪一起去手術室。");
+  return plan;
+}
 function aiChooseTarget(p){
   // aiConsiderTruckerBoost() runs before this and already folds any 卸載加速 doubling into
   // p.stepsLeft, so the reachable-rooms budget is simply the steps actually left this turn.
@@ -5484,8 +5513,13 @@ function aiChooseTarget(p){
   const rationWeight=(have)=> have<1 ? (STATE.round>=2?6:3) : have<2 ? (STATE.round>=2?2.5:1.5) : 0.5;
   const ballotFloors=(STATE.voteBallot||[]).filter(f=>!STATE.poisoned.has(f));
   const poisonDmgNow=poisonDamageForRound();
+  const mates=aiMates(p), plan=mates.length ? aiSurgeryPlan(p) : null;
+  const inPlan=!!(plan && plan.includes(p.id));
+  const matesAt=new Set(mates.filter(m=>m.actedThisRound).map(m=>m.room));
   for(const r of cands){
     let score=Math.random()*2;
+    if(r==="B202" && plan){ score += inPlan ? 12 : -8; } // 約好的兩人去；第三人避開，免得3人混戰
+    else if(matesAt.has(r) && !(r==="B202" && inPlan)) score-=4; // 不跟組員擠同一房間（分散搶資源、不互砍）
     const room=ROOMS[r];
     if(p.hp<=5 && (room.stock.pill||room.stock.adrenaline)) score+=5;
     if(p.prof==="medic" && p.hp<=6 && room.special==="surgery") score+=5; // 醫者仁心: solo 4-HP heal
@@ -5852,7 +5886,7 @@ function resolveAITurn(p){
   // brawl a human medic in the same spot could never trigger.
   // Same 2-person mutual treatment a human triggers via doSpecialRoom: exactly 2 present → both heal.
   // Counts whoever is physically here at the moment the AI acts, like the human path does.
-  if(!roomDisabled && room.special==="surgery" && p.prof!=="medic"){
+  if(!roomDisabled && room.special==="surgery"){
     const here=playersInRoom(p.room,true);
     if(here.length===2){ here.forEach(pl=>pl.flags.__surgeryHeal=true); log(p.room+" 手術室：2人在場，結算階段將各恢復4點生命。"); }
   }
@@ -5989,8 +6023,17 @@ function resolveAITurn(p){
     const minCount=Math.min(...floorOpts.map(countOnFloor));
     floorOpts=floorOpts.filter(f=>countOnFloor(f)===minCount);
   }
+  // AI 分組：避開組員(已行動者)所在樓層，並且全組投同一層（票數集中，更有機會真的毒到那層）。
+  const aiMateList=aiMates(p);
+  if(aiMateList.length && floorOpts.length>1){
+    const cnt=f=>aiMateList.filter(m=>m.actedThisRound && ROOMS[m.room].floor===f).length;
+    const mn=Math.min(...floorOpts.map(cnt));
+    floorOpts=floorOpts.filter(f=>cnt(f)===mn);
+  }
+  const voteKey=STATE.aiGroupOf?STATE.aiGroupOf[p.id]+"-"+STATE.round:null;
   if(floorOpts.length){
-    const voteFloor=floorOpts[Math.floor(Math.random()*floorOpts.length)];
+    let voteFloor=(voteKey!==null && STATE.aiGroupVote && floorOpts.includes(STATE.aiGroupVote[voteKey])) ? STATE.aiGroupVote[voteKey] : floorOpts[Math.floor(Math.random()*floorOpts.length)];
+    if(voteKey!==null && STATE.aiGroupVote && !(voteKey in STATE.aiGroupVote)) STATE.aiGroupVote[voteKey]=voteFloor;
     const voteWeight=Math.max(p.flags.voteWeight||1, p.prof==="laiqingde"?5:1);
     STATE.voteCounts[voteFloor]=(STATE.voteCounts[voteFloor]||0)+voteWeight;
     STATE.voteLog.push({name:p.name, floor:voteFloor, weight:voteWeight});
