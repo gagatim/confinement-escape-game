@@ -959,7 +959,8 @@ const PROFESSIONS = {
   ]},
   exorcist:{name:"還魂師", skills:[
     {name:"臨終祝禱", desc:"（被動）死亡變成暗影後，只要吸取1點生命就能復活（一般暗影需2點）<br>・整局可發動兩次，復活後生命為3。", passive:true},
-    {name:"安魂儀式", desc:"（被動）每次復活後，速度永久+1。", passive:true}
+    {name:"安魂儀式", desc:"（被動）每次復活後，速度永久+1。", passive:true},
+    {name:"亡靈庇護", desc:"（被動）被暗影吸血時不會扣血<br>・暗影仍照常吸取（計入其復活所需的吸血量）。", passive:true}
   ]},
   suzhenchang:{name:"蘇貞昌", skills:[
     {name:"衝衝衝", desc:"（被動）第1輪速度+1，第2輪速度+2，以此類推（第N輪速度+N）。", passive:true}
@@ -6808,7 +6809,8 @@ function settleRoundCore(){
       // 守護者的絕對防禦／幸運兒的吉星高照: the drain itself still counts toward the
       // ghost's revival total (it's still a successful drain attempt), it just costs the
       // protected victim 0 HP instead of 1.
-      const drainGc=damageWard(v, 1, {drain:true});
+      // 還魂師的亡靈庇護: the drain still lands for the ghost (counts toward its revival), the exorcist just loses 0 HP.
+      const drainGc=v.prof==="exorcist" ? {dmg:0, note:"〔亡靈庇護〕"} : damageWard(v, 1, {drain:true});
       const drainDmg=drainGc.dmg;
       damagePlayer(v,drainDmg,"暗影吸血");
       g.ghostDrainTotal++;
