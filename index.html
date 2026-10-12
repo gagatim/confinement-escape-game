@@ -3100,6 +3100,7 @@ function beginRound(){
     p.roundStartSteps = p.stepsLeft;
     p.roundEvents=[]; // cleared for the new round — showRoundSummary already read last round's
     p.flags.goldUsedThisRound=false;
+    p.flags.heliLeftThisRound=false; p.flags.airdropCollectedRound=0;
     p.flags.rocketShotsThisRound=0; // 火箭筒 is reusable now — capped per round (拆彈教官 gets 2 instead of 1)
     p.flags.rocketRoomsThisRound=[]; // 拆彈教官's 2 shots must hit 2 different rooms
     p.flags.recycleUsedThisRound=false; // 循環回收裝置 is a durable item too — limited to once per round
@@ -3336,6 +3337,7 @@ function tryMove(p,target){
   const dist=moveDist(p,p.room,target);
   let steps = p.stepsLeft;
   if(dist===Infinity || dist>steps) return false;
+  if(p.room==="202" && target!=="202") p.flags.heliLeftThisRound=true; // 離開停機坪：本輪不能再搭機
   p.room=target; p.stepsLeft-=dist;
   return true;
 }
@@ -3393,6 +3395,7 @@ function undoMovement(){
   if(p.flags.detectiveTarget!=null){ flashMsg("情報位移後無法回手。"); return; }
   p.room=p.roundStartRoom;
   p.stepsLeft=p.roundStartSteps;
+  p.flags.heliLeftThisRound=false; // 回手後又回到本輪起點，搭機資格恢復
   // 102 applies its laser effect just by walking through it (before any commit) — undo that too,
   // and clear its once-per-round trigger so walking through it again later this round still counts.
   p.pendingLaser=false;
@@ -3814,7 +3817,7 @@ function doRoomAction(){
   // to doSpecialRoom below, which commits you exactly as before, since staying put is required
   // before you're even eligible to board.)
   if(isHelipadBoarding){
-    collectAirdrop(p);
+    if(p.flags.airdropCollectedRound!==STATE.round){ p.flags.airdropCollectedRound=STATE.round; collectAirdrop(p); }
     openHelipadModal(p);
     return;
   }
@@ -3937,7 +3940,9 @@ function carrySpendStep(p){
 // 飛行員's 熟練起降: normally boarding requires having already been at 202 since the START of
 // this round (i.e. landed last round, waited it out, boarding this one) — a pilot can board the
 // very round they land, skipping that wait entirely.
-function canBoardHeliNow(p){ return p.roundStartRoom==="202" || p.prof==="pilot"; }
+// 搭機資格：上一輪就停留在停機坪（roundStartRoom==="202"），或飛行員（熟練起降，抵達當輪即可）。
+// 本輪只要離開過停機坪（走開、或已搭機飛走），即使又走回來也不能再搭一次（heliLeftThisRound）。
+function canBoardHeliNow(p){ return !p.flags.heliLeftThisRound && (p.roundStartRoom==="202" || p.prof==="pilot"); }
 function collectAirdrop(p){
   // The round's schedule is stocked into the bag exactly once, by beginRound() — this only
   // draws from it, so multiple pickups in the same round (arrival + boarding, several players)
@@ -4066,8 +4071,9 @@ function openHelipadModal(p){
     <button class="btn small" id="hpOk">起飛(消耗1步)</button> <button class="btn small ghost" id="hpCancel">不搭乘</button>`);
   document.getElementById("hpOk").onclick=()=>{
     if(!carrySpendStep(p)){ closeModal(); return; }
+    p.flags.heliLeftThisRound=true;
     p.room=document.getElementById("hpSel").value; closeModal(); renderAll();
-    log(p.name+" 搭乘直昇機前往 "+p.room+"。");
+    log(p.name+" 搭乘直昇機前往 "+p.room+"（消耗1步，剩餘 "+p.stepsLeft+" 步，可繼續移動）。");
   };
   bindModalClose("hpCancel");
 }
@@ -6065,6 +6071,7 @@ function resolveAITurn(p){
     // same "must stay one round before flying" rule as the human path
     const dests=HELI_TARGETS.filter(id=>id!==p.room);
     if(canBoardHeliNow(p) && dests.length && p.stepsLeft>=1){
+      p.flags.heliLeftThisRound=true;
       p.room=dests[Math.floor(Math.random()*dests.length)]; p.stepsLeft--;
     }
   }
