@@ -1884,7 +1884,7 @@ const VOICE=(()=>{
     speak
   };
 })();
-function speakSkill(p,key,opts){ VOICE.speak(SKILL_QUOTES[key],p.prof,{queue:true,hype:true}); skillFX(p,key,opts); }
+function speakSkill(p,key,opts){ if(!p || p.isAI || p!==STATE.players[0]) return; /* 只播放玩家自己角色的語音與特效，AI 一律不播 */ VOICE.speak(SKILL_QUOTES[key],p.prof,{queue:true,hype:true}); skillFX(p,key,opts); }
 // 被動技能「發動時」的視覺特效（不念台詞）：每個觸發點呼叫一次；同一個技能 1.2 秒內只播一次，避免結算時連播。
 const __passiveFxAt={};
 function passiveFX(p,key){
