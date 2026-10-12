@@ -39,7 +39,7 @@ function runOne(seedNo){
     for(let guard=0; guard<12 && !ev("STATE.gameOver"); guard++){
       ev("STATE.pendingEmbalmerChoice=null; advanceAfterRoundSummary();");
     }
-    errors.push("STAT surgery "+(ev("window.__surgeryHealCount||0"))+" "+(ev("window.__surgeryHealNonMedic||0")));
+    errors.push("STAT surgery "+(ev("window.__surgeryHealCount||0"))+" "+(ev("window.__surgeryHealNonMedic||0"))+" share "+ev("window.__aiShareCount||0"));
     const swallowed=JSON.parse(ev("JSON.stringify(ERROR_LOG)")); swallowed.forEach(s=>errors.push("SWALLOWED "+s.split("\n").slice(0,3).join(" | ")));
     if(!ev("STATE.gameOver")) return {ok:false,error:"遊戲未結束",errors};
     const recs=JSON.parse(ev("JSON.stringify(loadGameRecords())"));

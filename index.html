@@ -5495,6 +5495,27 @@ function aiSurgeryPlan(p){
   if(plan) log("AI 組內安排：「"+STATE.players.find(x=>x.id===plan[0]).name+"」與「"+STATE.players.find(x=>x.id===plan[1]).name+"」約好本輪一起去手術室。");
   return plan;
 }
+// AI 組員私下互通有無（不需同房、不寫入公開紀錄）：行動前，自己有多餘的水/糧(留1份自用)就分給
+// 完全沒有的組員；血量充足時把藥分給瀕危組員。受限於對方還放得下（負重）。
+function aiShareWithMates(p){
+  if(!p.alive || p.ghost) return;
+  const mates=aiMates(p); if(!mates.length) return;
+  const give=(m,item)=>{
+    if(itemCostsCarry(m,item) && carryRoom(m)<=0) return false;
+    if(!removeItem(p,item)) return false;
+    m.inv.push(item); window.__aiShareCount=(window.__aiShareCount||0)+1; return true;
+  };
+  for(const kind of ["water","food"]){
+    while(countItem(p,kind)>=2){
+      const m=mates.filter(x=>countItem(x,kind)===0 && countItem(x,"waterfood")===0).sort((a,b)=>a.hp-b.hp)[0];
+      if(!m || !give(m,kind)) break;
+    }
+  }
+  if(p.hp>=7 && countItem(p,"pill")>0){
+    const m=mates.filter(x=>x.hp<=4 && countItem(x,"pill")===0).sort((a,b)=>a.hp-b.hp)[0];
+    if(m) give(m,"pill");
+  }
+}
 function aiChooseTarget(p){
   // aiConsiderTruckerBoost() runs before this and already folds any 卸載加速 doubling into
   // p.stepsLeft, so the reachable-rooms budget is simply the steps actually left this turn.
@@ -5862,6 +5883,7 @@ function resolveAITurn(p){
       log(p.name+" 使用情報位移：放棄移動，直接移動到 "+t.name+" 所在的「"+p.room+"」。");
     }
   }
+  aiShareWithMates(p);
   aiConsiderTruckerBoost(p);
   aiConsiderRunnerSprint(p);
   aiConsiderHunterSprint(p);
