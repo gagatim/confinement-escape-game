@@ -4,7 +4,7 @@
 const {JSDOM,VirtualConsole}=require("jsdom");
 const fs=require("fs");
 const path=require("path");
-const HTML=fs.readFileSync(path.resolve(__dirname,"../index.html"),"utf8");
+const HTML=fs.readFileSync(process.env.HTML_PATH||path.resolve(__dirname,"../index.html"),"utf8");
 const N=+process.argv[2]||20;
 const OUT=process.argv[3]||"sim_result.json";
 const MODE=process.argv[4]||"all"; // all = 一般+擴充職業

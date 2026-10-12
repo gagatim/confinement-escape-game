@@ -815,7 +815,7 @@ const PROFESSIONS = {
   ]},
   bomb:{name:"橡膠人", skills:[
     {name:"橡膠身軀", desc:"（被動）受到持槍對手的戰鬥傷害時，傷害永久-4<br>・但你無法持有槍（手槍／霰彈槍）：<br>・抽到槍時放回房間，並補抽一張（不會抽到槍）。", passive:true},
-    {name:"彈力緩衝", desc:"（被動）不受火箭筒傷害。", passive:true}
+    {name:"隔空取物", desc:"（主動，整場限用2次）移動後、使用房間功能前發動：<br>・放棄本房間的行動<br>・改為從「同樓層、相鄰」的房間抽取1張道具（須有庫存）。"}
   ]},
   gambler:{name:"賭徒", skills:[
     {name:"好賭成性", desc:"須在使用房間功能前發動，擲骰：<br>・1-2失敗（本輪無法使用房間功能）、3-4無事、5-6成功（本輪房間功能可用兩次）。<br>・整局限用3次。", uses:3},
@@ -1799,6 +1799,7 @@ const SKILL_QUOTES={
   "chemist:0a":"這個配方，能救命。",
   "chemist:0b":"加大劑量，誰都別想活著出去。",
   "hacker:1":"系統，由我接管。",
+  "bomb:1":"手伸長一點，就拿到了。",
   "tamer:0":"去，把獵物叼回來。",
   "geneFreak:1":"重新編碼，我還能更強。",
   "climber:0":"撐得住，就往上爬。",
@@ -4496,6 +4497,7 @@ const SKILL_USE_LIMITS={
   "trucker:0":{flag:"truckerUses",max:3},
   "chemist:0":{flag:"chemistUses",max:2},
   "hacker:1":{flag:"hackerUses",max:3},
+  "bomb:1":{flag:"bombReachUses",max:2},
   "tamer:0":{flag:"tamerUses",max:4},
   "geneFreak:1":{flag:"geneUses",max:2},
   "climber:1":{flag:"climberDietUsed",max:1,bool:true},
@@ -5015,6 +5017,25 @@ function useProfSkill(p,idx){
       if(!opensOwnModal) renderAll();
     };
     bindModalClose("hackCancel");
+  } else if(p.prof==="bomb" && idx===1){
+    if(skillUseCapReached(p,"bomb:1")){ flashMsg("已用完2次"); return; }
+    if((p.flags.roomActsUsedThisRound||0)>0 || p.flags.roomLocked){ flashMsg("隔空取物須在使用房間功能前發動（會取代本房間的行動）。"); return; }
+    if(p.room===p.roundStartRoom && mustMoveThisRound(p)){ flashMsg("每輪必須先移動到不同的房間，才能發動。"); return; }
+    const opts=bombReachRooms(p);
+    if(!opts.length){ flashMsg("同樓層相鄰的房間沒有可抽取的庫存。"); return; }
+    openModal(`<h3>隔空取物：選擇要抽取的相鄰房間</h3>
+      <div class="muted" style="font-size:12px;margin-bottom:6px">將放棄本房間的行動，改從同樓層隔壁的房間抽 1 張道具。</div>
+      <select id="bombRoomSel">${opts.map(r=>`<option value="${r}">${r} ${ROOMS[r].name||""}（庫存 ${Object.values(ROOMS[r].stock).reduce((a,b)=>a+b,0)}）</option>`).join("")}</select><br><br>
+      <button class="btn small warn" id="bombOk">發動</button>
+      <button class="btn small ghost" id="bombCancel">取消</button>`);
+    document.getElementById("bombOk").onclick=()=>{
+      const r=document.getElementById("bombRoomSel").value;
+      bombReachCommit(p,r);
+      closeModal();
+      resolveHumanDraw(p,r,1);
+      renderAll();
+    };
+    bindModalClose("bombCancel");
   } else if(p.prof==="tamer" && idx===0){
     if(skillUseCapReached(p,"tamer:0")){ flashMsg("已用完4次"); return; }
     if(!tamerReady(p)){ flashMsg("巡迴獵犬必須在做完房間行動後才能使用。"); return; }
@@ -5143,7 +5164,7 @@ function useProfSkill(p,idx){
 // nothing. Every OTHER active skill executes immediately on click, which is risky for a
 // limited-use skill (a stray click permanently burns one of only 1-4 charges) — those get a
 // confirm prompt naming the skill and its effect before anything happens.
-const SKILL_OPENS_OWN_MODAL=new Set(["tamer:0","oracle:0","detective:0","chemist:0","hacker:1","geneFreak:1","shopper:1","pickpocket:0","courier:1","mediocre:1","mediocre:2","collector:1","prepper:1","witch:0",
+const SKILL_OPENS_OWN_MODAL=new Set(["bomb:1","tamer:0","oracle:0","detective:0","chemist:0","hacker:1","geneFreak:1","shopper:1","pickpocket:0","courier:1","mediocre:1","mediocre:2","collector:1","prepper:1","witch:0",
   // 三國模式：需要選目標玩家/房間的主動技能，跳過通用確認彈窗，直接進自己的選擇彈窗
   "zhangfei:0","weiyan:0","zhouyu:0","lusu:1","luxun:0","ganning:0","yuanshao:0","zhangjiao:0","zhangjiao:1","zhanghe:0","huanggai:1","huaxiong:0","sunquan:0","caopi:0"]);
 // 技能特效版 fallback: most skills already call speakSkill (which shows the effect), but a few
@@ -5543,6 +5564,40 @@ function aiShareWithMates(p){
     if(m) give(m,"pill");
   }
 }
+// 橡膠人的隔空取物: rooms physically beside p's current room ON THE SAME FLOOR (ladders/elevators
+// to other floors don't count) that have something left to draw.
+function bombReachRooms(p){
+  const here=ROOMS[p.room];
+  return (ADJ[p.room]||[]).filter(id=>ROOMS[id] && ROOMS[id].floor===here.floor && ROOMS[id].draw>0 &&
+    Object.values(ROOMS[id].stock||{}).some(n=>n>0) && !(STATE.sanguoDisabledRooms && STATE.sanguoDisabledRooms.has(id)));
+}
+// Shared by human and AI: spend a charge, forfeit this room's own action, and lock the destination
+// (using a room action is itself the "final stop" for the round, same as doRoomAction).
+function bombReachCommit(p,targetId){
+  p.flags.bombReachUses=(p.flags.bombReachUses||0)+1; p.flags.skillUsedThisRound=true;
+  p.flags.roomActsUsedThisRound=1+(p.flags.gamblerBonusOps||0); // own room's action is forfeited
+  p.flags.roomCommitted=true;
+  log(p.name+" 使用隔空取物：放棄本房間行動，改從隔壁「"+targetId+" "+(ROOMS[targetId].name||"")+"」抽取1張道具。");
+  speakSkill(p,"bomb:1");
+}
+function aiConsiderBombReach(p){
+  if(p.prof!=="bomb" || !p.alive || p.ghost || p.flags.skillUsedThisRound || skillUseCapReached(p,"bomb:1")) return false;
+  if((p.flags.roomActsUsedThisRound||0)>0) return false;
+  const cands=bombReachRooms(p); if(!cands.length) return false;
+  const lackW=countItem(p,"water")<1, lackF=countItem(p,"food")<1;
+  const val=(id)=>{ const st=ROOMS[id].stock; let v=0;
+    if(lackW) v+=3*(st.water>0); if(lackF) v+=3*(st.food>0);
+    if(p.hp<=6) v+=3*((st.pill>0)||(st.adrenaline>0));
+    if(!hasGun(p)) v+=1*((st.knife>0));
+    return v+0.3; };
+  const own=ROOMS[p.room], ownStocked=own.draw>0 && Object.values(own.stock||{}).some(n=>n>0);
+  const best=cands.reduce((b,r)=>val(r)>val(b)?r:b,cands[0]);
+  if(ownStocked && val(best)<3) return false; // own room is fine and the neighbour has nothing we're short of
+  if(!ownStocked && val(best)<1) return false;
+  bombReachCommit(p,best);
+  resolveAIDraw(p,best,1);
+  return true;
+}
 function aiChooseTarget(p){
   // aiConsiderTruckerBoost() runs before this and already folds any 卸載加速 doubling into
   // p.stepsLeft, so the reachable-rooms budget is simply the steps actually left this turn.
@@ -5923,7 +5978,7 @@ function resolveAITurn(p){
   if(p.room==="102") applyLaser(p);
   const room=ROOMS[p.room];
   // 張角的黃天之世（三國模式）: AI 也一樣拿不到被封印房間的功能。
-  const roomDisabled = (STATE.sanguoDisabledRooms && STATE.sanguoDisabledRooms.has(p.room));
+  const roomDisabled = (STATE.sanguoDisabledRooms && STATE.sanguoDisabledRooms.has(p.room)) || aiConsiderBombReach(p);
   if(!roomDisabled && room.draw>0){ resolveAIDraw(p,p.room,room.draw); }
   if(!roomDisabled && room.special==="gene"){ p.power++; p.speed++; p.carry++; }
   if(!roomDisabled && room.special==="respec"){ /* AI keeps stats */ }
@@ -6578,7 +6633,6 @@ function settleRoundCore(){
     STATE.__report.rocket.push(r+(hit.length?"（命中 "+hit.map(p=>p.name).join("、")+"）":"（房內無人）"));
     hit.forEach(p=>{
       let dmg=4, note="";
-      if(p.prof==="bomb"){ dmg=0; note="〔彈力緩衝：無視〕"; }
       if(p.prof==="mediocre"){ dmg+=1; note+="〔脆弱體質 +1〕"; }
       if(p.prof==="zhouyu" && dmg>0){ dmg=Math.max(0,dmg-2); note+="〔赤壁奇謀 -2〕"; } // 三國模式
       if(shooter && shooter.prof==="luxun"){ dmg+=1; note+="〔夷陵奇謀 +1〕"; } // 三國模式
