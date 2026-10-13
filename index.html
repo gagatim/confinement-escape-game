@@ -1026,12 +1026,11 @@ const PROFESSIONS = {
   // ---- 實體擴充職業（僅在「實體模式＋實體擴充」勾選時開放；見 PHYSICAL_EXP_PROFS）----
   bodyguard:{name:"保鑣", skills:[
     {name:"壯碩體格", desc:"（被動）武力永久+1。", passive:true},
-    {name:"鐵壁", desc:"（被動）受到的戰鬥傷害-2。", passive:true},
-    {name:"笨重裝備", desc:"（被動）移動速度永久-1。", passive:true}
+    {name:"鐵壁", desc:"（被動）受到的戰鬥傷害-2。", passive:true}
   ]},
   sniper:{name:"狙擊手", skills:[
     {name:"一擊必中", desc:"（被動）背包內持有槍械（手槍／霰彈槍）時，武力額外+2（只加一次）。", passive:true},
-    {name:"遠距狙擊", desc:"（主動，整局限用2次）指定距離3步以內（不含自己所在房間）的1間房間：結算時，該房間內的所有存活玩家各受到2點傷害。", uses:2}
+    {name:"遠距狙擊", desc:"（主動，整局限用2次）指定距離3步以內（不含自己所在房間）的1間房間：結算時，該房間內的所有存活玩家各受到2點傷害。<br>・使用後下一輪移動步數-2（至少為1）。", uses:2}
   ]},
   berserker:{name:"狂戰士", skills:[
     {name:"血怒", desc:"（被動）生命≤6時，武力+2。", passive:true},
@@ -1045,7 +1044,7 @@ const PROFESSIONS = {
   ]},
   mole:{name:"地鼠", skills:[
     {name:"地底適應", desc:"（被動）受到的毒氣傷害-1（最低0）。", passive:true},
-    {name:"地下療養", desc:"（被動）結算時，若身處地下樓層（B開頭房間）且該房間沒有中毒，恢復1點生命。", passive:true}
+    {name:"地下療養", desc:"（被動）身處地下樓層（B開頭房間）且該房間沒有中毒時：<br>・結算時恢復1點生命。<br>・下一輪出發地仍是無毒的地下房間，則移動步數+2。", passive:true}
   ]},
   clerk:{name:"倉管員", skills:[
     {name:"調貨", desc:"（被動）在金庫、武器庫、水塔、糧倉、垃圾場、酒窖使用房間功能時，可選擇改為抽取這6個房間中的任一個（依被選房間的抽取數量與庫存）。", passive:true},
@@ -2783,7 +2782,7 @@ function startGame(){
   // profession init effects
   players.forEach(p=>{
     if(p.prof==="tamer"){ p.power+=1; p.carry+=1; }
-    if(p.prof==="bodyguard"){ p.power+=1; p.speed=Math.max(0,p.speed-1); } // 保鑣的壯碩體格
+    if(p.prof==="bodyguard"){ p.power+=1; } // 保鑣的壯碩體格
     if(p.prof==="clerk"){ p.carry+=2; } // 倉管員的庫存管理
     if(p.prof==="tycoon"){
       p.inv.push("gold","gold","gold");
@@ -3151,6 +3150,17 @@ function beginRound(){
     if(p.prof==="toxic" && roomIsPoisoned(ROOMS[p.room])){
       p.stepsLeft += 3;
       log(p.name+"（淬毒衝刺）本輪出發地為已中毒樓層，移動步數+3（本輪共"+p.stepsLeft+"步）。");
+    }
+    // 狙擊手的遠距狙擊: the recoil from last round's shot — steps -2 this round, but never below 1.
+    if(p.flags.sniperSlowNext){
+      p.flags.sniperSlowNext=false;
+      const before=p.stepsLeft; p.stepsLeft=Math.min(before,Math.max(1,before-2));
+      log(p.name+"（遠距狙擊後座力）本輪移動步數-2（共"+p.stepsLeft+"步，至少1步）。");
+    }
+    // 地鼠的地下療養: starting the round in a non-poisoned underground room (B-prefixed) grants +2 steps.
+    if(p.prof==="mole" && String(p.room).charAt(0)==="B" && !roomIsPoisoned(ROOMS[p.room])){
+      p.stepsLeft += 2;
+      log(p.name+"（地下療養）出發地為無毒的地下房間，本輪移動步數+2（共"+p.stepsLeft+"步）。");
     }
     // 刺客的無聲離場: the +3 steps earned by last round's kill, spent at the start of this round.
     if(p.prof==="assassin" && p.flags.assassinSpeedNext){
@@ -5141,7 +5151,7 @@ function sniperCandidates(p){
 }
 function sniperAim(p,roomId){
   p.flags.sniperUses=(p.flags.sniperUses||0)+1; p.flags.skillUsedThisRound=true;
-  p.flags.sniperTarget=roomId;
+  p.flags.sniperTarget=roomId; p.flags.sniperSlowNext=true;
   log(p.name+" 使用遠距狙擊，瞄準「"+roomId+" "+(ROOMS[roomId].name||"")+"」（結算時該房間所有玩家各受2點傷害）。");
   speakSkill(p,"sniper:1");
 }
