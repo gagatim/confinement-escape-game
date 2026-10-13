@@ -1062,7 +1062,7 @@ const PROFESSIONS = {
     {name:"招攬團員", desc:"（被動）遊戲開始時，指定2名其他玩家為團員；你與團員之間無法互相造成戰鬥傷害。", passive:true}
   ]},
   clerk:{name:"倉管員", skills:[
-    {name:"調貨", desc:"（被動）在金庫、武器庫、水塔、糧倉、垃圾場、酒窖使用房間功能時，可選擇改為抽取這6個房間中的任一個（依被選房間的抽取數量與庫存）。", passive:true},
+    {name:"調貨", desc:"（被動）在金庫、武器庫、水塔、糧倉、垃圾場、酒窖、藥房使用房間功能時，可選擇改為抽取這7個房間（含藥房）中的任一個（依被選房間的抽取數量與庫存）；不可與上一回合抽取的房間相同。", passive:true},
     {name:"庫存管理", desc:"（被動）背包容量永久+2。", passive:true}
   ]}
 };
@@ -1073,7 +1073,9 @@ const EXPANSION_PROFS=new Set(["fatty","trucker","bartender","chemist","hacker",
 // 實體擴充: six extra professions for 實體模式, hidden everywhere (cards + AI pool) unless the
 // player ticks 實體擴充 (which itself only exists while 實體模式 is on). Off by default.
 // 倉管員的調貨: 水塔、武器庫、金庫、垃圾場、糧倉、酒窖
-const CLERK_ROOMS=["101","B107","B206","B503","B505","B601"];
+const CLERK_ROOMS=["101","B107","B206","B301","B503","B505","B601"];
+// 倉管員 may not 調貨 from the same room he drew from last round.
+function clerkBlockedRoom(p){ const l=p.flags.clerkLast; return (l && l.round===STATE.round-1) ? l.room : null; }
 const PHYSICAL_EXP_PROFS=new Set(["sniper","berserker","paramedic","mole","clerk","scout","lobbyist","leader"]);
 // One small emoji "portrait" per profession — shown on the selection card and anywhere a player's
 // profession is listed in-game, so each of the 16 is visually distinct at a glance, not just by name.
@@ -4006,12 +4008,13 @@ function doRoomAction(){
   // 倉管員的調貨: in one of the 6 supply rooms, pick which of the 6 to actually draw from.
   if(p.prof==="clerk" && CLERK_ROOMS.includes(p.room)){
     openModal(`<h3>調貨：選擇要抽取的房間</h3>
-      <select id="clerkRoomSel">${CLERK_ROOMS.map(r=>`<option value="${r}"${r===p.room?" selected":""}>${r} ${ROOMS[r].name||""}（抽${ROOMS[r].draw}張，庫存 ${Object.values(ROOMS[r].stock).reduce((a,b)=>a+b,0)}）</option>`).join("")}</select><br><br>
+      <select id="clerkRoomSel">${CLERK_ROOMS.filter(r=>r!==clerkBlockedRoom(p)).map((r,i)=>`<option value="${r}"${i===0?" selected":""}>${r} ${ROOMS[r].name||""}（抽${ROOMS[r].draw}張，庫存 ${Object.values(ROOMS[r].stock).reduce((a,b)=>a+b,0)}）</option>`).join("")}</select><br><br>
       <button class="btn small warn" id="clerkOk">抽取</button>
       <button class="btn small ghost" id="clerkCancel">取消</button>`);
     document.getElementById("clerkOk").onclick=()=>{
       const r=document.getElementById("clerkRoomSel").value;
       closeModal();
+      p.flags.clerkLast={round:STATE.round,room:r};
       if(r!==p.room) log(p.name+" 使用調貨：改抽「"+r+" "+(ROOMS[r].name||"")+"」的物資。");
       resolveHumanDraw(p,r,ROOMS[r].draw);
       p.flags.roomActsUsedThisRound=used+1;
@@ -6307,9 +6310,14 @@ function resolveAITurn(p){
     let src=p.room;
     if(p.prof==="clerk" && CLERK_ROOMS.includes(p.room)){
       const sum=r=>Object.values(ROOMS[r].stock).reduce((a,b)=>a+b,0);
-      if(countItem(p,"water")===0 && sum("101")>0) src="101";
-      else if(countItem(p,"food")===0 && sum("B505")>0) src="B505";
-      else src=CLERK_ROOMS.reduce((best,r)=>sum(r)>sum(best)?r:best,p.room);
+      const ok=r=>r!==clerkBlockedRoom(p);
+      const medStock=ROOMS["B301"].stock.pill>0||ROOMS["B301"].stock.adrenaline>0;
+      const cands=CLERK_ROOMS.filter(ok);
+      if(countItem(p,"water")===0 && ok("101") && sum("101")>0) src="101";
+      else if(countItem(p,"food")===0 && ok("B505") && sum("B505")>0) src="B505";
+      else if(p.hp<=5 && ok("B301") && medStock) src="B301";
+      else src=cands.reduce((best,r)=>sum(r)>sum(best)?r:best,cands[0]);
+      p.flags.clerkLast={round:STATE.round,room:src};
     }
     resolveAIDraw(p,src,ROOMS[src].draw);
   }
