@@ -1029,15 +1029,17 @@ const PROFESSIONS = {
     {name:"鐵壁", desc:"（被動）受到的戰鬥傷害-1。", passive:true}
   ]},
   sniper:{name:"狙擊手", skills:[
-    {name:"一擊必中", desc:"（被動）背包內持有槍械（手槍／霰彈槍）時，武力額外+2（只加一次）。", passive:true}
+    {name:"一擊必中", desc:"（被動）背包內持有槍械（手槍／霰彈槍）時，武力額外+2（只加一次）。", passive:true},
+    {name:"遠距狙擊", desc:"（主動，整局限用2次）指定距離3步以內（不含自己所在房間）的1間房間：結算時，該房間內的所有存活玩家各受到2點傷害。", uses:2}
   ]},
   berserker:{name:"狂戰士", skills:[
     {name:"血怒", desc:"（被動）生命≤5時，武力+2。", passive:true},
     {name:"困獸之鬥", desc:"（被動）生命≤3時，受到的戰鬥傷害-2。", passive:true}
   ]},
   paramedic:{name:"急救員", skills:[
-    {name:"戰地急救", desc:"（被動）結算時，若生命≤5，恢復1點生命。", passive:true},
-    {name:"包紮技巧", desc:"（被動）藥片治療量額外+1（共3點）。", passive:true}
+    {name:"戰地急救", desc:"（被動）上一輪結束時生命≤6，本輪開始時恢復1點生命。", passive:true},
+    {name:"包紮技巧", desc:"（被動）藥片在結算時的回復量+1（共3點），且可以對同房間的他人使用。", passive:true},
+    {name:"急救包", desc:"（被動）開局自備1片藥片；藥片永久不佔負重。", passive:true}
   ]},
   mole:{name:"地鼠", skills:[
     {name:"地底適應", desc:"（被動）受到的毒氣傷害-1（最低0）。", passive:true},
@@ -2605,7 +2607,7 @@ function makePlayer(id,isAI,profId,stats,name){
     weightlessWine: profId==="bartender",
     weightlessMedical: profId==="medic", // 醫官的隨身醫療包: 藥片/腎上腺素不佔負重
     weightlessRation: profId==="gourmet" || profId==="prepper", // 老饕的多多益善／生存狂的未雨綢繆: 水/糧不佔負重（廚師的儲糧有道改為每份0.5，見 usedCarry）
-    weightlessPill: profId==="herbalist" // 草藥師的藥草袋: 藥片不佔負重
+    weightlessPill: profId==="herbalist" || profId==="paramedic" // 急救員的急救包／ 草藥師的藥草袋: 藥片不佔負重
   };
   return p;
 }
@@ -2792,6 +2794,7 @@ function startGame(){
     }
     // 生存狂的未雨綢繆: brought from outside, not looted from any room — no room stock to deduct.
     if(p.prof==="prepper"){ p.inv.push("water","water","food","food"); }
+    if(p.prof==="paramedic"){ p.inv.push("pill"); } // 急救員的急救包: brought from outside, no room stock to deduct
     // ---- 三國模式：開局一次性被動 ----
     if(p.prof==="lvbu"){ p.power+=3; } // 天下無雙（武力上限+1 沒有對應機制，簡化省略）
     if(p.prof==="yanliang"){ /* 河北猛將已改走 combatPower() 的固定+2，這裡不再重複加 */ }
@@ -3159,6 +3162,11 @@ function beginRound(){
     if(p.prof==="simayi" && p.hp<=4) p.stepsLeft+=2; // 韜光養晦
     if(p.prof==="sunce" || p.prof==="mateng") p.stepsLeft+=1; // 小霸王／西涼鐵騎（簡化：每輪速度+1）
     if(p.prof==="suzhenchang") p.stepsLeft+=STATE.round; // 衝衝衝: 第N輪速度+N
+    // 急救員的戰地急救: last round ended at ≤6 HP, so heal 1 as this round opens.
+    if(p.prof==="paramedic" && p.alive && !p.ghost && p.hp<=6){
+      p.hp=Math.min(p.maxhp,p.hp+1);
+      log(p.name+"（戰地急救）上輪結束生命≤6，本輪開始恢復1點生命（HP→"+p.hp+"）。","heal");
+    }
     p.roundStartRoom = p.room; // lets 回手 undo all movement made so far this round, for free
     p.roundStartSteps = p.stepsLeft;
     p.roundEvents=[]; // cleared for the new round — showRoundSummary already read last round's
@@ -4464,11 +4472,14 @@ function resolvePillHealing(p){
     uses.forEach(item=>{
       if(item!=="pill") return;
       STATE.discardPile.push(item);
-      const heal = p.prof==="herbalist" ? 4 : p.prof==="paramedic" ? 3 : 2; // 草藥師的藥效增強／急救員的包紮技巧
+      let heal = p.prof==="herbalist" ? 4 : 2; // 草藥師的藥效增強
+      if(p.prof==="paramedic") heal+=1; // 急救員的包紮技巧 (own pills)
+      if((p.flags.pillBonus||0)>0){ p.flags.pillBonus--; heal+=1; } // 急救員的包紮技巧 (pill given by a paramedic)
       p.hp=Math.min(p.maxhp,p.hp+heal);
       log(p.name+" 結算：服用藥片，恢復"+heal+"點生命。","heal");
     });
   }
+  p.flags.pillBonus=0;
   p.flags.pendingItemUses=[]; // clear regardless — a pill queued by a player who died first is simply wasted
 }
 function useGoldAtRoom(p){
@@ -4710,6 +4721,7 @@ const SKILL_USE_LIMITS={
   "guardian:1":{flag:"guardianDefenseUsed",max:1,bool:true},
   "hermit:1":{flag:"hermitCloakUses",max:2},
   "prepper:1":{flag:"prepperCopyUses",max:2},
+  "sniper:1":{flag:"sniperUses",max:2},
   "witch:0":{flag:"witchSprinkleUsed",max:1,bool:true},
   // ---- 三國模式：主動技能使用次數（見 useSanguoSkill） ----
   "xiahouyuan:1":{flag:"sgXiahouyuanUses",max:3},
@@ -5121,6 +5133,16 @@ function releaseHoundItems(){
     if(held.includes("pill") && p.hp<p.maxhp && !uses.includes("pill")) declare("pill");
   });
 }
+// 狙擊手的遠距狙擊: aim now, damage lands at settlement (see the 實體擴充 block in settleRound).
+function sniperCandidates(p){
+  return Object.keys(ROOMS).filter(r=>{ const d=bfsDist(p.room,r); return d>0 && d<=3; });
+}
+function sniperAim(p,roomId){
+  p.flags.sniperUses=(p.flags.sniperUses||0)+1; p.flags.skillUsedThisRound=true;
+  p.flags.sniperTarget=roomId;
+  log(p.name+" 使用遠距狙擊，瞄準「"+roomId+" "+(ROOMS[roomId].name||"")+"」（結算時該房間所有玩家各受2點傷害）。");
+  speakSkill(p,"sniper:1");
+}
 function tamerReady(p){
   const room=ROOMS[p.room];
   const noAction = !room || (!room.special && !(room.draw>0)) || p.flags.roomLocked;
@@ -5344,6 +5366,21 @@ function useProfSkill(p,idx){
     if(skillUseCapReached(p,"prepper:1")){ flashMsg("已用完2次"); return; }
     if(countItem(p,"water")<1 && countItem(p,"food")<1){ flashMsg("背包內沒有水或糧食可複製"); return; }
     openPrepperCopyModal(p);
+  } else if(p.prof==="sniper" && idx===1){
+    if(skillUseCapReached(p,"sniper:1")){ flashMsg("已用完2次"); return; }
+    const cands=sniperCandidates(p);
+    if(!cands.length){ flashMsg("距離3步以內沒有可狙擊的房間。"); return; }
+    openModal(`<h3>遠距狙擊：指定距離3步以內的房間</h3>
+      <div class="muted" style="font-size:12px;margin-bottom:6px">結算時，該房間內所有存活玩家各受到2點傷害。</div>
+      <select id="sniperSel">${cands.map(r=>`<option value="${r}">${r} ${ROOMS[r].name||""}（距離${bfsDist(p.room,r)}）</option>`).join("")}</select><br><br>
+      <button class="btn small warn" id="sniperOk">瞄準</button>
+      <button class="btn small ghost" id="sniperCancel">取消</button>`);
+    document.getElementById("sniperOk").onclick=()=>{
+      sniperAim(p,document.getElementById("sniperSel").value);
+      closeModal(); renderAll();
+    };
+    bindModalClose("sniperCancel");
+    return;
   } else if(p.prof==="witch" && idx===0){
     if(skillUseCapReached(p,"witch:0")){ flashMsg("已用完"); return; }
     if(STATE.round===1 || STATE.round>=6){ flashMsg("第1輪與第6輪無法使用灑毒"); return; }
@@ -5357,7 +5394,7 @@ function useProfSkill(p,idx){
 // nothing. Every OTHER active skill executes immediately on click, which is risky for a
 // limited-use skill (a stray click permanently burns one of only 1-4 charges) — those get a
 // confirm prompt naming the skill and its effect before anything happens.
-const SKILL_OPENS_OWN_MODAL=new Set(["bomb:1","tamer:0","oracle:0","detective:0","chemist:0","hacker:1","geneFreak:1","shopper:1","pickpocket:0","courier:1","mediocre:1","mediocre:2","collector:1","prepper:1","witch:0",
+const SKILL_OPENS_OWN_MODAL=new Set(["bomb:1","tamer:0","oracle:0","detective:0","chemist:0","hacker:1","geneFreak:1","shopper:1","pickpocket:0","courier:1","mediocre:1","mediocre:2","collector:1","prepper:1","witch:0","sniper:1",
   // 三國模式：需要選目標玩家/房間的主動技能，跳過通用確認彈窗，直接進自己的選擇彈窗
   "zhangfei:0","weiyan:0","zhouyu:0","lusu:1","luxun:0","ganning:0","yuanshao:0","zhangjiao:0","zhangjiao:1","zhanghe:0","huanggai:1","huaxiong:0","sunquan:0","caopi:0"]);
 // 技能特效版 fallback: most skills already call speakSkill (which shows the effect), but a few
@@ -5991,6 +6028,19 @@ function aiConsiderSkillAfterMove(p){
     }
     return;
   }
+  if(p.prof==="sniper"){
+    // 遠距狙擊: aim at the in-range room holding the most non-mate players (needs 2+ to be worth a charge).
+    if(skillUseCapReached(p,"sniper:1")) return;
+    const mates=aiMates(p).map(m=>m.id);
+    let best=null, bestN=1;
+    sniperCandidates(p).forEach(r=>{
+      const here=playersInRoom(r,true);
+      if(here.some(x=>mates.includes(x.id))) return;
+      if(here.length>bestN){ best=r; bestN=here.length; }
+    });
+    if(best) sniperAim(p,best);
+    return;
+  }
   if(p.prof==="tamer"){ if(!skillUseCapReached(p,"tamer:0")) useProfSkill(p,0); return; }
   if(p.prof==="embalmer") return; // 亡者遺贈 is decided at the moment of a death (see killPlayer), not as a normal-turn skill
   if(p.prof==="survivor"){
@@ -6227,6 +6277,12 @@ function resolveAITurn(p){
   aiConsiderSkillAfterMove(p);
   // simple item usage: declare now, effect resolves at settlement (same as the human path)
   if(p.hp<=4 && countItem(p,"pill")>0){ removeItem(p,"pill"); p.flags.pendingItemUses.push("pill"); }
+  else if(p.prof==="paramedic" && countItem(p,"pill")>0){
+    // 包紮技巧: spend a spare pill on a hurt roommate who is also a teammate.
+    const mates=aiMates(p).map(m=>m.id);
+    const t=playersInRoom(p.room,true).find(x=>x.id!==p.id && x.hp<=4 && mates.includes(x.id));
+    if(t){ removeItem(p,"pill"); t.flags.pendingItemUses.push("pill"); t.flags.pillBonus=(t.flags.pillBonus||0)+1; log(p.name+"（包紮技巧）把藥片給了 "+t.name+"。"); }
+  }
   // 神秘商店道具 (地圖2): only the ones with a clear, cheap heuristic get AI usage — 地雷/神秘
   // 骰子/幸運銅板/傳送符 are deliberately left unused by AI, same precedent as 賭徒/基因怪人/郵差
   // above (no obvious "worth it now" signal for a random-outcome or arbitrary-target action).
@@ -6804,12 +6860,24 @@ function askPayModals(resume){
 function askUseItemModals(resume){
   askSettleModals(humansToUseItems(), p=>{
     const rows=[];
-    for(let i=0;i<countItem(p,"pill");i++) rows.push({item:"pill",label:"藥片（結算後回血）",checked:false});
+    for(let i=0;i<countItem(p,"pill");i++){
+      rows.push({item:"pill",label:"藥片（結算後回血）",checked:false});
+      // 急救員的包紮技巧: each pill can instead go to a living player in the same room.
+      if(p.prof==="paramedic") playersInRoom(p.room,true).filter(x=>x.id!==p.id).forEach(x=>
+        rows.push({item:"pill@"+x.id,label:"藥片 → 給 "+x.name+"（目前生命 "+x.hp+"）",checked:false}));
+    }
     if(countItem(p,"adrenaline")>0) rows.push({item:"adrenaline",label:"腎上腺素（下輪速度10，下輪飢餓結算完前不會死）",checked:false});
     if(p.prof!=="bartender") for(let i=0;i<countItem(p,"wine");i++) rows.push({item:"wine",label:"酒（6種結果隨機）",checked:false});
     return {title:"結算：使用道具", note:p.name+"：是否使用藥片／腎上腺素／酒？（目前生命 "+p.hp+"）", rows};
   }, (p,chosen)=>{
     chosen.forEach(it=>{
+      if(it.startsWith("pill@")){
+        const t=STATE.players.find(x=>x.id===+it.slice(5));
+        if(!t || !t.alive || t.ghost || !removeItem(p,"pill")) return;
+        t.flags.pendingItemUses.push("pill"); t.flags.pillBonus=(t.flags.pillBonus||0)+1;
+        log(p.name+"（包紮技巧）結算：把藥片給了 "+t.name+"。");
+        return;
+      }
       if(!removeItem(p,it)) return;
       if(it==="wine") p.flags.wineExcludedQueue.push(null);
       p.flags.pendingItemUses.push(it);
@@ -6970,13 +7038,25 @@ function* settleRoundCore(){
     STATE.__report.combat.push(p.name+" 縱火 @"+p.room+"（"+victims.map(x=>x.name).join("、")+" 各-1）");
   });
 
+  // 實體擴充：狙擊手的遠距狙擊 — hits everyone alive in the aimed room as it stands after combat.
+  STATE.players.forEach(p=>{
+    const t=p.flags.sniperTarget;
+    if(!t) return;
+    p.flags.sniperTarget=null;
+    if(!p.alive || p.ghost) return;
+    const victims=playersInRoom(t,true);
+    victims.forEach(x=>{
+      const gc=damageWard(x,2);
+      damagePlayer(x,gc.dmg,"狙擊手遠距狙擊",p.id);
+      log(x.name+" 在「"+t+"」被 "+p.name+" 狙擊，受到 "+gc.dmg+" 點傷害"+gc.note+"。","dmg");
+    });
+    if(!victims.length) log(p.name+" 的遠距狙擊落空：「"+t+"」沒有人。");
+    STATE.__report.combat.push(p.name+" 狙擊 @"+t+(victims.length?"（"+victims.map(x=>x.name).join("、")+" 各-2）":"（落空）"));
+  });
+
   // 實體擴充：急救員的戰地急救／地鼠的地下療養 (settlement heals)
   STATE.players.forEach(p=>{
     if(!p.alive || p.ghost) return;
-    if(p.prof==="paramedic" && p.hp<=5){
-      p.hp=Math.min(p.maxhp,p.hp+1);
-      log(p.name+"（戰地急救）恢復1點生命（HP→"+p.hp+"）。","heal");
-    }
     if(p.prof==="mole" && String(p.room).charAt(0)==="B" && !roomIsPoisoned(ROOMS[p.room])){
       p.hp=Math.min(p.maxhp,p.hp+1);
       log(p.name+"（地下療養）身處無毒的地下樓層，恢復1點生命（HP→"+p.hp+"）。","heal");
