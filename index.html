@@ -870,7 +870,7 @@ const PROFESSIONS = {
     {name:"邊緣存在感", desc:"（被動）所在房間存活玩家3人以上時：<br>・你不參與戰鬥結算（火箭筒傷害仍有效），並自動恢復1點生命（固定）。", passive:true}
   ]},
   climber:{name:"攀岩者", skills:[
-    {name:"垂直攀爬", desc:"（主動）發動後，本回合可直接移動到正上方或正下方一層、位置重疊的房間，每次消耗1步<br>・與節食同一輪只能擇一發動。", uses:99},
+    {name:"垂直攀爬", desc:"（主動）發動後，本回合可直接移動到正上方或正下方一層、位置重疊的房間，每次消耗1步。", uses:99},
     {name:"節食", desc:"（主動，整局限用1次）本回合不需支付水與糧。", uses:1}
   ]},
   engineer:{name:"工程師", skills:[
@@ -5309,7 +5309,8 @@ function useProfSkill(p,idx){
   const sk=prof.skills[idx];
   // Active profession skills are a once-per-round action (the "技能使用階段" from the rulebook),
   // shared across a player's own skill slots — using one locks out the other for the rest of the round.
-  if(p.flags.skillUsedThisRound){ flashMsg("本輪已使用過職業技能，請下輪再使用。"); return; }
+  // 攀岩者 is exempt: 垂直攀爬 and 節食 can both be used in the same round.
+  if(p.flags.skillUsedThisRound && p.prof!=="climber"){ flashMsg("本輪已使用過職業技能，請下輪再使用。"); return; }
   if(p.flags.sgSilenced){ flashMsg("你本輪被篡漢登基封印，無法使用主動技能。"); return; }
   if(SANGUO_PROFS.has(p.prof)){ useSanguoSkill(p,idx); return; }
   if(p.prof==="gambler" && idx===0){
@@ -5424,11 +5425,12 @@ function useProfSkill(p,idx){
     p.flags.geneUses++; p.flags.skillUsedThisRound=true; speakSkill(p,"geneFreak:1");
     openRespecModal(p);
   } else if(p.prof==="climber" && idx===0){
-    p.flags.climberVertical=true; p.flags.skillUsedThisRound=true;
+    if(p.flags.climberVertical){ flashMsg("本輪已發動垂直攀爬。"); return; }
+    p.flags.climberVertical=true;
     log(p.name+" 發動垂直攀爬。"); speakSkill(p,"climber:0");
   } else if(p.prof==="climber" && idx===1){
     if(skillUseCapReached(p,"climber:1")){ flashMsg("已用完"); return; }
-    p.flags.climberDietUsed=true; p.flags.dietThisRound=true; p.flags.skillUsedThisRound=true;
+    p.flags.climberDietUsed=true; p.flags.dietThisRound=true;
     log(p.name+" 使用節食：本輪不需支付水/糧。"); speakSkill(p,"climber:1");
   } else if(p.prof==="survivor" && idx===1){
     if(skillUseCapReached(p,"survivor:1")){ flashMsg("已用完2次"); return; }
@@ -6174,7 +6176,6 @@ function aiConsiderSkillAfterMove(p){
         p.room=dests[Math.floor(Math.random()*dests.length)].id; p.stepsLeft--;
         log(p.name+" 使用垂直攀爬逃離毒氣樓層，前往 "+p.room+"。");
       }
-      return;
     }
     // 節食: only worth spending the once-per-game use when it actually replaces a real payment.
     if(!skillUseCapReached(p,"climber:1") && countItem(p,"water")===0 && countItem(p,"food")===0) useProfSkill(p,1);
