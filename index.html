@@ -408,6 +408,8 @@
         <input type="checkbox" id="physicalToggle" checked> 啟用實體模式（遊戲方式與一般版本相同，但職業只開放精選的16位，AI也只會從這16位中選取；玩家人數改為8~12人，可重複選同一個出生點；與擴充模式、三國模式互斥）</label>
       <label class="muted" id="physicalExpLabel" style="display:none;margin:0 0 6px 22px;font-size:13px">
         <input type="checkbox" id="physicalExpToggle"> 實體擴充（需先啟用實體模式；額外開放8位新職業：狙擊手、狂戰士、急救員、地鼠、倉管員、偵察兵、說客、團長，AI也可能選到；預設關閉）</label>
+      <label class="muted" id="physicalExp2Label" style="display:none;margin:0 0 6px 22px;font-size:13px">
+        <input type="checkbox" id="physicalExp2Toggle"> 實體擴充2（需先啟用實體模式；額外開放5位新職業：賞金獵人、哨兵、老千、看守長、清潔工，AI也可能選到；預設關閉）</label>
       <label class="muted" style="display:block;margin-bottom:10px;font-size:13px">
         <input type="checkbox" id="sanguoTeamToggle"> 啟用三國陣營戰（需先啟用三國模式；限定9或12人，依國家分成3～4隊，每隊3人，同國家不互相傷害，房內混戰只計較國家間的代表武力，結算比較各國總血量）</label>
       <div class="prof-grid" id="profGrid"></div>
@@ -1061,6 +1063,26 @@ const PROFESSIONS = {
     {name:"物歸原主", desc:"（被動）持有你標記道具的玩家死亡時，該道具直接回到你的背包。", passive:true},
     {name:"招攬團員", desc:"（被動）遊戲開始時，指定2名其他玩家為團員；你與團員之間無法互相造成戰鬥傷害。", passive:true}
   ]},
+  bountyhunter:{name:"賞金獵人", skills:[
+    {name:"追獵", desc:"（被動）與生命≤5的玩家戰鬥時，自己武力+1。", passive:true},
+    {name:"戰利品", desc:"（被動）在戰鬥中擊殺玩家時，恢復2點生命，並取得對方的道具（受負重限制，裝不下的留在原地）。", passive:true}
+  ]},
+  sentinel:{name:"哨兵", skills:[
+    {name:"堅守崗位", desc:"（被動）本輪沒有離開出發房間時，受到的戰鬥傷害-2。", passive:true},
+    {name:"居高臨下", desc:"（被動）所在房間內有3人以上（含自己）時，武力+1。", passive:true}
+  ]},
+  cardsharp:{name:"老千", skills:[
+    {name:"手氣", desc:"（被動）抽取道具時擲骰：1～2 少抽1張（至少抽1張）、3～4 不變、5～6 多抽1張。", passive:true},
+    {name:"孤注一擲", desc:"（被動）生命≤3時，手氣的骰值一律視為6。", passive:true}
+  ]},
+  warden:{name:"看守長", skills:[
+    {name:"禁足令", desc:"（主動，整局限用2次）指定同房間的1名玩家：其下一輪移動步數-2（至少為1）。", uses:2},
+    {name:"威壓", desc:"（被動）與你同房間的其他玩家，戰鬥時武力-2。", passive:true}
+  ]},
+  janitor:{name:"清潔工", skills:[
+    {name:"物盡其用", desc:"（被動）垃圾不佔負重；在垃圾場使用房間功能時，多抽1張。", passive:true},
+    {name:"廢物利用", desc:"（被動）結算時若持有2個以上垃圾，自動消耗2個並恢復1點生命（每輪最多1次）。", passive:true}
+  ]},
   clerk:{name:"倉管員", skills:[
     {name:"調貨", desc:"（被動）在金庫、武器庫、水塔、糧倉、垃圾場、酒窖、藥房、大倉庫使用房間功能時，可選擇改為抽取這8個房間中的任一個（依被選房間的抽取數量與庫存）；不可與上一回合抽取的房間相同。", passive:true},
     {name:"庫存管理", desc:"（被動）背包上限永久+2。此加成不屬於負重素質，不會被重新分配素質、增減素質的效果影響。", passive:true}
@@ -1076,7 +1098,10 @@ const EXPANSION_PROFS=new Set(["fatty","trucker","bartender","chemist","hacker",
 const CLERK_ROOMS=["101","B107","B206","B301","B501","B503","B505","B601"];
 // 倉管員 may not 調貨 from the same room he drew from last round.
 function clerkBlockedRoom(p){ const l=p.flags.clerkLast; return (l && l.round===STATE.round-1) ? l.room : null; }
-const PHYSICAL_EXP_PROFS=new Set(["sniper","berserker","paramedic","mole","clerk","scout","lobbyist","leader"]);
+// 實體擴充2: the second batch (a separate checkbox). PHYSICAL_EXP_PROFS below is the UNION of both
+// batches, used for hiding/counting; each checkbox only unlocks its own batch.
+const PHYSICAL_EXP2_PROFS=new Set(["bountyhunter","sentinel","cardsharp","warden","janitor"]);
+const PHYSICAL_EXP_PROFS=new Set(["bountyhunter","sentinel","cardsharp","warden","janitor","sniper","berserker","paramedic","mole","clerk","scout","lobbyist","leader"]);
 // One small emoji "portrait" per profession — shown on the selection card and anywhere a player's
 // profession is listed in-game, so each of the 16 is visually distinct at a glance, not just by name.
 const PROF_ICON={
@@ -1087,7 +1112,7 @@ const PROF_ICON={
   shopper:"🛍️", runner:"🏃", herbalist:"🌿", veteran:"🎖️", pickpocket:"🥷",
   diver:"🤿", courier:"📦", gourmet:"🍽️", farmer:"🌾", miner:"⛏️", hunter:"🏹",
   mediocre:"🤷", boss:"🕴️", collector:"📿", butcher:"🥩", exorcist:"🕯️", guardian:"🛡️", lucky:"🍀",
-  hermit:"🏚️", prepper:"🥫", witch:"🧙", toxic:"☣️", arsonist:"🔥", vampire:"🧛", assassin:"🗡️", bodyguard:"🕶️", sniper:"🎯", berserker:"🪓", paramedic:"⛑️", mole:"🐀", clerk:"📋", scout:"🔭", lobbyist:"🗳️", leader:"📣", laiqingde:"🐦", shenboyang:"🐻", jiangwanan:"🎤", suzhenchang:"🏃‍♂️", detective:"🕵️", oracle:"☠️"
+  hermit:"🏚️", prepper:"🥫", witch:"🧙", toxic:"☣️", arsonist:"🔥", vampire:"🧛", assassin:"🗡️", bodyguard:"🕶️", sniper:"🎯", berserker:"🪓", paramedic:"⛑️", mole:"🐀", clerk:"📋", scout:"🔭", lobbyist:"🗳️", leader:"📣", bountyhunter:"💰", sentinel:"🛡️", cardsharp:"🃏", warden:"⛓️", janitor:"🧹", laiqingde:"🐦", shenboyang:"🐻", jiangwanan:"🎤", suzhenchang:"🏃‍♂️", detective:"🕵️", oracle:"☠️"
 };
 // ===================== 三國模式 (SANGUO_MODE) =====================
 // 40 characters across 4 kingdoms. Added directly into PROFESSIONS (not a separate object) so
@@ -2235,7 +2260,12 @@ const SELECT_QUOTES={
   clerk:"東西多沒關係，我扛得動。",
   scout:"我先去探路。",
   lobbyist:"票數，是談出來的。",
-  leader:"拿著，這是團隊給你的。"
+  leader:"拿著，這是團隊給你的。",
+  bountyhunter:"你的命，我收下了。",
+  sentinel:"這個位置，我不讓。",
+  cardsharp:"牌在我手上，你輸定了。",
+  warden:"沒我的許可，哪裡都別想去。",
+  janitor:"別人丟的，都是我的寶。"
 };
 (()=>{
   const voiceBtn=document.getElementById("voiceMuteBtn");
@@ -2312,6 +2342,7 @@ let sanguoMode=false;
 // AI's random-pick pool) is narrowed to 16 hand-picked professions that are practical to run at a
 // physical table. Mutually exclusive with 三國模式; overrides 擴充模式's additive card visibility.
 let physicalMode=false;
+let physicalExp2Mode=false; // 實體擴充2: second sub-option of 實體模式, off by default (adds PHYSICAL_EXP2_PROFS)
 let physicalExpMode=false; // 實體擴充: sub-option of 實體模式, off by default (adds PHYSICAL_EXP_PROFS)
 const PHYSICAL_PROFS=new Set(["bodyguard","vampire","scavenger","embalmer","exorcist","tamer","geneFreak","engineer","shopper","butcher","bartender","detective","bomb","merc","climber","mediocre","lucky"]);
 // 三國陣營戰: a sub-mode of 三國模式 — off by default. When on, professions are assigned as
@@ -2375,7 +2406,7 @@ Object.entries(PROFESSIONS).forEach(([id,p])=>{
   if(PHYSICAL_EXP_PROFS.has(id)) div.classList.add("hidden");
   div.innerHTML=`<div class="prof-head"><span class="prof-icon">${profIcon(id)}</span><h3>${p.name}</h3>`+
     (EXPANSION_PROFS.has(id)?`<span class="tag">擴充</span>`:"")+
-    (PHYSICAL_EXP_PROFS.has(id)?`<span class="tag">實體擴充</span>`:"")+
+    (PHYSICAL_EXP_PROFS.has(id)?`<span class="tag">${PHYSICAL_EXP2_PROFS.has(id)?"實體擴充2":"實體擴充"}</span>`:"")+
     (SANGUO_PROFS.has(id)?`<span class="tag">${SANGUO_KINGDOM[id]}</span>`:"")+`</div>`+
     p.skills.map(s=>`<div class="sk"><b>${s.name}</b>｜${s.desc}</div>`).join("");
   div.addEventListener("click",()=>{
@@ -2394,7 +2425,7 @@ document.getElementById("bountyToggle").addEventListener("change",(e)=>{ bountyM
 // expansionMode — and drops the current selection if it just got hidden.
 function syncProfCards(){
   const visible=id=>sanguoMode ? SANGUO_PROFS.has(id)
-    : physicalMode ? (PHYSICAL_PROFS.has(id) || (physicalExpMode && PHYSICAL_EXP_PROFS.has(id)))
+    : physicalMode ? (PHYSICAL_PROFS.has(id) || (physicalExpMode && PHYSICAL_EXP_PROFS.has(id) && !PHYSICAL_EXP2_PROFS.has(id)) || (physicalExp2Mode && PHYSICAL_EXP2_PROFS.has(id)))
     : (!SANGUO_PROFS.has(id) && !PHYSICAL_EXP_PROFS.has(id) && (expansionMode || !EXPANSION_PROFS.has(id)));
   document.querySelectorAll(".prof-card").forEach(c=>c.classList.toggle("hidden",!visible(c.dataset.id)));
   if(selectedProf && !visible(selectedProf)){
@@ -2423,11 +2454,19 @@ document.getElementById("physicalExpToggle").addEventListener("change",(e)=>{
   physicalExpMode=e.target.checked;
   syncProfCards();
 });
+document.getElementById("physicalExp2Toggle").addEventListener("change",(e)=>{
+  physicalExp2Mode=e.target.checked;
+  syncProfCards();
+});
 document.getElementById("physicalToggle").addEventListener("change",(e)=>{
   physicalMode=e.target.checked;
   // 實體擴充 only exists under 實體模式: show its checkbox there, and reset it to off when leaving.
   document.getElementById("physicalExpLabel").style.display=physicalMode?"block":"none";
-  if(!physicalMode){ physicalExpMode=false; document.getElementById("physicalExpToggle").checked=false; }
+  document.getElementById("physicalExp2Label").style.display=physicalMode?"block":"none";
+  if(!physicalMode){
+    physicalExpMode=false; document.getElementById("physicalExpToggle").checked=false;
+    physicalExp2Mode=false; document.getElementById("physicalExp2Toggle").checked=false;
+  }
   if(physicalMode && sanguoMode){ // mutually exclusive with 三國模式 (which also drops 三國陣營戰)
     document.getElementById("sanguoToggle").checked=false;
     document.getElementById("sanguoToggle").dispatchEvent(new Event("change"));
@@ -2449,6 +2488,8 @@ document.getElementById("sanguoToggle").addEventListener("change",(e)=>{
     physicalMode=false; document.getElementById("physicalToggle").checked=false;
     physicalExpMode=false; document.getElementById("physicalExpToggle").checked=false;
     document.getElementById("physicalExpLabel").style.display="none";
+    physicalExp2Mode=false; document.getElementById("physicalExp2Toggle").checked=false;
+    document.getElementById("physicalExp2Label").style.display="none";
   }
   syncProfCards();
   // 三國陣營戰 needs 三國模式 on to mean anything — turning 三國模式 off underneath it
@@ -2624,7 +2665,7 @@ function makePlayer(id,isAI,profId,stats,name){
     pendingActions:{targetRoom:null, movementDone:false, roomActed:false},
     weaponWeightless: profId==="merc" || profId==="xuchu", // 許褚的虎痴神力也適用
     weightlessGold: profId==="tycoon",
-    weightlessTrash: profId==="scavenger",
+    weightlessTrash: profId==="scavenger" || profId==="janitor",
     weightlessWine: profId==="bartender",
     weightlessMedical: profId==="medic", // 醫官的隨身醫療包: 藥片/腎上腺素不佔負重
     weightlessRation: profId==="gourmet" || profId==="prepper", // 老饕的多多益善／生存狂的未雨綢繆: 水/糧不佔負重（廚師的儲糧有道改為每份0.5，見 usedCarry）
@@ -2706,6 +2747,9 @@ function combatPower(p){
   // ---- 實體擴充職業 ----
   if(p.prof==="sniper" && hasGun(p)) base+=2; // 狙擊手的一擊必中
   if(p.prof==="berserker" && p.hp<=6) base+=2; // 狂戰士的血怒
+  if(p.prof==="sentinel" && playersInRoom(p.room,true).length>=3) base+=1; // 哨兵的居高臨下
+  // 看守長的威壓: every other player sharing a room with a living 看守長 fights at -2.
+  if(STATE && STATE.players && p.prof!=="warden" && STATE.players.some(x=>x.alive && !x.ghost && x.prof==="warden" && x.id!==p.id && x.room===p.room)) base-=2;
   // (保鑣的壯碩體格 +1 武力 is applied once at startGame, like 馴獸師)
   // ---- 三國模式：武力相關被動 ----
   if(p.prof==="guanyu" && p.inv.includes("knife")) base+=2; // 青龍偃月刀
@@ -2758,7 +2802,7 @@ function startGame(){
   // 三國模式 replaces the pool entirely (AI only ever picks from the 40 武將 while it's on),
   // matching the card grid's own full-swap behaviour rather than 擴充模式's additive one.
   const profIds=sanguoMode ? [...SANGUO_PROFS]
-    : physicalMode ? [...PHYSICAL_PROFS, ...(physicalExpMode?PHYSICAL_EXP_PROFS:[])]
+    : physicalMode ? [...PHYSICAL_PROFS, ...[...PHYSICAL_EXP_PROFS].filter(id=>PHYSICAL_EXP2_PROFS.has(id)?physicalExp2Mode:physicalExpMode)]
     : Object.keys(PROFESSIONS).filter(id=>!SANGUO_PROFS.has(id) && !PHYSICAL_EXP_PROFS.has(id) && (expansionMode||!EXPANSION_PROFS.has(id)));
   const players=[you];
   // rolls the same random power/speed/carry split every AI player gets — pulled out so both the
@@ -3195,6 +3239,12 @@ function beginRound(){
       p.flags.sniperSlowNext=false;
       const before=p.stepsLeft; p.stepsLeft=Math.min(before,Math.max(1,before-2));
       log(p.name+"（遠距狙擊後座力）本輪移動步數-2（共"+p.stepsLeft+"步，至少1步）。");
+    }
+    // 看守長的禁足令: the slowed target loses 2 steps this round, never dropping below 1.
+    if(p.flags.wardenSlowNext){
+      p.flags.wardenSlowNext=false;
+      const before=p.stepsLeft; p.stepsLeft=Math.min(before,Math.max(1,before-2));
+      log(p.name+"（禁足令）本輪移動步數-2（共"+p.stepsLeft+"步，至少1步）。");
     }
     // 偵察兵的疾行／輕裝上陣
     if(p.prof==="scout"){
@@ -3788,7 +3838,19 @@ function luckyApply(p,roll,src){ passiveFX(p,"lucky:0");
     log(p.name+"（"+src+"）擲骰6：恢復1點生命（HP→"+p.hp+"），負重上限永久+1（→"+p.carry+"）。","heal");
   }
 }
+// 老千的手氣／清潔工的物盡其用: adjust how many cards a room search draws.
+function adjustDrawCount(p,roomId,n){
+  if(p.prof==="janitor" && roomId==="B503"){ n+=1; log(p.name+"（物盡其用）在垃圾場多抽1張。"); }
+  if(p.prof==="cardsharp"){
+    const roll=p.hp<=3 ? 6 : 1+Math.floor(Math.random()*6);
+    if(roll<=2){ n=Math.max(1,n-1); log(p.name+"（手氣）擲出"+roll+"：少抽1張（至少1張）。"); }
+    else if(roll>=5){ n+=1; log(p.name+"（手氣）擲出"+roll+(p.hp<=3?"（孤注一擲）":"")+"：多抽1張。"); }
+    else log(p.name+"（手氣）擲出"+roll+"：抽取數量不變。");
+  }
+  return n;
+}
 function resolveHumanDraw(p,roomId,maxDraw){
+  maxDraw=adjustDrawCount(p,roomId,maxDraw);
   const room=ROOMS[roomId];
   // 購物大媽的精挑細選／曹操的唯才是用: see 1 extra item, but must put exactly 1 of the reveal
   // back — actual kept amount stays maxDraw either way, so this only ever improves WHICH ones
@@ -3932,6 +3994,7 @@ function aiUseGold(p){
   return true;
 }
 function resolveAIDraw(p,roomId,maxDraw){
+  maxDraw=adjustDrawCount(p,roomId,maxDraw);
   const priority=(it)=>(ITEMS[it].weapon?0:(it==="pill"||it==="adrenaline")?1:(it==="water"||it==="food")?2:3);
   const extra = (p.prof==="shopper" || p.prof==="caocao") ? 1 : 0;
   // 庸才的以命換命 (抽卡選項): see resolveHumanDraw's matching comment.
@@ -4804,6 +4867,7 @@ const SKILL_USE_LIMITS={
   "hermit:1":{flag:"hermitCloakUses",max:2},
   "prepper:1":{flag:"prepperCopyUses",max:2},
   "sniper:1":{flag:"sniperUses",max:2},
+  "warden:0":{flag:"wardenUses",max:2},
   "witch:0":{flag:"witchSprinkleUsed",max:1,bool:true},
   // ---- 三國模式：主動技能使用次數（見 useSanguoSkill） ----
   "xiahouyuan:1":{flag:"sgXiahouyuanUses",max:3},
@@ -5225,6 +5289,14 @@ function sniperAim(p,roomId){
   log(p.name+" 使用遠距狙擊，瞄準「"+roomId+" "+(ROOMS[roomId].name||"")+"」（結算時該房間所有玩家各受2點傷害）。");
   speakSkill(p,"sniper:1");
 }
+// 看守長的禁足令: slow a same-room player's next round by 2 steps.
+function wardenTargets(p){ return playersInRoom(p.room,true).filter(x=>x.id!==p.id); }
+function wardenCommand(p,target){
+  p.flags.wardenUses=(p.flags.wardenUses||0)+1; p.flags.skillUsedThisRound=true;
+  target.flags.wardenSlowNext=true;
+  log(p.name+" 對 "+target.name+" 下達禁足令：其下一輪移動步數-2（至少為1）。");
+  speakSkill(p,"warden:0");
+}
 function tamerReady(p){
   const room=ROOMS[p.room];
   const noAction = !room || (!room.special && !(room.draw>0)) || p.flags.roomLocked;
@@ -5463,6 +5535,22 @@ function useProfSkill(p,idx){
     };
     bindModalClose("sniperCancel");
     return;
+  } else if(p.prof==="warden" && idx===0){
+    if(skillUseCapReached(p,"warden:0")){ flashMsg("已用完2次"); return; }
+    const ts=wardenTargets(p);
+    if(!ts.length){ flashMsg("同房間沒有其他玩家。"); return; }
+    openModal(`<h3>禁足令：指定同房間的1名玩家</h3>
+      <div class="muted" style="font-size:12px;margin-bottom:6px">其下一輪移動步數-2（至少為1）。</div>
+      <select id="wardenSel">${ts.map(x=>`<option value="${x.id}">${x.name}（HP${x.hp}）</option>`).join("")}</select><br><br>
+      <button class="btn small warn" id="wardenOk">下令</button>
+      <button class="btn small ghost" id="wardenCancel">取消</button>`);
+    document.getElementById("wardenOk").onclick=()=>{
+      const t=STATE.players.find(x=>x.id==document.getElementById("wardenSel").value);
+      if(t) wardenCommand(p,t);
+      closeModal(); renderAll();
+    };
+    bindModalClose("wardenCancel");
+    return;
   } else if(p.prof==="witch" && idx===0){
     if(skillUseCapReached(p,"witch:0")){ flashMsg("已用完"); return; }
     if(STATE.round===1 || STATE.round>=6){ flashMsg("第1輪與第6輪無法使用灑毒"); return; }
@@ -5476,7 +5564,7 @@ function useProfSkill(p,idx){
 // nothing. Every OTHER active skill executes immediately on click, which is risky for a
 // limited-use skill (a stray click permanently burns one of only 1-4 charges) — those get a
 // confirm prompt naming the skill and its effect before anything happens.
-const SKILL_OPENS_OWN_MODAL=new Set(["bomb:1","tamer:0","oracle:0","detective:0","chemist:0","hacker:1","geneFreak:1","shopper:1","pickpocket:0","courier:1","mediocre:1","mediocre:2","collector:1","prepper:1","witch:0","sniper:1",
+const SKILL_OPENS_OWN_MODAL=new Set(["bomb:1","tamer:0","oracle:0","detective:0","chemist:0","hacker:1","geneFreak:1","shopper:1","pickpocket:0","courier:1","mediocre:1","mediocre:2","collector:1","prepper:1","witch:0","sniper:1","warden:0",
   // 三國模式：需要選目標玩家/房間的主動技能，跳過通用確認彈窗，直接進自己的選擇彈窗
   "zhangfei:0","weiyan:0","zhouyu:0","lusu:1","luxun:0","ganning:0","yuanshao:0","zhangjiao:0","zhangjiao:1","zhanghe:0","huanggai:1","huaxiong:0","sunquan:0","caopi:0"]);
 // 技能特效版 fallback: most skills already call speakSkill (which shows the effect), but a few
@@ -6123,6 +6211,14 @@ function aiConsiderSkillAfterMove(p){
     if(best) sniperAim(p,best);
     return;
   }
+  if(p.prof==="warden"){
+    // 禁足令: slow the strongest non-mate sharing the room (once per round).
+    if(skillUseCapReached(p,"warden:0") || p.flags.skillUsedThisRound) return;
+    const mates=aiMates(p).map(m=>m.id);
+    const foes=wardenTargets(p).filter(x=>!mates.includes(x.id) && !x.flags.wardenSlowNext);
+    if(foes.length){ foes.sort((a,b)=>combatPower(b)-combatPower(a)); wardenCommand(p,foes[0]); }
+    return;
+  }
   if(p.prof==="tamer"){ if(!skillUseCapReached(p,"tamer:0")) useProfSkill(p,0); return; }
   if(p.prof==="embalmer") return; // 亡者遺贈 is decided at the moment of a death (see killPlayer), not as a normal-turn skill
   if(p.prof==="survivor"){
@@ -6610,6 +6706,15 @@ function killPlayer(p,cause,killerId){
     if(killer && killer.alive && killer.prof==="berserker" && (killer.flags.berserkKills||0)<2){ // 狂戰士的嗜殺
       killer.flags.berserkKills=(killer.flags.berserkKills||0)+1; killer.power++;
       log(killer.name+"（嗜殺）擊殺 "+p.name+"，武力永久+1（"+killer.flags.berserkKills+"/2）。");
+    }
+    if(killer && killer.alive && killer.prof==="bountyhunter"){ // 賞金獵人的戰利品
+      killer.hp=Math.min(killer.maxhp,killer.hp+2);
+      const got=[];
+      p.inv.slice().forEach(it=>{
+        if(itemCostsCarry(killer,it) && carryRoom(killer)<=0) return;
+        if(removeItem(p,it)){ killer.inv.push(it); got.push(ITEMS[it].name); }
+      });
+      log(killer.name+"（戰利品）擊殺 "+p.name+"，恢復2點生命（HP→"+killer.hp+"）"+(got.length?"，取得道具："+got.join("、"):"，沒有取得道具")+"。","heal");
     }
     if(killer && killer.alive && killer.prof==="butcher"){
       killer.hp=Math.min(killer.maxhp,killer.hp+2);
@@ -7155,6 +7260,11 @@ function* settleRoundCore(){
   // 實體擴充：急救員的戰地急救／地鼠的地下療養 (settlement heals)
   STATE.players.forEach(p=>{
     if(!p.alive || p.ghost) return;
+    if(p.prof==="janitor" && countItem(p,"trash")>=2){ // 清潔工的廢物利用
+      removeItem(p,"trash"); removeItem(p,"trash");
+      p.hp=Math.min(p.maxhp,p.hp+1);
+      log(p.name+"（廢物利用）消耗2個垃圾，恢復1點生命（HP→"+p.hp+"）。","heal");
+    }
     if(p.prof==="mole" && String(p.room).charAt(0)==="B" && !roomIsPoisoned(ROOMS[p.room])){
       p.hp=Math.min(p.maxhp,p.hp+1);
       log(p.name+"（地下療養）身處無毒的地下樓層，恢復1點生命（HP→"+p.hp+"）。","heal");
@@ -7399,6 +7509,7 @@ function resolveCombat(a,b,roomId,frozenA){
   // 顏良的斬將 (+3 vs 生命較高者)、張遼的突襲 (+2, 本輪第一次攻擊且本輪有進入新房間).
   const sgBonus=(p,opp)=>{
     let x=0;
+    if(p.prof==="bountyhunter" && opp.hp<=5) x+=1; // 賞金獵人的追獵
     if(p.prof==="yanliang" && p.flags.yanliangActive && opp.hp>p.hp) x+=3;
     if(p.prof==="zhangliao" && !p.flags.zhangliaoRaidUsed && p.roundStartRoom!==p.room) x+=2;
     return x;
@@ -7434,6 +7545,7 @@ function resolveCombat(a,b,roomId,frozenA){
     if(p.prof==="scout" && d>0){ d=Math.max(0,d-1); note+="〔靈活閃避 -1〕"; }
     if(p.prof==="bodyguard" && d>0){ const before=d; d=Math.max(0,d-2); note+="〔鐵壁 -"+(before-d)+"〕"; }
     if(p.prof==="berserker" && p.hp<=3 && d>0){ const before=d; d=Math.max(0,d-2); note+="〔困獸之鬥 -"+(before-d)+"〕"; }
+    if(p.prof==="sentinel" && p.roundStartRoom===p.room && d>0){ const before=d; d=Math.max(0,d-2); note+="〔堅守崗位 -"+(before-d)+"〕"; }
     // 隱士的離群索居: included for completeness (the skill's own wording lists 戰鬥 alongside
     // 中毒/飢餓), though combat inherently requires an opponent sharing the room, so "truly
     // alone" can never actually be true here — this branch is a structural no-op.
