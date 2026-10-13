@@ -1063,7 +1063,7 @@ const PROFESSIONS = {
   ]},
   clerk:{name:"倉管員", skills:[
     {name:"調貨", desc:"（被動）在金庫、武器庫、水塔、糧倉、垃圾場、酒窖、藥房、大倉庫使用房間功能時，可選擇改為抽取這8個房間中的任一個（依被選房間的抽取數量與庫存）；不可與上一回合抽取的房間相同。", passive:true},
-    {name:"庫存管理", desc:"（被動）背包容量永久+2。", passive:true}
+    {name:"庫存管理", desc:"（被動）背包上限永久+2。此加成不屬於負重素質，不會被重新分配素質、增減素質的效果影響。", passive:true}
   ]}
 };
 // 擴充模式: these professions are hidden from the setup screen (and never randomly given to
@@ -2635,7 +2635,7 @@ function makePlayer(id,isAI,profId,stats,name){
 function effectiveCarryCap(p){
   // 庸才的以命換命 (負重選項): +1 for the round it's spent in, tracked in flags since it's not a
   // permanent stat change like p.carry.
-  return p.carry + (p.inv.includes("dimpocket") ? 9999 : 0) + (p.flags.mediocreTempCarry||0);
+  return p.carry + (p.prof==="clerk"?2:0) + (p.inv.includes("dimpocket") ? 9999 : 0) + (p.flags.mediocreTempCarry||0);
 }
 // `invOverride` lets callers ask "what would usedCarry be for THIS hypothetical inventory" without
 // actually mutating p.inv — needed anywhere multiple items (e.g. 2+ gold drawn in the same batch)
@@ -2803,7 +2803,6 @@ function startGame(){
   players.forEach(p=>{
     if(p.prof==="tamer"){ p.power+=1; p.carry+=1; }
     if(p.prof==="bodyguard"){ p.power+=1; } // 保鑣的壯碩體格
-    if(p.prof==="clerk"){ p.carry+=2; } // 倉管員的庫存管理
     if(p.prof==="tycoon"){
       p.inv.push("gold","gold","gold");
       ROOMS["B206"].stock.gold=Math.max(0,(ROOMS["B206"].stock.gold||0)-2);
@@ -7858,7 +7857,7 @@ function renderAll(){
   }
   EL.stPower.textContent=combatPower(p);
   EL.stSpeed.textContent=p.speed;
-  EL.stCarry.textContent=p.carry;
+  EL.stCarry.textContent=p.carry+(p.prof==="clerk"?"（+2）":"");
   EL.curRoom.textContent=p.room+" "+(ROOMS[p.room].name||"");
   EL.stepsLeft.textContent=p.stepsLeft+(p.ghost?"（穿牆）":"");
   EL.carryUsed.textContent=usedCarry(p);
