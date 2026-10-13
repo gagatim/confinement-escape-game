@@ -959,7 +959,7 @@ const PROFESSIONS = {
   ]},
   butcher:{name:"屠夫", skills:[
     {name:"屠宰專精", desc:"（被動）背包內有刀時，武力額外+2（只加一次）<br>・刀不佔負重。", passive:true},
-    {name:"鮮血盛宴", desc:"（被動）在戰鬥中擊殺其他玩家後，恢復2點生命。", passive:true}
+    {name:"鮮血盛宴", desc:"（被動）在戰鬥中對其他玩家造成傷害時，恢復1點生命（每輪最多1次）。", passive:true}
   ]},
   exorcist:{name:"還魂師", skills:[
     {name:"臨終祝禱", desc:"（被動）死亡變成暗影後，只要吸取1點生命就能復活（一般暗影需2點）<br>・整局可發動兩次，復活後生命為3。", passive:true},
@@ -3285,6 +3285,7 @@ function beginRound(){
     p.flags.smugglerBonusUsedThisRound=false; // 走私客的熟悉門路: once per round
     p.flags.survivorFirstAidActive=false; // 求生教官的野戰急救: only covers the round it's used
     p.flags.diverHoldBreathActive=false; // 潛水員的憋氣術: declared fresh each round it's used
+    p.flags.butcherHealed=false; // 屠夫的鮮血盛宴: once-per-round heal
     p.flags.vampireHealRound=0; // 吸血鬼的吸血: per-round heal cap
     p.flags.hunterAmbushActive=false; // 獵人的埋伏: the must-move waiver only covers the round it's used
     p.flags.guardianDefenseActive=false; // 守護者的絕對防禦: the must-move waiver + damage immunity only covers the round it's used
@@ -6717,10 +6718,6 @@ function killPlayer(p,cause,killerId){
       });
       log(killer.name+"（戰利品）擊殺 "+p.name+"，恢復2點生命（HP→"+killer.hp+"）"+(got.length?"，取得道具："+got.join("、"):"，沒有取得道具")+"。","heal");
     }
-    if(killer && killer.alive && killer.prof==="butcher"){
-      killer.hp=Math.min(killer.maxhp,killer.hp+2);
-      log(killer.name+"（鮮血盛宴）擊殺 "+p.name+"，恢復2點生命（HP→"+killer.hp+"）。","heal"); passiveFX(killer,"butcher:1");
-    }
     // 姜維的繼志北伐: +1 永久武力／每次由自己擊殺，上限+2 — combatPower() reads the累積值.
     if(killer && killer.alive && killer.prof==="jiangwei"){
       killer.flags.jiangweiKillBonus=Math.min(2,(killer.flags.jiangweiKillBonus||0)+1);
@@ -7570,6 +7567,12 @@ function resolveCombat(a,b,roomId,frozenA){
   if(dmgToB>0){ damagePlayer(b,dmgToB,"與"+a.name+"戰鬥",a.id); log(b.name+" 在「"+roomId+"」戰鬥中受到 "+dmgToB+" 點傷害（對手 "+a.name+"）"+rb.note+"。","dmg"); }
   if(dmgToA===0 && dmgToB===0) log(a.name+" 與 "+b.name+" 在「"+roomId+"」武力相同，未分勝負。");
   // 吸血鬼的吸血: heals half of the combat damage he actually dealt (rounded down), capped at 2 per round.
+  // 屠夫的鮮血盛宴: dealing combat damage heals 1, at most once per round.
+  [[a,dmgToB],[b,dmgToA]].forEach(([v,dealt])=>{
+    if(v.prof!=="butcher" || !v.alive || dealt<=0 || v.flags.butcherHealed) return;
+    v.flags.butcherHealed=true; v.hp=Math.min(v.maxhp,v.hp+1);
+    log(v.name+"（鮮血盛宴）造成 "+dealt+" 點傷害，恢復1點生命（HP→"+v.hp+"）。","heal"); passiveFX(v,"butcher:1");
+  });
   [[a,dmgToB],[b,dmgToA]].forEach(([v,dealt])=>{
     if(v.prof!=="vampire" || !v.alive || dealt<=0) return;
     const h=Math.min(2-(v.flags.vampireHealRound||0), Math.floor(dealt/2));
