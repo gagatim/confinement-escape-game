@@ -407,7 +407,7 @@
       <label class="muted" style="display:block;margin-bottom:6px;font-size:13px">
         <input type="checkbox" id="physicalToggle" checked> 啟用實體模式（遊戲方式與一般版本相同，但職業只開放精選的16位，AI也只會從這16位中選取；玩家人數改為8~12人，可重複選同一個出生點；與擴充模式、三國模式互斥）</label>
       <label class="muted" id="physicalExpLabel" style="display:none;margin:0 0 6px 22px;font-size:13px">
-        <input type="checkbox" id="physicalExpToggle"> 實體擴充（需先啟用實體模式；額外開放6位新職業：保鑣、狙擊手、狂戰士、急救員、地鼠、倉管員，AI也可能選到；預設關閉）</label>
+        <input type="checkbox" id="physicalExpToggle"> 實體擴充（需先啟用實體模式；額外開放9位新職業：保鑣、狙擊手、狂戰士、急救員、地鼠、倉管員、偵察兵、說客、團長，AI也可能選到；預設關閉）</label>
       <label class="muted" style="display:block;margin-bottom:10px;font-size:13px">
         <input type="checkbox" id="sanguoTeamToggle"> 啟用三國陣營戰（需先啟用三國模式；限定9或12人，依國家分成3～4隊，每隊3人，同國家不互相傷害，房內混戰只計較國家間的代表武力，結算比較各國總血量）</label>
       <div class="prof-grid" id="profGrid"></div>
@@ -1046,6 +1046,21 @@ const PROFESSIONS = {
     {name:"地底適應", desc:"（被動）受到的毒氣傷害-1（最低0）。", passive:true},
     {name:"地下療養", desc:"（被動）身處地下樓層（B開頭房間）且該房間沒有中毒時：<br>・結算時恢復1點生命。<br>・下一輪出發地仍是無毒的地下房間，則移動步數+2。", passive:true}
   ]},
+  scout:{name:"偵察兵", skills:[
+    {name:"疾行", desc:"（被動）每輪移動步數+2。", passive:true},
+    {name:"輕裝上陣", desc:"（被動）每輪開始時，背包內道具不超過3張，移動步數再+1。", passive:true},
+    {name:"靈活閃避", desc:"（被動）受到的戰鬥傷害-1。", passive:true}
+  ]},
+  lobbyist:{name:"說客", skills:[
+    {name:"拉票", desc:"（被動）你投毒氣樓層時，視為3票。", passive:true},
+    {name:"明哲保身", desc:"（被動）本輪你所投的樓層若淪為毒氣區域，你在該樓層不受毒氣傷害。", passive:true},
+    {name:"精算風險", desc:"（被動）受到的毒氣傷害-1（最低0）。", passive:true}
+  ]},
+  leader:{name:"團長", skills:[
+    {name:"自動標記", desc:"（被動）你背包中的道具都自動帶有你的標記，經交易、贈送、被偷等方式到了其他玩家手上後仍保留標記。<br>・結算時，若其他玩家消耗了你標記的道具（水／糧／水糧包／藥片／腎上腺素／酒），你恢復1點生命。", passive:true},
+    {name:"物歸原主", desc:"（被動）持有你標記道具的玩家死亡時，該道具直接回到你的背包。", passive:true},
+    {name:"招攬團員", desc:"（被動）遊戲開始時，指定2名其他玩家為團員；你與團員之間無法互相造成戰鬥傷害。", passive:true}
+  ]},
   clerk:{name:"倉管員", skills:[
     {name:"調貨", desc:"（被動）在金庫、武器庫、水塔、糧倉、垃圾場、酒窖使用房間功能時，可選擇改為抽取這6個房間中的任一個（依被選房間的抽取數量與庫存）。", passive:true},
     {name:"庫存管理", desc:"（被動）背包容量永久+2。", passive:true}
@@ -1059,7 +1074,7 @@ const EXPANSION_PROFS=new Set(["fatty","trucker","bartender","chemist","hacker",
 // player ticks 實體擴充 (which itself only exists while 實體模式 is on). Off by default.
 // 倉管員的調貨: 水塔、武器庫、金庫、垃圾場、糧倉、酒窖
 const CLERK_ROOMS=["101","B107","B206","B503","B505","B601"];
-const PHYSICAL_EXP_PROFS=new Set(["bodyguard","sniper","berserker","paramedic","mole","clerk"]);
+const PHYSICAL_EXP_PROFS=new Set(["bodyguard","sniper","berserker","paramedic","mole","clerk","scout","lobbyist","leader"]);
 // One small emoji "portrait" per profession — shown on the selection card and anywhere a player's
 // profession is listed in-game, so each of the 16 is visually distinct at a glance, not just by name.
 const PROF_ICON={
@@ -1070,7 +1085,7 @@ const PROF_ICON={
   shopper:"🛍️", runner:"🏃", herbalist:"🌿", veteran:"🎖️", pickpocket:"🥷",
   diver:"🤿", courier:"📦", gourmet:"🍽️", farmer:"🌾", miner:"⛏️", hunter:"🏹",
   mediocre:"🤷", boss:"🕴️", collector:"📿", butcher:"🥩", exorcist:"🕯️", guardian:"🛡️", lucky:"🍀",
-  hermit:"🏚️", prepper:"🥫", witch:"🧙", toxic:"☣️", arsonist:"🔥", vampire:"🧛", assassin:"🗡️", bodyguard:"🕶️", sniper:"🎯", berserker:"🪓", paramedic:"⛑️", mole:"🐀", clerk:"📋", laiqingde:"🐦", shenboyang:"🐻", jiangwanan:"🎤", suzhenchang:"🏃‍♂️", detective:"🕵️", oracle:"☠️"
+  hermit:"🏚️", prepper:"🥫", witch:"🧙", toxic:"☣️", arsonist:"🔥", vampire:"🧛", assassin:"🗡️", bodyguard:"🕶️", sniper:"🎯", berserker:"🪓", paramedic:"⛑️", mole:"🐀", clerk:"📋", scout:"🔭", lobbyist:"🗳️", leader:"📣", laiqingde:"🐦", shenboyang:"🐻", jiangwanan:"🎤", suzhenchang:"🏃‍♂️", detective:"🕵️", oracle:"☠️"
 };
 // ===================== 三國模式 (SANGUO_MODE) =====================
 // 40 characters across 4 kingdoms. Added directly into PROFESSIONS (not a separate object) so
@@ -2215,7 +2230,10 @@ const SELECT_QUOTES={
   berserker:"越痛，我越清醒。",
   paramedic:"撐住，我來處理。",
   mole:"地底下，才是我的地盤。",
-  clerk:"東西多沒關係，我扛得動。"
+  clerk:"東西多沒關係，我扛得動。",
+  scout:"我先去探路。",
+  lobbyist:"票數，是談出來的。",
+  leader:"拿著，這是團隊給你的。"
 };
 (()=>{
   const voiceBtn=document.getElementById("voiceMuteBtn");
@@ -2807,6 +2825,10 @@ function startGame(){
     }
     // AI 黑社會老大 has no UI to pick from, so it picks its 3 小弟 at random right away — the
     // human boss instead picks manually via #bossSelect below, after this loop.
+    // AI 團長 picks his 2 團員 at random right away; the human picks via #bossSelect (same screen as 老大).
+    if(p.prof==="leader" && p.isAI){
+      p.flags.recruits=shuffleArr(players.filter(x=>x.id!==p.id)).slice(0,2).map(x=>x.id);
+    }
     if(p.prof==="boss" && p.isAI){
       const picks=shuffleArr(players.filter(x=>x.id!==p.id)).slice(0,3).map(x=>x.id);
       applyBossHenchmen(p,picks);
@@ -2815,7 +2837,7 @@ function startGame(){
   // AI players secretly pick a spawn now; human picks via the spawn-select screen next.
   players.filter(p=>p.isAI).forEach(p=>{ p.spawnRoom=chooseAISpawn(p); });
   document.getElementById("setup").classList.add("hidden");
-  if(you.prof==="boss"){
+  if(you.prof==="boss" || you.prof==="leader"){
     renderBossGrid();
     document.getElementById("bossSelect").classList.remove("hidden");
   } else {
@@ -2830,6 +2852,13 @@ function startGame(){
 function renderBossGrid(){
   const grid=document.getElementById("bossGrid"); grid.innerHTML="";
   const boss=you();
+  const isLeader=boss.prof==="leader"; // 團長 reuses this screen to recruit 2 團員 instead of 3 小弟
+  const need=isLeader?2:3;
+  document.querySelector("#bossSelect h2").textContent=isLeader?"招攬團員：指定2名團員":"一呼百應：指定3名小弟";
+  document.querySelector("#bossSelect p.muted").textContent=isLeader
+    ?"點選2名其他玩家做為你的團員。你與團員之間無法互相造成戰鬥傷害。"
+    :"依序點選3名其他玩家做為你的小弟（A／B／C），三人的武力值將各永久+1。之後每當你即將扣血，會強制隨機抽取一名尚未用過的小弟代你受傷（每人只會被抽中1次），該小弟受傷後武力永久-1。";
+  document.getElementById("confirmBossBtn").textContent=isLeader?"確認團員名單，前往選擇出生點":"確認小弟名單，前往選擇出生點";
   const letters=["A","B","C"];
   let picked=[]; // ordered array of player ids, in click order == A/B/C
   const confirmBtn=document.getElementById("confirmBossBtn");
@@ -2837,26 +2866,35 @@ function renderBossGrid(){
   STATE.players.filter(p=>p.id!==boss.id).forEach(p=>{
     const div=document.createElement("div");
     div.className="prof-card"; div.dataset.pid=p.id;
-    div.innerHTML=`<h3>${p.name}</h3><div class="sk">點選指定為小弟</div>`;
+    div.innerHTML=`<h3>${p.name}</h3><div class="sk">${isLeader?"點選招攬為團員":"點選指定為小弟"}</div>`;
     div.addEventListener("click",()=>{
       const i=picked.indexOf(p.id);
       if(i>=0){
         picked.splice(i,1);
       } else {
-        if(picked.length>=3) return; // already have 3 — must deselect one first
+        if(picked.length>=need) return; // already full — must deselect one first
         picked.push(p.id);
       }
       grid.querySelectorAll(".prof-card").forEach(c=>{
         const idx=picked.indexOf(+c.dataset.pid);
-        if(idx>=0){ c.classList.add("selected"); c.querySelector(".sk").textContent="小弟 "+letters[idx]; }
-        else { c.classList.remove("selected"); c.querySelector(".sk").textContent="點選指定為小弟"; }
+        if(idx>=0){ c.classList.add("selected"); c.querySelector(".sk").textContent=isLeader?"團員":"小弟 "+letters[idx]; }
+        else { c.classList.remove("selected"); c.querySelector(".sk").textContent=isLeader?"點選招攬為團員":"點選指定為小弟"; }
       });
-      confirmBtn.disabled=picked.length!==3;
+      confirmBtn.disabled=picked.length!==need;
     });
     grid.appendChild(div);
   });
   confirmBtn.onclick=()=>{
-    if(picked.length!==3) return;
+    if(picked.length!==need) return;
+    if(isLeader){
+      boss.flags.recruits=picked.slice();
+      log("你（團長）招攬了團員："+picked.map(id=>STATE.players.find(x=>x.id===id).name).join("、")+"，你與他們之間無法互相造成戰鬥傷害。");
+      document.getElementById("bossSelect").classList.add("hidden");
+      renderSpawnGrid();
+      document.getElementById("spawnSelect").classList.remove("hidden");
+      saveGame();
+      return;
+    }
     applyBossHenchmen(boss,picked);
     log("你（黑社會老大）指定了小弟：A="+STATE.players.find(x=>x.id===picked[0]).name+"、B="+STATE.players.find(x=>x.id===picked[1]).name+"、C="+STATE.players.find(x=>x.id===picked[2]).name+"，三人武力各永久+1。");
     document.getElementById("bossSelect").classList.add("hidden");
@@ -3156,6 +3194,11 @@ function beginRound(){
       p.flags.sniperSlowNext=false;
       const before=p.stepsLeft; p.stepsLeft=Math.min(before,Math.max(1,before-2));
       log(p.name+"（遠距狙擊後座力）本輪移動步數-2（共"+p.stepsLeft+"步，至少1步）。");
+    }
+    // 偵察兵的疾行／輕裝上陣
+    if(p.prof==="scout"){
+      p.stepsLeft += 2 + (p.inv.length<=3 ? 1 : 0);
+      log(p.name+"（疾行"+(p.inv.length<=3?"＋輕裝上陣":"")+"）本輪移動步數"+(p.inv.length<=3?"+3":"+2")+"（共"+p.stepsLeft+"步）。");
     }
     // 地鼠的地下療養: starting the round in a non-poisoned underground room (B-prefixed) grants +2 steps.
     if(p.prof==="mole" && String(p.room).charAt(0)==="B" && !roomIsPoisoned(ROOMS[p.room])){
@@ -4400,12 +4443,35 @@ function openBartenderWineModal(p){
 // 水/糧 resolve through here: AI-declared ones early in settlement, a human's the moment they answer
 // the 步驟4 pay prompt (still before the hunger step itself reads the consumed_* flags).
 // 腎上腺素 only gets QUEUED here and takes effect at 步驟6 (see settleRoundCore).
+// 團長的自動標記: a 團長's items carry his mark wherever they go; markTransfer is called at every
+// place an item changes hands between players (trade, share, steal, delivery...).
+function markTransfer(from,to,item){
+  if(!from || !to || from===to) return;
+  let m=null;
+  if(from.prof==="leader") m={item,leaderId:from.id};
+  else { const marks=from.flags.leaderMarks||[]; const i=marks.findIndex(x=>x.item===item); if(i>=0) m=marks.splice(i,1)[0]; }
+  if(!m || m.leaderId===to.id) return; // back with its 團長: mark dissolves
+  to.flags.leaderMarks=(to.flags.leaderMarks||[]).concat(m);
+}
+// 團長的自動標記: when a marked item is consumed by its holder at settlement, the 團長 heals 1.
+function leaderConsumed(holder,item){
+  const marks=holder.flags.leaderMarks;
+  if(!marks || !marks.length) return;
+  const i=marks.findIndex(m=>m.item===item);
+  if(i<0) return;
+  const m=marks.splice(i,1)[0];
+  const L=STATE.players.find(x=>x.id===m.leaderId);
+  if(!L || !L.alive || L.ghost) return;
+  L.hp=Math.min(L.maxhp,L.hp+1);
+  log(L.name+"（自動標記）"+holder.name+" 消耗了標記的「"+ITEMS[item].name+"」，恢復1點生命（HP→"+L.hp+"）。","heal");
+}
 function resolvePendingItemUses(p){
   const uses=p.flags.pendingItemUses||[];
   const pillsPending=[];
   uses.forEach(item=>{
     if(item==="pill" || item==="wine"){ pillsPending.push(item); return; } // 藥片/酒 resolve later (see resolvePendingWines / resolvePillHealing)
     STATE.discardPile.push(item);
+    leaderConsumed(p,item);
     switch(item){
       case "water": case "food":
         p.flags["consumed_"+item]=true;
@@ -4455,6 +4521,7 @@ function resolvePendingWines(p){
   if(!p.alive || p.ghost) return;
   uses.filter(x=>x==="wine").forEach(()=>{
     STATE.discardPile.push("wine");
+    leaderConsumed(p,"wine");
     // 特調精釀: a bartender's own glass may have 4 outcomes pre-excluded, rolled among
     // whichever 2 remain. Each queued "wine" pulls its OWN exclusion (or none) off the front
     // of wineExcludedQueue, in the same order they were declared — NOT a single shared flag,
@@ -4484,6 +4551,7 @@ function resolvePillHealing(p){
     uses.forEach(item=>{
       if(item!=="pill") return;
       STATE.discardPile.push(item);
+      leaderConsumed(p,"pill");
       let heal = p.prof==="herbalist" ? 4 : 2; // 草藥師的藥效增強
       if(p.prof==="paramedic") heal+=1; // 急救員的包紮技巧 (own pills)
       if((p.flags.pillBonus||0)>0){ p.flags.pillBonus--; heal+=1; } // 急救員的包紮技巧 (pill given by a paramedic)
@@ -5500,7 +5568,7 @@ function openPickpocketModal(p){
     if(!target.inv.length){ flashMsg("對方身上沒有道具可偷。"); closeModal(); return; }
     p.flags.pickpocketUses++; p.flags.skillUsedThisRound=true;
     const idx=Math.floor(Math.random()*target.inv.length);
-    const item=target.inv.splice(idx,1)[0];
+    const item=target.inv.splice(idx,1)[0]; markTransfer(target,p,item);
     log(p.name+" 使用順手牽羊，從 "+target.name+" 身上偷到「"+ITEMS[item].name+"」。"); speakSkill(p,"pickpocket:0",{target:target});
     closeModal();
     if(itemCostsCarry(p,item) && carryRoom(p)<=0){ openDrawSelectionModal(p,[item],p.room); return; }
@@ -5526,7 +5594,7 @@ function openCourierDeliverModal(p){
     const itemIdx=+document.getElementById("courierItemSel").value;
     const targetId=+document.getElementById("courierTargetSel").value;
     const target=STATE.players.find(x=>x.id===targetId);
-    const item=p.inv.splice(itemIdx,1)[0];
+    const item=p.inv.splice(itemIdx,1)[0]; markTransfer(p,target,item);
     p.flags.courierUses++; p.flags.skillUsedThisRound=true;
     log(p.name+" 使用專人配送，將「"+ITEMS[item].name+"」寄給了 "+target.name+"。"); speakSkill(p,"courier:1",{target:target});
     closeModal();
@@ -5609,8 +5677,8 @@ function openCollectorTradeModal(p){
     if(wanted===undefined){ flashMsg("對方背包已變動，請重新選擇。"); closeModal(); openCollectorTradeModal(p); return; }
     // splice the 2 given items out highest-index-first so earlier indices don't shift mid-loop
     const givenItems=give.sort((a,b)=>b-a).map(i=>p.inv.splice(i,1)[0]);
-    target.inv.splice(wantIdx,1);
-    givenItems.forEach(it=>{
+    target.inv.splice(wantIdx,1); markTransfer(target,p,wanted);
+    givenItems.forEach(it=>{ markTransfer(p,target,it);
       if(itemCostsCarry(target,it) && carryRoom(target)<=0){
         ROOMS[target.room].stock[it]=(ROOMS[target.room].stock[it]||0)+1;
         log(target.name+" 背包已滿，「"+ITEMS[it].name+"」被留在了「"+target.room+"」。");
@@ -5673,7 +5741,7 @@ document.getElementById("voteBtn").addEventListener("click",()=>{
     <button class="btn small warn" id="voteOk">投票</button> <button class="btn small ghost" id="voteCancel">取消</button>`);
   document.getElementById("voteOk").onclick=()=>{
     const f=+document.getElementById("voteSel").value;
-    const weight=Math.max(p.flags.voteWeight||1, p.prof==="laiqingde"?5:1);
+    const weight=Math.max(p.flags.voteWeight||1, p.prof==="laiqingde"?5:p.prof==="lobbyist"?3:1);
     STATE.voteCounts[f]=(STATE.voteCounts[f]||0)+weight;
     STATE.voteLog.push({name:p.name, floor:f, weight});
     p.flags.voteWeight=1;
@@ -5704,7 +5772,7 @@ document.getElementById("tradeBtn").addEventListener("click",()=>{
       // handed over can never be picked right back out as the "back" reward
       const back=target.inv[Math.floor(Math.random()*target.inv.length)];
       removeItem(target,back);
-      removeItem(p,give); target.inv.push(give);
+      removeItem(p,give); target.inv.push(give); markTransfer(p,target,give); markTransfer(target,p,back);
       log(p.name+" 與 "+target.name+" 交易：給出「"+ITEMS[give].name+"」換得「"+ITEMS[back].name+"」。");
       if(itemCostsCarry(p,back) && carryRoom(p)<=0){ openDrawSelectionModal(p,[back],p.room); return; }
       p.inv.push(back);
@@ -5793,7 +5861,7 @@ function aiShareWithMates(p){
   const give=(m,item)=>{
     if(itemCostsCarry(m,item) && carryRoom(m)<=0) return false;
     if(!removeItem(p,item)) return false;
-    m.inv.push(item); window.__aiShareCount=(window.__aiShareCount||0)+1; dlog("私下互通 → "+p.name+" 給 "+m.name+" 「"+ITEMS[item].name+"」（"+m.name+" HP"+m.hp+"）"); return true;
+    m.inv.push(item); markTransfer(p,m,item); window.__aiShareCount=(window.__aiShareCount||0)+1; dlog("私下互通 → "+p.name+" 給 "+m.name+" 「"+ITEMS[item].name+"」（"+m.name+" HP"+m.hp+"）"); return true;
   };
   for(const kind of ["water","food"]){
     while(countItem(p,kind)>=2){
@@ -6087,7 +6155,7 @@ function aiConsiderSkillAfterMove(p){
     const target=targets[Math.floor(Math.random()*targets.length)];
     p.flags.pickpocketUses++; p.flags.skillUsedThisRound=true;
     const idx=Math.floor(Math.random()*target.inv.length);
-    const item=target.inv.splice(idx,1)[0];
+    const item=target.inv.splice(idx,1)[0]; markTransfer(target,p,item);
     log(p.name+" 使用順手牽羊，從 "+target.name+" 身上偷到「"+ITEMS[item].name+"」。");
     if(itemCostsCarry(p,item) && carryRoom(p)<=0){ ROOMS[p.room].stock[item]=(ROOMS[p.room].stock[item]||0)+1; }
     else { p.inv.push(item); }
@@ -6414,7 +6482,7 @@ function resolveAITurn(p){
     let voteFloor=(voteKey!==null && STATE.aiGroupVote && floorOpts.includes(STATE.aiGroupVote[voteKey])) ? STATE.aiGroupVote[voteKey] : floorOpts[Math.floor(Math.random()*floorOpts.length)];
     if(voteKey!==null && STATE.aiGroupVote && !(voteKey in STATE.aiGroupVote)) STATE.aiGroupVote[voteKey]=voteFloor;
     if(voteKey!==null) dlog("毒氣投票 → "+p.name+" 投 "+FLOOR_LABEL[voteFloor]+"（候選："+floorOpts.map(f=>FLOOR_LABEL[f]).join("、")+"）");
-    const voteWeight=Math.max(p.flags.voteWeight||1, p.prof==="laiqingde"?5:1);
+    const voteWeight=Math.max(p.flags.voteWeight||1, p.prof==="laiqingde"?5:p.prof==="lobbyist"?3:1);
     STATE.voteCounts[voteFloor]=(STATE.voteCounts[voteFloor]||0)+voteWeight;
     STATE.voteLog.push({name:p.name, floor:voteFloor, weight:voteWeight});
     p.flags.voteWeight=1;
@@ -6520,6 +6588,13 @@ function killPlayer(p,cause,killerId){
   if(killerId!==undefined){ const k=STATE.players.find(x=>x.id===killerId); if(k) k.kills=(k.kills||0)+1; }
   log(p.name+" 死亡（"+cause+"），於停屍間化為暗影...","dmg");
   SFX.death();
+  // 團長的物歸原主: marked items held by the dead player go straight back to their 團長.
+  (p.flags.leaderMarks||[]).forEach(m=>{
+    const L=STATE.players.find(x=>x.id===m.leaderId);
+    if(!L || !L.alive || L.ghost || L.id===p.id) return;
+    if(removeItem(p,m.item)){ L.inv.push(m.item); log(L.name+"（物歸原主）"+p.name+" 持有的標記道具「"+ITEMS[m.item].name+"」回到了 "+L.name+" 身上。"); }
+  });
+  p.flags.leaderMarks=[];
   // 屠夫的鮮血盛宴: only fires off the two direct combat hits in resolveCombat (see killerId's
   // doc comment on damagePlayer above) — killer must still be alive to benefit.
   if(killerId!==undefined){
@@ -7114,6 +7189,8 @@ function* settleRoundCore(){
       if(p.prof==="chemist" && dmg>0){ dmg=Math.max(0,dmg-1); note+="〔抗毒 -1〕"; }
       if(p.prof==="oracle" && dmg>0){ dmg=Math.max(0,dmg-1); note+="〔毒氣適應 -1〕"; }
       if(p.prof==="mole" && dmg>0){ dmg=Math.max(0,dmg-1); note+="〔地底適應 -1〕"; }
+      if(p.prof==="lobbyist" && dmg>0){ dmg=Math.max(0,dmg-1); note+="〔精算風險 -1〕"; }
+      if(p.prof==="lobbyist" && dmg>0 && (STATE.voteLog||[]).some(v=>v.name===p.name && v.floor===ROOMS[p.room].floor)){ dmg=0; note+="〔明哲保身 免傷〕"; }
       if(p.prof==="oracle" && p.flags.oracleHit && dmg>0){ dmg=Math.max(0,dmg-2); note+="〔精準預測 -2〕"; }
       if(p.prof==="witch" && dmg>0){ const before=dmg; const cut=STATE.round<=3?2:1; dmg=Math.max(0,dmg-cut); note+="〔毒氣防護 -"+(before-dmg)+"〕"; }
       if(p.prof==="survivor" && p.flags.survivorFirstAidActive && dmg>0){ dmg=Math.max(0,dmg-1); note+="〔野戰急救 -1〕"; }
@@ -7330,6 +7407,9 @@ function resolveCombat(a,b,roomId,frozenA){
     const diff=aPower-bPower;
     if(diff>0) dmgToB=diff; else if(diff<0) dmgToA=-diff;
   }
+  // 團長的招攬團員: a 團長 and his 團員 never deal combat damage to each other (both ways).
+  if(a.prof==="leader" && (a.flags.recruits||[]).includes(b.id)) { dmgToA=0; dmgToB=0; }
+  if(b.prof==="leader" && (b.flags.recruits||[]).includes(a.id)) { dmgToA=0; dmgToB=0; }
   // 黃蓋的詐降: the named target can't hurt 黃蓋 this round (he can still hurt them).
   if(a.prof==="huanggai" && a.flags.zhaxiangTarget===b.id) dmgToA=0;
   if(b.prof==="huanggai" && b.flags.zhaxiangTarget===a.id) dmgToB=0;
@@ -7344,6 +7424,7 @@ function resolveCombat(a,b,roomId,frozenA){
     // for everyone there including him — combat only, other damage sources no longer get it.
     if(d>0 && playersInRoom(roomId,true).some(x=>x.prof==="guardian")){ d=Math.max(0,d-1); note+="〔守護者庇護 -1〕"; }
     if(p.prof==="veteran" && p.hp<=3 && d>0){ const before=d; d=Math.max(0,d-4); note+="〔破釜沉舟 -"+(before-d)+"〕"; }
+    if(p.prof==="scout" && d>0){ d=Math.max(0,d-1); note+="〔靈活閃避 -1〕"; }
     if(p.prof==="bodyguard" && d>0){ const before=d; d=Math.max(0,d-2); note+="〔鐵壁 -"+(before-d)+"〕"; }
     if(p.prof==="berserker" && p.hp<=3 && d>0){ const before=d; d=Math.max(0,d-2); note+="〔困獸之鬥 -"+(before-d)+"〕"; }
     // 隱士的離群索居: included for completeness (the skill's own wording lists 戰鬥 alongside
