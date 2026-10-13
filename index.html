@@ -1044,8 +1044,8 @@ const PROFESSIONS = {
     {name:"地下療養", desc:"（被動）結算時，若身處地下樓層（B開頭房間）且該房間沒有中毒，恢復1點生命。", passive:true}
   ]},
   clerk:{name:"倉管員", skills:[
-    {name:"庫存管理", desc:"（被動）背包容量永久+2。", passive:true},
-    {name:"行動遲緩", desc:"（被動）移動速度永久-1。", passive:true}
+    {name:"調貨", desc:"（被動）在金庫、武器庫、水塔、糧倉、垃圾場、酒窖使用房間功能時，可選擇改為抽取這6個房間中的任一個（依被選房間的抽取數量與庫存）。", passive:true},
+    {name:"庫存管理", desc:"（被動）背包容量永久+2。", passive:true}
   ]}
 };
 // 擴充模式: these professions are hidden from the setup screen (and never randomly given to
@@ -1054,6 +1054,8 @@ const PROFESSIONS = {
 const EXPANSION_PROFS=new Set(["fatty","trucker","bartender","chemist","hacker","shade","merc","outsider","climber","pilot","chef","diver","courier","gourmet","farmer","mediocre","collector","guardian","hunter","pickpocket","lucky","hermit","prepper","vampire","assassin"]);
 // 實體擴充: six extra professions for 實體模式, hidden everywhere (cards + AI pool) unless the
 // player ticks 實體擴充 (which itself only exists while 實體模式 is on). Off by default.
+// 倉管員的調貨: 水塔、武器庫、金庫、垃圾場、糧倉、酒窖
+const CLERK_ROOMS=["101","B107","B206","B503","B505","B601"];
 const PHYSICAL_EXP_PROFS=new Set(["bodyguard","sniper","berserker","paramedic","mole","clerk"]);
 // One small emoji "portrait" per profession — shown on the selection card and anywhere a player's
 // profession is listed in-game, so each of the 16 is visually distinct at a glance, not just by name.
@@ -2778,7 +2780,7 @@ function startGame(){
   players.forEach(p=>{
     if(p.prof==="tamer"){ p.power+=1; p.carry+=1; }
     if(p.prof==="bodyguard"){ p.power+=1; } // 保鑣的壯碩體格
-    if(p.prof==="clerk"){ p.carry+=2; p.speed=Math.max(0,p.speed-1); } // 倉管員的庫存管理／行動遲緩
+    if(p.prof==="clerk"){ p.carry+=2; } // 倉管員的庫存管理
     if(p.prof==="tycoon"){
       p.inv.push("gold","gold","gold");
       ROOMS["B206"].stock.gold=Math.max(0,(ROOMS["B206"].stock.gold||0)-2);
@@ -3937,6 +3939,24 @@ function doRoomAction(){
   // 張角的黃天之世（三國模式）: 指定房間本輪功能全部失效。
   if(STATE.sanguoDisabledRooms && STATE.sanguoDisabledRooms.has(p.room)){
     flashMsg("此房間本輪已被「黃天之世」封印，功能失效。"); p.flags.roomActsUsedThisRound=used+1; return;
+  }
+  // 倉管員的調貨: in one of the 6 supply rooms, pick which of the 6 to actually draw from.
+  if(p.prof==="clerk" && CLERK_ROOMS.includes(p.room)){
+    openModal(`<h3>調貨：選擇要抽取的房間</h3>
+      <select id="clerkRoomSel">${CLERK_ROOMS.map(r=>`<option value="${r}"${r===p.room?" selected":""}>${r} ${ROOMS[r].name||""}（抽${ROOMS[r].draw}張，庫存 ${Object.values(ROOMS[r].stock).reduce((a,b)=>a+b,0)}）</option>`).join("")}</select><br><br>
+      <button class="btn small warn" id="clerkOk">抽取</button>
+      <button class="btn small ghost" id="clerkCancel">取消</button>`);
+    document.getElementById("clerkOk").onclick=()=>{
+      const r=document.getElementById("clerkRoomSel").value;
+      closeModal();
+      if(r!==p.room) log(p.name+" 使用調貨：改抽「"+r+" "+(ROOMS[r].name||"")+"」的物資。");
+      resolveHumanDraw(p,r,ROOMS[r].draw);
+      p.flags.roomActsUsedThisRound=used+1;
+      p.flags.roomCommitted=true;
+      renderAll();
+    };
+    bindModalClose("clerkCancel");
+    return;
   }
   if(room.draw>0) resolveHumanDraw(p,p.room,room.draw);
   if(room.special) doSpecialRoom(p,room);
@@ -6152,7 +6172,17 @@ function resolveAITurn(p){
   const room=ROOMS[p.room];
   // 張角的黃天之世（三國模式）: AI 也一樣拿不到被封印房間的功能。
   const roomDisabled = (STATE.sanguoDisabledRooms && STATE.sanguoDisabledRooms.has(p.room)) || aiConsiderBombReach(p);
-  if(!roomDisabled && room.draw>0){ resolveAIDraw(p,p.room,room.draw); }
+  if(!roomDisabled && room.draw>0){
+    // 倉管員的調貨: AI picks whichever supply room fills a missing water/food, else the fullest stock.
+    let src=p.room;
+    if(p.prof==="clerk" && CLERK_ROOMS.includes(p.room)){
+      const sum=r=>Object.values(ROOMS[r].stock).reduce((a,b)=>a+b,0);
+      if(countItem(p,"water")===0 && sum("101")>0) src="101";
+      else if(countItem(p,"food")===0 && sum("B505")>0) src="B505";
+      else src=CLERK_ROOMS.reduce((best,r)=>sum(r)>sum(best)?r:best,p.room);
+    }
+    resolveAIDraw(p,src,ROOMS[src].draw);
+  }
   if(!roomDisabled) aiUseGold(p);
   if(!roomDisabled && room.special==="gene"){ p.power++; p.speed++; p.carry++; }
   if(!roomDisabled && room.special==="respec"){ /* AI keeps stats */ }
