@@ -1026,15 +1026,17 @@ const PROFESSIONS = {
   // ---- 實體擴充職業（僅在「實體模式＋實體擴充」勾選時開放；見 PHYSICAL_EXP_PROFS）----
   bodyguard:{name:"保鑣", skills:[
     {name:"壯碩體格", desc:"（被動）武力永久+1。", passive:true},
-    {name:"鐵壁", desc:"（被動）受到的戰鬥傷害-1。", passive:true}
+    {name:"鐵壁", desc:"（被動）受到的戰鬥傷害-2。", passive:true},
+    {name:"笨重裝備", desc:"（被動）移動速度永久-1。", passive:true}
   ]},
   sniper:{name:"狙擊手", skills:[
     {name:"一擊必中", desc:"（被動）背包內持有槍械（手槍／霰彈槍）時，武力額外+2（只加一次）。", passive:true},
     {name:"遠距狙擊", desc:"（主動，整局限用2次）指定距離3步以內（不含自己所在房間）的1間房間：結算時，該房間內的所有存活玩家各受到2點傷害。", uses:2}
   ]},
   berserker:{name:"狂戰士", skills:[
-    {name:"血怒", desc:"（被動）生命≤5時，武力+2。", passive:true},
-    {name:"困獸之鬥", desc:"（被動）生命≤3時，受到的戰鬥傷害-2。", passive:true}
+    {name:"血怒", desc:"（被動）生命≤6時，武力+2。", passive:true},
+    {name:"困獸之鬥", desc:"（被動）生命≤3時，受到的戰鬥傷害-2。", passive:true},
+    {name:"嗜殺", desc:"（被動）在戰鬥中擊殺其他玩家後，武力永久+1（最多累積2次）。", passive:true}
   ]},
   paramedic:{name:"急救員", skills:[
     {name:"戰地急救", desc:"（被動）上一輪結束時生命≤6，本輪開始時恢復1點生命。", passive:true},
@@ -2684,7 +2686,7 @@ function combatPower(p){
   if(p.prof==="vampire") base+=1; // 吸血鬼的吸血: 武力+1
   // ---- 實體擴充職業 ----
   if(p.prof==="sniper" && hasGun(p)) base+=2; // 狙擊手的一擊必中
-  if(p.prof==="berserker" && p.hp<=5) base+=2; // 狂戰士的血怒
+  if(p.prof==="berserker" && p.hp<=6) base+=2; // 狂戰士的血怒
   // (保鑣的壯碩體格 +1 武力 is applied once at startGame, like 馴獸師)
   // ---- 三國模式：武力相關被動 ----
   if(p.prof==="guanyu" && p.inv.includes("knife")) base+=2; // 青龍偃月刀
@@ -2781,7 +2783,7 @@ function startGame(){
   // profession init effects
   players.forEach(p=>{
     if(p.prof==="tamer"){ p.power+=1; p.carry+=1; }
-    if(p.prof==="bodyguard"){ p.power+=1; } // 保鑣的壯碩體格
+    if(p.prof==="bodyguard"){ p.power+=1; p.speed=Math.max(0,p.speed-1); } // 保鑣的壯碩體格
     if(p.prof==="clerk"){ p.carry+=2; } // 倉管員的庫存管理
     if(p.prof==="tycoon"){
       p.inv.push("gold","gold","gold");
@@ -6513,6 +6515,10 @@ function killPlayer(p,cause,killerId){
   if(killerId!==undefined){
     const killer=STATE.players.find(x=>x.id===killerId);
     if(killer && killer.alive && killer.prof==="assassin") killer.flags.assassinSpeedNext=true; // 無聲離場
+    if(killer && killer.alive && killer.prof==="berserker" && (killer.flags.berserkKills||0)<2){ // 狂戰士的嗜殺
+      killer.flags.berserkKills=(killer.flags.berserkKills||0)+1; killer.power++;
+      log(killer.name+"（嗜殺）擊殺 "+p.name+"，武力永久+1（"+killer.flags.berserkKills+"/2）。");
+    }
     if(killer && killer.alive && killer.prof==="butcher"){
       killer.hp=Math.min(killer.maxhp,killer.hp+2);
       log(killer.name+"（鮮血盛宴）擊殺 "+p.name+"，恢復2點生命（HP→"+killer.hp+"）。","heal"); passiveFX(killer,"butcher:1");
@@ -7328,7 +7334,7 @@ function resolveCombat(a,b,roomId,frozenA){
     // for everyone there including him — combat only, other damage sources no longer get it.
     if(d>0 && playersInRoom(roomId,true).some(x=>x.prof==="guardian")){ d=Math.max(0,d-1); note+="〔守護者庇護 -1〕"; }
     if(p.prof==="veteran" && p.hp<=3 && d>0){ const before=d; d=Math.max(0,d-4); note+="〔破釜沉舟 -"+(before-d)+"〕"; }
-    if(p.prof==="bodyguard" && d>0){ d=Math.max(0,d-1); note+="〔鐵壁 -1〕"; }
+    if(p.prof==="bodyguard" && d>0){ const before=d; d=Math.max(0,d-2); note+="〔鐵壁 -"+(before-d)+"〕"; }
     if(p.prof==="berserker" && p.hp<=3 && d>0){ const before=d; d=Math.max(0,d-2); note+="〔困獸之鬥 -"+(before-d)+"〕"; }
     // 隱士的離群索居: included for completeness (the skill's own wording lists 戰鬥 alongside
     // 中毒/飢餓), though combat inherently requires an opponent sharing the room, so "truly
