@@ -1328,7 +1328,7 @@ function saveGame(){
       flags.__onceKeys = p.flags.__onceKeys ? [...p.flags.__onceKeys] : undefined;
       return {...p, flags};
     });
-    const stateCopy={...STATE, players:playersData, poisoned:[...STATE.poisoned], detoxedRooms:[...(STATE.detoxedRooms||[])]};
+    const stateCopy={...STATE, players:playersData, poisoned:[...STATE.poisoned], detoxedRooms:[...(STATE.detoxedRooms||[])], sanguoDisabledRooms:[...(STATE.sanguoDisabledRooms||[])]};
     delete stateCopy.__report;
     const roomsData={};
     Object.keys(ROOMS).forEach(id=>{
@@ -1533,6 +1533,7 @@ function restoreGame(){
   try{
     st.poisoned=new Set(st.poisoned||[]);
     st.detoxedRooms=new Set(st.detoxedRooms||[]);
+    st.sanguoDisabledRooms=new Set(Array.isArray(st.sanguoDisabledRooms)?st.sanguoDisabledRooms:[]); // JSON turns a Set into {}
     // saves made before the end screen's 每輪回顧 existed won't have this — default to no history yet.
     if(!st.roundHistory) st.roundHistory=[];
     st.players.forEach(p=>{
