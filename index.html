@@ -407,7 +407,7 @@
       <label class="muted" style="display:block;margin-bottom:6px;font-size:13px">
         <input type="checkbox" id="physicalToggle" checked> 啟用實體模式（遊戲方式與一般版本相同，但職業只開放精選的16位，AI也只會從這16位中選取；玩家人數改為8~12人，可重複選同一個出生點；與擴充模式、三國模式互斥）</label>
       <label class="muted" id="physicalExpLabel" style="display:none;margin:0 0 6px 22px;font-size:13px">
-        <input type="checkbox" id="physicalExpToggle"> 實體擴充（需先啟用實體模式；額外開放9位新職業：保鑣、狙擊手、狂戰士、急救員、地鼠、倉管員、偵察兵、說客、團長，AI也可能選到；預設關閉）</label>
+        <input type="checkbox" id="physicalExpToggle"> 實體擴充（需先啟用實體模式；額外開放8位新職業：狙擊手、狂戰士、急救員、地鼠、倉管員、偵察兵、說客、團長，AI也可能選到；預設關閉）</label>
       <label class="muted" style="display:block;margin-bottom:10px;font-size:13px">
         <input type="checkbox" id="sanguoTeamToggle"> 啟用三國陣營戰（需先啟用三國模式；限定9或12人，依國家分成3～4隊，每隊3人，同國家不互相傷害，房內混戰只計較國家間的代表武力，結算比較各國總血量）</label>
       <div class="prof-grid" id="profGrid"></div>
@@ -1074,7 +1074,7 @@ const EXPANSION_PROFS=new Set(["fatty","trucker","bartender","chemist","hacker",
 // player ticks 實體擴充 (which itself only exists while 實體模式 is on). Off by default.
 // 倉管員的調貨: 水塔、武器庫、金庫、垃圾場、糧倉、酒窖
 const CLERK_ROOMS=["101","B107","B206","B503","B505","B601"];
-const PHYSICAL_EXP_PROFS=new Set(["bodyguard","sniper","berserker","paramedic","mole","clerk","scout","lobbyist","leader"]);
+const PHYSICAL_EXP_PROFS=new Set(["sniper","berserker","paramedic","mole","clerk","scout","lobbyist","leader"]);
 // One small emoji "portrait" per profession — shown on the selection card and anywhere a player's
 // profession is listed in-game, so each of the 16 is visually distinct at a glance, not just by name.
 const PROF_ICON={
@@ -2311,7 +2311,7 @@ let sanguoMode=false;
 // physical table. Mutually exclusive with 三國模式; overrides 擴充模式's additive card visibility.
 let physicalMode=false;
 let physicalExpMode=false; // 實體擴充: sub-option of 實體模式, off by default (adds PHYSICAL_EXP_PROFS)
-const PHYSICAL_PROFS=new Set(["vampire","scavenger","embalmer","exorcist","tamer","geneFreak","engineer","shopper","butcher","bartender","detective","bomb","merc","climber","mediocre","lucky"]);
+const PHYSICAL_PROFS=new Set(["bodyguard","vampire","scavenger","embalmer","exorcist","tamer","geneFreak","engineer","shopper","butcher","bartender","detective","bomb","merc","climber","mediocre","lucky"]);
 // 三國陣營戰: a sub-mode of 三國模式 — off by default. When on, professions are assigned as
 // whole-kingdom teams (see startGame's sanguoTeamMode branch) instead of each AI independently
 // picking a random 武將, player count is locked to 9 or 12, and room combat/poison-vote/endgame
