@@ -4062,7 +4062,7 @@ function doRoomAction(){
   // to doSpecialRoom below, which commits you exactly as before, since staying put is required
   // before you're even eligible to board.)
   if(isHelipadBoarding){
-    if(p.flags.airdropCollectedRound!==STATE.round){ p.flags.airdropCollectedRound=STATE.round; collectAirdrop(p); }
+    if(p.flags.airdropCollectedRound!==STATE.round){ p.flags.airdropCollectedRound=STATE.round; collectAirdrop(p,()=>openHelipadModal(p)); return; }
     openHelipadModal(p);
     return;
   }
@@ -4210,7 +4210,13 @@ function carrySpendStep(p){
 // 抵達停機坪的當輪必須停留（不能再往別處移動），下一輪才能搭機；飛行員（熟練起降）不受限。
 function heliMustStay(p){ return p.room==="202" && p.roundStartRoom!=="202" && p.prof!=="pilot" && !p.ghost; }
 function canBoardHeliNow(p){ return !p.flags.heliLeftThisRound && (p.roundStartRoom==="202" || p.prof==="pilot"); }
-function collectAirdrop(p){
+function collectAirdrop(p,done){
+  // 真人玩家：從本輪空投袋現有的物資中自己選（飛行員的導航員可再選第2樣）；AI 維持原本的自動抽取。
+  if(!p.isAI){
+    const b=ROOMS["202"].airdropBag;
+    if(b && b.length){ pickAirdropHuman(p,p.prof==="pilot"?2:1,done); return; }
+    flashMsg("停機坪：本輪空投袋已被領完，沒有物資可選。");
+  }
   // The round's schedule is stocked into the bag exactly once, by beginRound() — this only
   // draws from it, so multiple pickups in the same round (arrival + boarding, several players)
   // share one round's supply instead of each re-adding the whole schedule and inflating it.
@@ -4229,6 +4235,32 @@ function collectAirdrop(p){
     const pick2=bag.shift();
     if(carryRoom(p)>0){ p.inv.push(pick2); log(p.name+"（導航員）額外從空投獲得: "+ITEMS[pick2].name); }
   }
+  if(done) done();
+}
+function pickAirdropHuman(p,left,done){
+  const bag=ROOMS["202"].airdropBag||[];
+  const opts=[...new Set(bag.filter(it=>canHoldItem(p,it)))];
+  if(left<=0 || !opts.length){
+    if(left>0 && bag.length && !opts.length) log(p.name+"（橡膠人）空投只有槍，無法持有。");
+    renderAll(); if(done) done(); return;
+  }
+  const btns=opts.map(it=>{
+    const full=itemCostsCarry(p,it) && carryRoom(p)<=0;
+    return `<button class="btn small" data-air="${it}"${full?" disabled":""}>${ITEMS[it].name} ×${bag.filter(x=>x===it).length}${full?"（背包已滿）":""}</button>`;
+  }).join(" ");
+  openModal(`<h3>停機坪空投：選擇1樣物資帶走${p.prof==="pilot"?"（導航員：可選"+left+"樣）":""}</h3>
+    <div class="muted" style="font-size:12px;margin-bottom:8px">本輪空投袋剩餘物資如下，其他玩家也會從同一袋領取。</div>
+    <div>${btns}</div><br><button class="btn small ghost" id="airSkip">放棄領取</button>`);
+  document.querySelectorAll("#modal button[data-air]").forEach(btn=>{
+    btn.onclick=()=>{
+      const it=btn.dataset.air, i=bag.indexOf(it);
+      if(i<0) return;
+      bag.splice(i,1); p.inv.push(it);
+      log(p.name+(left===2&&p.prof==="pilot"?"":p.prof==="pilot"?"（導航員）額外":"")+" 從停機坪空投選擇獲得: "+ITEMS[it].name);
+      closeModal(); pickAirdropHuman(p,left-1,done);
+    };
+  });
+  document.getElementById("airSkip").onclick=()=>{ closeModal(); renderAll(); if(done) done(); };
 }
 
 /* ---- modals ---- */
