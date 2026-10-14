@@ -815,6 +815,13 @@ function ghostAdj(){
       return (a1<=b2 && b1<=a2 && colTouch) || ((b1===a2+1||a1===b2+1) && colOverlap);
     });
   });
+  // 純幾何相鄰會漏掉「橋」這類中間有空隙的連線（例如 B105↔B106、B305↔B306），
+  // 暗影不該比活人更難走：把一般相鄰表 ADJ 的連線也併進來（雙向）。
+  ids.forEach(a=>{ (ADJ[a]||[]).forEach(b=>{
+    if(!GHOST_ADJ[a]) GHOST_ADJ[a]=[]; if(!GHOST_ADJ[b]) GHOST_ADJ[b]=[];
+    if(!GHOST_ADJ[a].includes(b)) GHOST_ADJ[a].push(b);
+    if(!GHOST_ADJ[b].includes(a)) GHOST_ADJ[b].push(a);
+  }); });
   return GHOST_ADJ;
 }
 function ghostReach(from,maxSteps){
