@@ -195,10 +195,17 @@
   .flipRow{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin:12px 0;perspective:800px}
   .flipCard{width:84px;height:112px;position:relative;transform-style:preserve-3d;transition:transform .55s cubic-bezier(.3,.9,.3,1);cursor:pointer}
   .flipCard.flipped{transform:rotateY(180deg)}
-  .flipFace{position:absolute;inset:0;backface-visibility:hidden;-webkit-backface-visibility:hidden;border-radius:8px;display:flex;align-items:center;justify-content:center;text-align:center;font-size:14px;font-weight:700;padding:4px;border:2px solid var(--line)}
-  .flipBack{background:repeating-linear-gradient(45deg,#16303a,#16303a 6px,#1d4250 6px,#1d4250 12px);color:var(--cyan-bright);font-size:28px}
-  .flipFront{transform:rotateY(180deg);background:var(--panel,#10202a);color:var(--ink)}
-  .flipCard.rare .flipFront{border-color:#ffc94a;box-shadow:0 0 14px 3px rgba(255,201,74,.75);animation:rareGlow 1.1s ease-in-out infinite alternate}
+  .flipFace{position:absolute;inset:0;backface-visibility:hidden;-webkit-backface-visibility:hidden;border-radius:10px;overflow:hidden;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;text-align:center;font-weight:700;font-size:15px;padding:6px}
+  .flipBack{background:radial-gradient(circle at 50% 38%,#2a6378 0%,#14303f 55%,#0a1824 100%);border:2px solid #4d9db3;box-shadow:inset 0 0 14px rgba(0,0,0,.55)}
+  .flipBack::before{content:"";position:absolute;inset:5px;border:1px solid rgba(127,227,245,.55);border-radius:6px}
+  .flipBack::after{content:"";position:absolute;inset:0;background:linear-gradient(115deg,transparent 35%,rgba(255,255,255,.14) 48%,transparent 60%)}
+  .flipEmblem{position:relative;width:34px;height:34px;transform:rotate(45deg);border:2px solid #7fe3f5;border-radius:4px;display:flex;align-items:center;justify-content:center;background:rgba(127,227,245,.08);box-shadow:0 0 10px rgba(127,227,245,.45)}
+  .flipEmblem i{transform:rotate(-45deg);font-style:normal;color:#bff3fb;font-size:18px;line-height:1}
+  .flipFront{transform:rotateY(180deg);color:var(--ink);background:linear-gradient(160deg,var(--panel) 30%,color-mix(in srgb,var(--cyan-bright) 16%,var(--panel)) 100%);border:2px solid var(--line)}
+  .flipFront .nm{font-size:16px;letter-spacing:.04em}
+  .flipFront .tag{font-size:10px;font-weight:600;letter-spacing:.12em;color:var(--muted);border-top:1px solid var(--line);padding-top:4px;width:70%}
+  .flipCard.rare .flipFront{background:linear-gradient(160deg,rgba(255,201,74,.22) 0%,var(--panel) 70%);border-color:#ffc94a;box-shadow:0 0 14px 3px rgba(255,201,74,.75);animation:rareGlow 1.1s ease-in-out infinite alternate}
+  .flipCard.rare .flipFront .tag{color:#ffc94a;border-color:#ffc94a}
   @keyframes rareGlow{from{box-shadow:0 0 8px 1px rgba(255,201,74,.5)}to{box-shadow:0 0 20px 6px rgba(255,201,74,.95)}}
   @keyframes modalFade{from{opacity:0}to{opacity:1}}
   @keyframes modalPop{from{opacity:0;transform:scale(.96) translateY(6px)}to{opacity:1;transform:scale(1) translateY(0)}}
@@ -3252,7 +3259,7 @@ function beginRound(){
     p.stepsLeft = p.ghost ? (p.flags.ghostSpeed!=null?p.flags.ghostSpeed:baseSpeed(p)) : p.speed; // 暗影的步數＝死前速度（不含腎上腺素）
     // 毒人的淬毒衝刺: keyed off wherever they're STARTING this round (before any movement), not
     // where they end up — so round 1 never qualifies (STATE.poisoned is still empty at that point).
-    if(p.prof==="toxic" && roomIsPoisoned(ROOMS[p.room])){
+    if(p.prof==="toxic" && p.room!=="202" && roomIsPoisoned(ROOMS[p.room])){ // 停機坪不會中毒，不算已中毒樓層
       p.stepsLeft += 3;
       log(p.name+"（淬毒衝刺）本輪出發地為已中毒樓層，移動步數+3（本輪共"+p.stepsLeft+"步）。");
     }
@@ -3902,9 +3909,9 @@ const RARE_REVEAL=new Set(["pistol","shotgun","gold","adrenaline","knifeX2"]);
 function revealDrawnItems(drawnItems,roomId,next){
   let off=false;
   try{ off=localStorage.getItem("noDrawAnim")==="1"; }catch(e){}
-  if(!fxMode || off || !drawnItems.length || (window.matchMedia && matchMedia("(prefers-reduced-motion:reduce)").matches)){ next(); return; }
+  if(!fxMode || off || !drawnItems.length){ next(); return; }
   const room=ROOMS[roomId];
-  const cards=drawnItems.map((it,i)=>`<div class="flipCard${RARE_REVEAL.has(it)?" rare":""}" data-i="${i}"><div class="flipFace flipBack">?</div><div class="flipFace flipFront">${ITEMS[it].name}</div></div>`).join("");
+  const cards=drawnItems.map((it,i)=>`<div class="flipCard${RARE_REVEAL.has(it)?" rare":""}" data-i="${i}"><div class="flipFace flipBack"><div class="flipEmblem"><i>?</i></div></div><div class="flipFace flipFront"><span class="nm">${ITEMS[it].name}</span><span class="tag">${RARE_REVEAL.has(it)?"稀有":"普通"}</span></div></div>`).join("");
   openModal(`<h3>在「${room.name||roomId}」搜索中…</h3>
     <div class="flipRow">${cards}</div>
     <button class="btn small" id="flipSkip">跳過動畫</button>
