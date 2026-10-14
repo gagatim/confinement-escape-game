@@ -6055,7 +6055,7 @@ function aiChooseTarget(p){
     // 餐廳(節食)免繳本輪水糧：缺水糧時是安全的補救落點。
     if(STATE.round>=2 && r==="B204") score+=1.5*((haveW<1?1:0)+(haveF<1?1:0));
     // 本輪候選毒氣樓層會在本輪結算立即生效：停留在候選樓層有機率吃毒，按傷害折算期望扣分。
-    if(!roomIsPoisoned(room) && !room.poisonRequires && ballotFloors.includes(room.floor)) score-=poisonDmgNow*1.5/ballotFloors.length;
+    if(!aiThinksPoisoned(room) && !room.poisonRequires && ballotFloors.includes(room.floor)) score-=poisonDmgNow*1.5/ballotFloors.length;
     if(room.draw>0) score+=1.5;
     // Drift bonuses: same needs as above, but scored by distance-to-nearest-match across the
     // WHOLE map (not just this round's reachable set) so the AI still leans toward a useful room
@@ -6068,7 +6068,7 @@ function aiChooseTarget(p){
     { const d=nearestRoomDistance(r,x=>x.stock.water); if(isFinite(d)) score+=rationWeight(haveW)/(d+2); }
     { const d=nearestRoomDistance(r,x=>x.stock.food); if(isFinite(d)) score+=rationWeight(haveF)/(d+2); }
     { const d=nearestRoomDistance(r,x=>x.draw>0); if(isFinite(d)) score+=1.5/(d+2); }
-    if(roomIsPoisoned(room)) score-=6+poisonDmgNow*2;
+    if(aiThinksPoisoned(room)) score-=6+poisonDmgNow*2;
     if(r==="102") score-=4;
     // 操作室(重新分配點數) is a no-op for the AI — it always keeps its stats as rolled rather
     // than actually re-speccing (see aiConsiderSkillAfterMove's 基因重組 comment for the same
@@ -6185,8 +6185,8 @@ function aiConsiderSkillAfterMove(p){
   if(SANGUO_PROFS.has(p.prof)){ aiConsiderSanguoSkill(p); return; }
   if(p.prof==="climber"){
     // 垂直攀爬: escape a poisoned floor immediately rather than riding out this round's damage.
-    if(roomIsPoisoned(room) && p.stepsLeft>=1){
-      const dests=Object.values(ROOMS).filter(r=>(r.floor===room.floor-1||r.floor===room.floor+1) && !roomIsPoisoned(r));
+    if(aiThinksPoisoned(room) && p.stepsLeft>=1){
+      const dests=Object.values(ROOMS).filter(r=>(r.floor===room.floor-1||r.floor===room.floor+1) && !aiThinksPoisoned(r));
       if(dests.length){
         useProfSkill(p,0); // sets climberVertical + skillUsedThisRound
         p.room=dests[Math.floor(Math.random()*dests.length)].id; p.stepsLeft--;
@@ -6242,7 +6242,7 @@ function aiConsiderSkillAfterMove(p){
   if(p.prof==="embalmer") return; // 亡者遺贈 is decided at the moment of a death (see killPlayer), not as a normal-turn skill
   if(p.prof==="survivor"){
     // 野戰急救: only worth a limited charge when actually standing in a poisoned room this round.
-    if(!skillUseCapReached(p,"survivor:1") && roomIsPoisoned(ROOMS[p.room])) useProfSkill(p,1);
+    if(!skillUseCapReached(p,"survivor:1") && aiThinksPoisoned(ROOMS[p.room])) useProfSkill(p,1);
     return;
   }
   if(p.prof==="shopper"){
@@ -6251,9 +6251,9 @@ function aiConsiderSkillAfterMove(p){
     if(skillUseCapReached(p,"shopper:1") || p.stepsLeft<1) return;
     const dests=Object.values(ROOMS).filter(r=>r.floor===room.floor+1);
     if(!dests.length) return;
-    const wantsEscape=roomIsPoisoned(room) && dests.some(r=>!roomIsPoisoned(r));
+    const wantsEscape=aiThinksPoisoned(room) && dests.some(r=>!aiThinksPoisoned(r));
     if(!wantsEscape && Math.random()>=0.25) return;
-    const pool = wantsEscape ? dests.filter(r=>!roomIsPoisoned(r)) : dests;
+    const pool = wantsEscape ? dests.filter(r=>!aiThinksPoisoned(r)) : dests;
     p.flags.shopperJumpUses++; p.flags.skillUsedThisRound=true; p.stepsLeft--;
     if(p.flags.shopperJumpUses>=3 && !p.flags.shopperSpeedPenaltyApplied){
       p.speed=Math.max(0,p.speed-2); p.flags.shopperSpeedPenaltyApplied=true;
@@ -6280,7 +6280,7 @@ function aiConsiderSkillAfterMove(p){
   }
   if(p.prof==="diver"){
     // 憋氣術: only worth a limited charge when actually standing in a poisoned room this round.
-    if(!skillUseCapReached(p,"diver:1") && roomIsPoisoned(room)){
+    if(!skillUseCapReached(p,"diver:1") && aiThinksPoisoned(room)){
       p.flags.diverHoldBreathUses++; p.flags.skillUsedThisRound=true;
       p.flags.diverHoldBreathActive=true;
       log(p.name+" 使用憋氣術：本輪進入毒氣房間將完全不受傷害。");
@@ -6468,8 +6468,8 @@ function resolveAITurn(p){
   // 傳送室 (since its rule change only reaches a no-function room, it's an escape valve rather
   // than a loot shortcut): same shape as 攀岩者's poison escape above — only worth the step when
   // actually standing in poison gas right now, teleporting straight to a clean no-function room.
-  if(room.special==="teleport" && roomIsPoisoned(room) && p.stepsLeft>=1){
-    const tpDests=Object.keys(ROOMS).filter(id=>isFunctionlessRoom(ROOMS[id]) && !roomIsPoisoned(ROOMS[id]));
+  if(room.special==="teleport" && aiThinksPoisoned(room) && p.stepsLeft>=1){
+    const tpDests=Object.keys(ROOMS).filter(id=>isFunctionlessRoom(ROOMS[id]) && !aiThinksPoisoned(ROOMS[id]));
     if(tpDests.length){
       p.room=tpDests[Math.floor(Math.random()*tpDests.length)]; p.stepsLeft--;
       log(p.name+" 使用傳送室逃離毒氣樓層，傳送至 "+p.room+"。");
@@ -6497,7 +6497,7 @@ function resolveAITurn(p){
   }
   // 氧氣瓶: only spent when actually standing in a poisoned room with no cheaper immunity already
   // covering it (gasmask/憋氣術/樂透永久免疫), so it doesn't get burned on a safe room by mistake.
-  if(roomIsPoisoned(room) && !p.inv.includes("gasmask") && !p.flags.poisonImmune &&
+  if(aiThinksPoisoned(room) && !p.inv.includes("gasmask") && !p.flags.poisonImmune &&
      !(p.prof==="diver" && p.flags.diverHoldBreathActive) && countItem(p,"oxygen")>0 && removeItem(p,"oxygen")){
     STATE.discardPile.push("oxygen");
     p.flags.oxygenImmuneActive=true; p.flags.oxygenSpeedPending=true;
@@ -6537,7 +6537,7 @@ function resolveAITurn(p){
     for(let i=0;i<shotsAllowed;i++){
       const funcTargets=Object.keys(ROOMS).filter(r=>r!==p.room && !chosen.includes(r) &&
         !ROCKET_AI_AVOID_ROOMS.has(r) && (ROOMS[r].special || ROOMS[r].draw>0));
-      const clean=funcTargets.filter(r=>!roomIsPoisoned(ROOMS[r]));
+      const clean=funcTargets.filter(r=>!aiThinksPoisoned(ROOMS[r]));
       const targets=clean.length ? clean : funcTargets;
       if(!targets.length) break;
       chosen.push(targets[Math.floor(Math.random()*targets.length)]);
@@ -6874,6 +6874,12 @@ function hermitAlone(p){
 // warehouse) which per the rulebook only turns toxic once BOTH the floors it spans are poisoned,
 // and any single room the 控制室 ability has permanently detoxed (a surgical exception that
 // spares just that room while the rest of its floor stays toxic).
+// AI決策用：控制室的「秘密解毒」只有解毒者自己知道，AI 看不到，仍把該房間當成毒房間
+// （實際傷害判定仍走 roomIsPoisoned，不受影響）。
+function aiThinksPoisoned(room){
+  if(room.poisonRequires) return room.poisonRequires.every(f=>STATE.poisoned.has(f));
+  return STATE.poisoned.has(room.floor);
+}
 function roomIsPoisoned(room){
   if(STATE.detoxedRooms && STATE.detoxedRooms.has(room.id)) return false;
   if(room.poisonRequires) return room.poisonRequires.every(f=>STATE.poisoned.has(f));
@@ -7706,6 +7712,8 @@ function showRoundSummary(){
     (iconsOff()?"":"☠ ")+"本輪投票明細："+voteLines+"<br>"+
     "目前已中毒樓層：<span style='color:var(--ember-bright)'>"+poisonedList+"</span>"+
     "</div>";
+  const wineLines=(_rh&&_rh.wine)||[];
+  if(wineLines.length) html+="<div style='margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--line)'>"+(iconsOff()?"":"🍷 ")+"本輪喝酒結果：<br>"+wineLines.join("<br>")+"</div>";
   if(detailOn) html+=roundDetailHtml(_rh&&_rh.detail);
   else STATE.players.forEach(p=>{
     const companions=playersInRoom(p.room,false).filter(x=>x.id!==p.id).map(x=>x.name+(x.ghost?"[暗影]":"")).join("、")||"（無）";
