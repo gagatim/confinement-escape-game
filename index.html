@@ -3906,13 +3906,14 @@ function resolveHumanDraw(p,roomId,maxDraw,animate){
 // 抽卡翻牌動畫：搜索到的道具先以牌背出現，依序翻面；稀有道具（槍／金條／腎上腺素／雙刀）會發光。
 // 只是在原本的收下流程前多一個展示步驟，翻完（或按跳過）才呼叫 next()，規則完全不變。
 const RARE_REVEAL=new Set(["pistol","shotgun","gold","adrenaline","knifeX2"]);
-function revealDrawnItems(drawnItems,roomId,next){
+function revealDrawnItems(drawnItems,roomId,next,lead){
   let off=false;
   try{ off=localStorage.getItem("noDrawAnim")==="1"; }catch(e){}
   if(!fxMode || off || !drawnItems.length){ next(); return; }
-  const room=ROOMS[roomId];
+  const room=ROOMS[roomId]||{};
+  const headBusy=lead?lead+"…":"在「"+(room.name||roomId)+"」搜索中…", headDone=lead?lead+"：":"在「"+(room.name||roomId)+"」搜索到：";
   const cards=drawnItems.map((it,i)=>`<div class="flipCard${RARE_REVEAL.has(it)?" rare":""}" data-i="${i}"><div class="flipFace flipBack"><div class="flipEmblem"><i>?</i></div></div><div class="flipFace flipFront"><span class="nm">${ITEMS[it].name}</span><span class="tag">${RARE_REVEAL.has(it)?"稀有":"普通"}</span></div></div>`).join("");
-  openModal(`<h3>在「${room.name||roomId}」搜索中…</h3>
+  openModal(`<h3>${headBusy}</h3>
     <div class="flipRow">${cards}</div>
     <button class="btn small" id="flipSkip">跳過動畫</button>
     <button class="btn small" id="flipOk" style="display:none">收下</button>
@@ -3925,7 +3926,7 @@ function revealDrawnItems(drawnItems,roomId,next){
     els.forEach(e=>e.classList.add("flipped"));
     document.getElementById("flipSkip").style.display="none";
     document.getElementById("flipOk").style.display="";
-    document.querySelector("#modal h3").textContent="在「"+(room.name||roomId)+"」搜索到：";
+    document.querySelector("#modal h3").textContent=headDone;
   };
   const flipOne=(i)=>{
     if(done) return;
@@ -4805,6 +4806,7 @@ function doRecycle(p){
   if(p.prof==="engineer") passiveFX(p,"engineer:0");
   log(p.name+" 使用循環回收裝置，獲得: "+ITEMS[item].name);
   renderAll();
+  if(!p.isAI) revealDrawnItems([item],null,()=>{},"循環回收裝置回收");
 }
 function useRecycleDevice(p){
   if(!recycleChecks(p)) return;
@@ -5329,6 +5331,7 @@ function tamerCandidates(p){
 function helipadBagHas(r){ return r==="202" && !!(ROOMS[r].airdropBag && ROOMS[r].airdropBag.length); }
 function houndPendingCost(p){ return (p.flags.houndPending||[]).filter(it=>itemCostsCarry(p,it)).length; }
 function tamerDispatch(p,target){
+  const houndBefore=(p.flags.houndPending||[]).length;
   p.flags.skillUsedThisRound=true; p.flags.tamerUses++; speakSkill(p,"tamer:0");
   const stockKeys=Object.keys(ROOMS[target].stock).filter(k=>ROOMS[target].stock[k]>0 && canHoldItem(p,k));
   // 停機坪: 獵犬從本輪空投袋隨機叼 1 張（與一般庫存房間二選一，優先空投袋）
@@ -5344,6 +5347,8 @@ function tamerDispatch(p,target){
     p.flags.houndPending=(p.flags.houndPending||[]).concat(pick);
     log(p.name+" 派遣巡迴獵犬前往「"+target+" "+(ROOMS[target].name||"")+"」，帶回: "+ITEMS[pick].name+"（結算階段才能使用）。");
   } else { log(p.name+" 派遣巡迴獵犬前往「"+target+"」，但無法獲得道具。"); }
+  const hp=p.flags.houndPending||[];
+  return hp.length>houndBefore ? hp[hp.length-1] : null;
 }
 function openTamerModal(p,cands){
   const opts=cands.map(r=>`<option value="${r}">${r} ${ROOMS[r].name||""}（距離${bfsDist(p.room,r)}）</option>`).join("");
@@ -5351,7 +5356,8 @@ function openTamerModal(p,cands){
     <button class="btn small warn" id="tamerOk">派遣</button> <button class="btn small ghost" id="tamerCancel">取消</button>`);
   document.getElementById("tamerOk").onclick=()=>{
     const target=document.getElementById("tamerSel").value;
-    closeModal(); tamerDispatch(p,target); renderAll();
+    closeModal(); const got=tamerDispatch(p,target); renderAll();
+    if(got) revealDrawnItems([got],null,()=>{},"巡迴獵犬帶回");
   };
   bindModalClose("tamerCancel");
 }
@@ -5485,7 +5491,7 @@ function useProfSkill(p,idx){
       log(p.name+" 使用遠端操控：於本回合遠端使用了「"+r+" "+(room.name||"")+"」。"); speakSkill(p,"hacker:1",{room:r});
       const opensOwnModal=HACKER_OWN_MODAL_SPECIALS.has(room.special);
       if(!opensOwnModal) closeModal();
-      if(room.draw>0) resolveHumanDraw(p,r,room.draw);
+      if(room.draw>0) resolveHumanDraw(p,r,room.draw,!room.special);
       if(room.special) doSpecialRoom(p,room);
       if(!opensOwnModal) renderAll();
     };
@@ -5505,7 +5511,7 @@ function useProfSkill(p,idx){
       const r=document.getElementById("bombRoomSel").value;
       bombReachCommit(p,r);
       closeModal();
-      resolveHumanDraw(p,r,1);
+      resolveHumanDraw(p,r,1,true);
       renderAll();
     };
     bindModalClose("bombCancel");
