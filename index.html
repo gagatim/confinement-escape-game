@@ -3263,7 +3263,7 @@ function beginRound(){
     // Round 1 starts at the secretly-chosen spawn room; every later round continues from
     // wherever the player physically ended up last round — position is NOT reset to a hub.
     if(STATE.round===1 && p.spawnRoom) p.room=p.spawnRoom;
-    p.stepsLeft = p.ghost ? (p.flags.ghostSpeed!=null?p.flags.ghostSpeed:baseSpeed(p)) : p.speed; // 暗影的步數＝死前速度（不含腎上腺素）
+    p.stepsLeft = p.ghost ? Math.max(1,p.flags.ghostSpeed!=null?p.flags.ghostSpeed:baseSpeed(p)) : p.speed; // 暗影的步數＝死前速度（不含腎上腺素）
     // 毒人的淬毒衝刺: keyed off wherever they're STARTING this round (before any movement), not
     // where they end up — so round 1 never qualifies (STATE.poisoned is still empty at that point).
     if(p.prof==="toxic" && p.room!=="202" && roomIsPoisoned(ROOMS[p.room])){ // 停機坪不會中毒，不算已中毒樓層
@@ -6941,7 +6941,7 @@ function killPlayer(p,cause,killerId){
   p.room="B701";
   // shade immunity/heal handled separately in ghost-drain resolution; 暗影親和 speed+2 below
   if(p.prof==="shade"){ p.speed+=2; log(p.name+"（暗影親和）成為暗影，移動速度永久+2（現為 "+p.speed+"）。"); }
-  p.flags.ghostSpeed=baseSpeed(p); // 暗影每輪的移動步數＝死前的移動速度，不含腎上腺素（baseSpeed 已扣除）
+  p.flags.ghostSpeed=Math.max(1,baseSpeed(p)); // 至少1步：暗影從停屍間出發，0步會永遠困在停屍間、違反每輪強制移動。 // 暗影每輪的移動步數＝死前的移動速度，不含腎上腺素（baseSpeed 已扣除）
 }
 // 還魂師的臨終祝禱: only ever lowers the THREATENED player's own revival bar (their prof at the
 // moment they died), not whoever's asking — used both by the drain-settlement check and the
