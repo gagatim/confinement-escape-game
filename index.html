@@ -3263,7 +3263,7 @@ function beginRound(){
     // Round 1 starts at the secretly-chosen spawn room; every later round continues from
     // wherever the player physically ended up last round — position is NOT reset to a hub.
     if(STATE.round===1 && p.spawnRoom) p.room=p.spawnRoom;
-    p.stepsLeft = p.ghost ? Math.max(1,p.flags.ghostSpeed!=null?p.flags.ghostSpeed:baseSpeed(p)) : p.speed; // 暗影的步數＝死前速度（不含腎上腺素）
+    p.stepsLeft = p.ghost ? Math.max(1,p.flags.ghostSpeed!=null?p.flags.ghostSpeed:baseSpeed(p)) : Math.max(1,p.speed); // 每輪步數至少1（含麻醉鏢／噴霧後）；暗影的步數＝死前速度（不含腎上腺素）
     // 毒人的淬毒衝刺: keyed off wherever they're STARTING this round (before any movement), not
     // where they end up — so round 1 never qualifies (STATE.poisoned is still empty at that point).
     if(p.prof==="toxic" && p.room!=="202" && roomIsPoisoned(ROOMS[p.room])){ // 停機坪不會中毒，不算已中毒樓層
