@@ -217,6 +217,22 @@
   .flipCard.rare .flipFront .nm{color:#ffe08a;text-shadow:0 0 6px rgba(255,201,74,.7)}
   .flipCard.rare .flipFront::before{content:"";position:absolute;inset:0;background:linear-gradient(115deg,transparent 30%,rgba(255,244,200,.55) 48%,transparent 66%);transform:translateX(-120%);animation:rareSweep 1.8s ease-in-out infinite;pointer-events:none}
   .flipCard.rare .flipFront::after{content:"✦";position:absolute;top:4px;right:7px;color:#ffe08a;font-size:13px;line-height:1;text-shadow:0 0 6px rgba(255,201,74,.9);pointer-events:none;animation:rareTwinkle 1.2s ease-in-out infinite alternate}
+  /* 垃圾場五件特產：各自一種主色＋專屬動態（火箭筒火紅閃動／次元口袋紫色漩渦／循環回收裝置綠色旋轉／繩索琥珀掃光／防毒面具青綠霧氣） */
+  .flipCard.sp .flipFront{border-width:3px;border-color:var(--sp);background:linear-gradient(160deg,color-mix(in srgb,var(--sp) 26%,var(--panel)) 0%,var(--panel) 75%);box-shadow:0 0 12px 2px color-mix(in srgb,var(--sp) 70%,transparent)}
+  .flipCard.sp .flipFront .tag{color:var(--sp);border-color:var(--sp)}
+  .flipCard.sp .flipFront .nm{color:var(--sp);text-shadow:0 0 6px color-mix(in srgb,var(--sp) 60%,transparent)}
+  .flipCard.sp .flipFront .ic{filter:drop-shadow(0 0 6px var(--sp))}
+  .flipCard.sp-rocket{--sp:#ff5a36} .flipCard.sp-dimpocket{--sp:#b57bff} .flipCard.sp-recycledevice{--sp:#4cd07a}
+  .flipCard.sp-rope{--sp:#e0a24a} .flipCard.sp-gasmask{--sp:#35d0c0}
+  .flipCard.sp-rocket .flipFront{animation:spFlicker .35s steps(2) infinite alternate}
+  .flipCard.sp-dimpocket .flipFront::before{content:"";position:absolute;inset:-40%;background:conic-gradient(from 0deg,transparent 0 70%,rgba(181,123,255,.45) 85%,transparent 100%);animation:spSpin 2.4s linear infinite;pointer-events:none}
+  .flipCard.sp-recycledevice .flipFront .ic{animation:spSpin 3s linear infinite}
+  .flipCard.sp-rope .flipFront::before{content:"";position:absolute;inset:0;background:repeating-linear-gradient(135deg,transparent 0 8px,rgba(224,162,74,.18) 8px 12px);animation:spSlide 1.6s linear infinite;pointer-events:none}
+  .flipCard.sp-gasmask .flipFront::before{content:"";position:absolute;left:-20%;right:-20%;bottom:-10%;height:55%;background:radial-gradient(ellipse at 50% 100%,rgba(53,208,192,.5),transparent 70%);animation:spMist 1.8s ease-in-out infinite alternate;pointer-events:none}
+  @keyframes spFlicker{from{box-shadow:0 0 8px 1px rgba(255,90,54,.5)}to{box-shadow:0 0 22px 6px rgba(255,140,60,.95)}}
+  @keyframes spSpin{to{transform:rotate(360deg)}}
+  @keyframes spSlide{to{background-position:24px 24px}}
+  @keyframes spMist{from{opacity:.3;transform:translateY(6px)}to{opacity:1;transform:translateY(-4px)}}
   @keyframes rareSweep{0%{transform:translateX(-120%)}60%,100%{transform:translateX(120%)}}
   @keyframes rareTwinkle{from{opacity:.25}to{opacity:1}}
   @keyframes rareIconPulse{from{transform:scale(1)}to{transform:scale(1.18)}}
@@ -3939,11 +3955,12 @@ function revealDrawnItems(drawnItems,roomId,next,lead){
   if(!fxMode || off || !drawnItems.length){ next(); return; }
   const room=ROOMS[roomId]||{};
   const headBusy=lead?lead+"…":"在「"+(room.name||roomId)+"」搜索中…", headDone=lead?lead+"：":"在「"+(room.name||roomId)+"」搜索到：";
-  const tierOf=it=>RARE_REVEAL.has(it)?"rare":(it==="trash"?"trash":"normal");
-  const tierLabel={rare:"稀有",trash:"垃圾",normal:"普通"};
+  const JUNK_SPECIAL=new Set(["rope","gasmask","rocket","dimpocket","recycledevice"]);
+  const tierOf=it=>RARE_REVEAL.has(it)?"rare":(JUNK_SPECIAL.has(it)?"sp":(it==="trash"?"trash":"normal"));
+  const tierLabel={rare:"稀有",sp:"特產",trash:"垃圾",normal:"普通"};
   const cards=drawnItems.map((it,i)=>{
     const t=tierOf(it), ic=iconsOff()?"":`<span class="ic">${ITEM_ICON[it]||"📦"}</span>`;
-    return `<div class="flipCard${t==="normal"?"":" "+t}" data-i="${i}"><div class="flipFace flipBack"><div class="flipEmblem"><i>?</i></div></div><div class="flipFace flipFront">${ic}<span class="nm">${ITEMS[it].name}</span><span class="tag">${tierLabel[t]}</span></div></div>`;
+    return `<div class="flipCard${t==="normal"?"":(t==="sp"?" sp sp-"+it:" "+t)}" data-i="${i}"><div class="flipFace flipBack"><div class="flipEmblem"><i>?</i></div></div><div class="flipFace flipFront">${ic}<span class="nm">${ITEMS[it].name}</span><span class="tag">${tierLabel[t]}</span></div></div>`;
   }).join("");
   openModal(`<h3>${headBusy}</h3>
     <div class="flipRow">${cards}</div>
