@@ -97,6 +97,14 @@
   .prof-card h3{font-size:15px;color:var(--cyan-bright);margin:0}
   .prof-card .sk{font-size:11.5px;color:var(--muted);margin-top:6px;line-height:1.55}
   .prof-card .sk b{color:var(--amber-bright)}
+  /* 技能說明排版：名稱＋被動/主動標籤，一句話摘要，細項用縮排條列 */
+  .skchip{display:inline-block;margin-left:6px;padding:0 7px;border-radius:999px;border:1px solid currentColor;font-size:10px;font-weight:600;letter-spacing:.06em;line-height:1.5;vertical-align:1px}
+  .skchip.pas{color:var(--cyan-bright)} .skchip.act{color:var(--amber-bright)}
+  .skd{font-weight:400;margin-top:2px}
+  .skd .skl{display:block}
+  .skd .skb{display:block;padding-left:1em;text-indent:-1em}
+  .skd .skb::before{content:"・"}
+  .skd .skn2{display:block;font-style:italic;opacity:.85}
   .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
   .statbar{display:flex;align-items:center;gap:8px;margin:6px 0}
   .statbar label{width:90px;font-size:13px}
@@ -896,38 +904,52 @@ function ghostReach(from,maxSteps){
 }
 
 /* ===================== DATA: PROFESSIONS ===================== */
+// 把技能說明（原始字串）拆成：標籤（被動／主動＋次數限制）＋摘要句＋條列。只影響顯示，不改資料。
+function fmtSkill(s){
+  const parts=String(s.desc||"").split(/<br\s*\/?>/);
+  let head=parts.shift()||"", chip="";
+  const m=head.match(/^（(被動|主動)([^）]*)）/);
+  if(m){
+    const extra=m[2].replace(/^，/,"");
+    chip=`<span class="skchip ${m[1]==="被動"?"pas":"act"}">${m[1]}${extra?"・"+extra:""}</span>`;
+    head=head.slice(m[0].length);
+  }
+  const lines=[head].concat(parts).map(x=>x.trim()).filter(Boolean);
+  const body=lines.map(l=>l.startsWith("・")?`<span class="skb">${l.slice(1)}</span>`:/^<i>/.test(l)?`<span class="skn2">${l}</span>`:`<span class="skl">${l}</span>`).join("");
+  return {chip,body};
+}
 const PROFESSIONS = {
   fatty:{name:"肥宅", skills:[
     {name:"肥肉坦克", desc:"（被動）受到近戰、槍械傷害時，最終傷害-2。", passive:true},
     {name:"肥宅味", desc:"（被動）所有玩家都知道你所在的房間。", passive:true}
   ]},
   bomb:{name:"橡膠人", skills:[
-    {name:"橡膠身軀", desc:"（被動）<br>・受到持槍對手的戰鬥傷害、以及火箭筒傷害時，傷害永久-4<br>・代價：你無法持有槍（手槍／霰彈槍），抽到槍時放回房間，並補抽一張（不會抽到槍）。", passive:true},
-    {name:"隔空取物", desc:"（主動，整場限用2次）移動後、使用房間功能前發動：<br>・放棄本房間的行動<br>・改為從「同樓層、相鄰」的房間抽取1張道具（須有庫存）。"}
+    {name:"橡膠身軀", desc:"（被動）受到持槍對手的戰鬥傷害、以及火箭筒傷害時，傷害永久-4。<br>・代價：你無法持有槍（手槍／霰彈槍），抽到槍時放回房間，並補抽一張（不會抽到槍）。", passive:true},
+    {name:"隔空取物", desc:"（主動，整局限用2次）移動後、使用房間功能前發動，放棄本房間的行動。<br>・改為從「同樓層、相鄰」的房間抽取1張道具（須有庫存）。"}
   ]},
   gambler:{name:"賭徒", skills:[
     {name:"好賭成性", desc:"須在使用房間功能前發動，擲骰：<br>・1-2失敗（本輪無法使用房間功能）、3-4無事、5-6成功（本輪房間功能可用兩次）。<br>・整局限用3次。", uses:3},
     {name:"逢賭必贏", desc:"整局限用1次：發動時【好賭成性】必定成功。", uses:1}
   ]},
   scavenger:{name:"拾荒者", skills:[
-    {name:"拾荒嗅覺", desc:"（被動）垃圾不佔負重<br>・在房間每抽到1件物品，有50%機率額外獲得1個垃圾（由垃圾場庫存扣除）。", passive:true},
-    {name:"變廢為寶", desc:"（主動，整局限用2次）行動階段可使用：<br>・選擇背包內任意數量的垃圾，每個隨機轉為1份水或1份糧（需有背包空位）。", uses:2}
+    {name:"拾荒嗅覺", desc:"（被動）垃圾不佔負重。<br>・在房間每抽到1件物品，有50%機率額外獲得1個垃圾（由垃圾場庫存扣除）。", passive:true},
+    {name:"變廢為寶", desc:"（主動，整局限用2次）行動階段可使用：選擇背包內任意數量的垃圾，每個隨機轉為1份水或1份糧。<br>・需有背包空位。", uses:2}
   ]},
   trucker:{name:"貨車司機", skills:[
     {name:"卸載加速", desc:"移動階段可使用：丟棄1張非垃圾道具，本輪速度變兩倍（上限10）。整局限用3次。", uses:3},
     {name:"猛烈衝撞", desc:"（被動）使用卸載加速時強制觸發：<br>・抵達房間時，房內其他存活玩家各-1血，且該房間公開。", passive:true}
   ]},
   bartender:{name:"飲品師", skills:[
-    {name:"特調精釀", desc:"（被動）你的果汁(酒)不佔負重，開局先拿走酒窖的2瓶。<br>・使用酒前可選擇剔除剛好四種結果（也可不剔除），再從剩下的結果中隨機抽取。", passive:true},
-    {name:"舉杯共飲", desc:"（被動）道具使用階段，你可請任一存活玩家（不限同房間）喝你的果汁（同樣可剔除四種結果或不剔除）<br>・其他玩家也可把酒交給你，請你代為調製。", passive:true}
+    {name:"特調精釀", desc:"（被動）你的果汁（酒）不佔負重，開局先拿走酒窖的2瓶。<br>・使用酒前可選擇剔除剛好四種結果（也可不剔除），再從剩下的結果中隨機抽取。", passive:true},
+    {name:"舉杯共飲", desc:"（被動）道具使用階段，你可請任一存活玩家（不限同房間）喝你的果汁（同樣可剔除四種結果或不剔除）。<br>・其他玩家也可把酒交給你，請你代為調製。", passive:true}
   ]},
   chemist:{name:"化學家", skills:[
     {name:"毒性調和", desc:"移動階段可使用，二選一：<br>・指定1個已中毒樓層，本輪毒氣傷害-2（最低0）<br>・或本輪毒氣樓層傷害+2。<br>・整局限用2次。", uses:2},
     {name:"抗毒", desc:"（被動）受到的毒氣傷害永久-1。", passive:true}
   ]},
   embalmer:{name:"入殮師", skills:[
-    {name:"蠱耗感應", desc:"（被動）每當有玩家死亡變成暗影，你的負重永久+1，並在其道具放入停屍間前，隨機取走其中1張（不限每輪次數）。<br>・同一輪多人死亡時逐一處理：<br>・每位死者各取1張、負重各+1。", passive:true},
-    {name:"亡者遺贈", desc:"（主動，整局限用1次）有道具的死者，在其道具放入停屍間前，可以啟動，隨機取得道具改為自行選擇一張。", uses:1}
+    {name:"蠱耗感應", desc:"（被動）每當有玩家死亡變成暗影，你的負重永久+1，並在其道具放入停屍間前，隨機取走其中1張（不限每輪次數）。<br>・同一輪多人死亡時逐一處理：每位死者各取1張、負重各+1。", passive:true},
+    {name:"亡者遺贈", desc:"（主動，整局限用1次）有道具的死者，在其道具放入停屍間前可以啟動：將「隨機取得」改為「自行選擇」其中1張。", uses:1}
   ]},
   hacker:{name:"黑客", skills:[
     {name:"系統監控", desc:"（被動）可查看任意1個房間目前的人數與各玩家武力值（不含是否持槍）。", passive:true},
@@ -944,7 +966,7 @@ const PROFESSIONS = {
     {name:"巡迴獵犬", desc:"武力與負重永久+1。<br>・（主動，整局限用4次）須在房間行動結束後才能使用（所在房間無功能可用時不受限）：<br>・指定距離5步以內、尚有庫存的房間（停機坪則看本輪空投袋是否還有道具），派遣獵犬隨機抽取1張道具（不可超過負重）。<br>・獵犬帶回的道具要到結算階段才能使用。", uses:4}
   ]},
   merc:{name:"雇傭兵", skills:[
-    {name:"武器精通", desc:"（被動）所有武器（刀/雙刀/手槍/霰彈槍）不佔負重<br>・火箭筒不算武器，仍佔負重。<br>・你的刀與手槍效果相同，武力數值不變。", passive:true}
+    {name:"武器精通", desc:"（被動）所有武器（刀／雙刀／手槍／霰彈槍）不佔負重。<br>・火箭筒不算武器，仍佔負重。<br>・你的刀與手槍效果相同，武力數值不變。", passive:true}
   ]},
   geneFreak:{name:"基因怪人", skills:[
     {name:"先天優勢", desc:"（被動）開局可分配12點基因點數（一般玩家10點），武力上限5點。", passive:true},
@@ -958,7 +980,7 @@ const PROFESSIONS = {
     {name:"節食", desc:"（主動，整局限用1次）本回合不需支付水與糧。", uses:1}
   ]},
   engineer:{name:"工程師", skills:[
-    {name:"回收裝置A", desc:"（被動）不需持有循環回收裝置卡，每輪可直接使用1次回收功能：<br>・從棄牌堆隨機取得1張道具（需有背包空位；垃圾不會被回收）。", passive:true}
+    {name:"回收裝置A", desc:"（被動）不需持有循環回收裝置卡，每輪可直接使用1次回收功能。<br>・從棄牌堆隨機取得1張道具（需有背包空位；垃圾不會被回收）。", passive:true}
   ]},
   medic:{name:"醫官", skills:[
     {name:"醫者仁心", desc:"（被動）手術室原本需恰好2人在場才會治療<br>・你1人在場即可觸發，結算時恢復4點生命。", passive:true},
@@ -986,8 +1008,8 @@ const PROFESSIONS = {
     {name:"野戰急救", desc:"整局限用2次：本回合毒氣傷害-1。", uses:2}
   ]},
   shopper:{name:"購物大媽", skills:[
-    {name:"精挑細選", desc:"（被動）搜索抽取道具時多抽1張，再自選1張放回房間<br>・實際獲得的數量不變。", passive:true},
-    {name:"跳樓大拍賣", desc:"（主動，整局限用3次）消耗1步，直接跳到下一層樓的任一房間（只能往下，須在確定停留前使用）<br>・用完第3次後，速度永久-2。", uses:3}
+    {name:"精挑細選", desc:"（被動）搜索抽取道具時多抽1張，再自選1張放回房間。<br>・實際獲得的數量不變。", passive:true},
+    {name:"跳樓大拍賣", desc:"（主動，整局限用3次）消耗1步，直接跳到下一層樓的任一房間（只能往下，須在確定停留前使用）。<br>・用完第3次後，速度永久-2。", uses:3}
   ]},
   runner:{name:"馬拉松跑者", skills:[
     {name:"耐力訓練", desc:"（被動）若本輪步數剛好用完，且回合結束時身處功能房間，結算時恢復1點生命。", passive:true},
@@ -1031,7 +1053,7 @@ const PROFESSIONS = {
   mediocre:{name:"庸才", skills:[
     {name:"脆弱體質", desc:"（被動）被火箭筒擊中時，傷害+1（共5點）。", passive:true},
     {name:"斷尾求生", desc:"（主動，整局限用3次）丟棄背包中1張道具，立即恢復2點生命（不超過上限）。", uses:3},
-    {name:"以命換命", desc:"（主動）行動階段可使用（生命需大於1）：<br>・花1點生命，二選一：<br>・本輪負重+1，或本輪搜索時多抽1張（僅限本輪）。", uses:99}
+    {name:"以命換命", desc:"（主動）行動階段可使用（生命需大於1）：花1點生命，二選一。<br>・本輪負重+1。<br>・本輪搜索時多抽1張。<br>・兩種效果都只限本輪。", uses:99}
   ]},
   boss:{name:"黑社會老大", skills:[
     {name:"一呼百應", desc:"（被動）遊戲開始時指定3名其他玩家為小弟（A／B／C），三人武力永久+1。", passive:true},
@@ -1042,11 +1064,11 @@ const PROFESSIONS = {
     {name:"以物易物", desc:"整局限用2次：<br>・查看任意1名玩家的完整背包，以你背包中任意2張道具，強制換取對方1張指定道具（不需同房，無視對方意願）。", uses:2}
   ]},
   butcher:{name:"屠夫", skills:[
-    {name:"屠宰專精", desc:"（被動）背包內有刀時，武力額外+2（只加一次）<br>・刀不佔負重。", passive:true},
+    {name:"屠宰專精", desc:"（被動）背包內有刀時，武力額外+2（只加一次）。<br>・刀不佔負重。", passive:true},
     {name:"鮮血盛宴", desc:"（被動）在戰鬥中對其他玩家造成傷害時，恢復1點生命（每輪最多1次）。", passive:true}
   ]},
   exorcist:{name:"還魂師", skills:[
-    {name:"臨終祝禱", desc:"（被動）死亡變成暗影後，只要吸取1點生命就能復活（一般暗影需2點）<br>・整局可發動兩次，復活後生命為3。", passive:true},
+    {name:"臨終祝禱", desc:"（被動）死亡變成暗影後，只要吸取1點生命就能復活（一般暗影需2點）。<br>・整局可發動兩次，復活後生命為3。", passive:true},
     {name:"安魂儀式", desc:"（被動）每次復活後，速度永久+1。", passive:true},
     {name:"亡靈庇護", desc:"（被動）被暗影吸血時不會扣血<br>・暗影仍照常吸取（計入其復活所需的吸血量）。", passive:true}
   ]},
@@ -1071,7 +1093,7 @@ const PROFESSIONS = {
   ]},
   lucky:{name:"幸運兒", skills:[
     {name:"吉星高照", desc:"（被動）每輪行動階段開始時，先自動擲骰：<br>・1｜水塔：獲得1份水<br>・2｜糧倉：獲得1份糧<br>・3｜大倉庫：抽取1張道具卡<br>・4｜垃圾場：抽取1張道具卡<br>・5｜本回合移動步數+2<br>・6｜立即恢復1點生命（不超過上限），且負重上限永久+1<br><i>1～4：該房間沒有存貨則失效。</i>", passive:true},
-    {name:"幸運加持", desc:"（被動）吉星高照的骰值與上一回合相同時，可以額外自選一項其他效果發動。<br><i>不能選當回合已擲到的那項。</i>", passive:true}
+    {name:"幸運加持", desc:"（被動）吉星高照的骰值與上一回合相同時，可以額外自選一項其他效果發動。<br>・不能選當回合已擲到的那項。", passive:true}
   ]},
   hermit:{name:"隱士", skills:[
     {name:"離群索居", desc:"（被動）房間內只有你1人（無其他玩家、無暗影）時，戰鬥／中毒／飢餓傷害各-1。", passive:true},
@@ -1095,14 +1117,14 @@ const PROFESSIONS = {
     {name:"毒氣適應", desc:"（被動）自身受到的毒氣傷害永遠-1（最低0）。", passive:true}
   ]},
   detective:{name:"私家偵探", skills:[
-    {name:"情報位移", desc:"（主動，整局限用3次）移動前使用，放棄本輪移動：<br>・指定1名行動順序比你靠前的存活玩家，你直接移動到他所在的房間（不花步數，事先無法得知他在哪），並可執行該房間的行動。<br>・同一名玩家最多被跟蹤1次。", uses:3}
+    {name:"情報位移", desc:"（主動，整局限用3次）移動前使用，放棄本輪移動。<br>・指定1名行動順序比你靠前的存活玩家，你直接移動到他所在的房間（不花步數，事先無法得知他在哪），並可執行該房間的行動。<br>・同一名玩家最多被跟蹤1次。", uses:3}
   ]},
   arsonist:{name:"縱火犯", skills:[
     {name:"點火", desc:"（被動）結算時，若你所在房間（含你）有3名以上存活玩家，房內其他玩家各-1血，你恢復1點生命。", passive:true},
     {name:"火場老手", desc:"（被動）你所在房間（含你）有3名以上存活玩家時，你受到的戰鬥傷害-3。", passive:true}
   ]},
   vampire:{name:"吸血鬼", skills:[
-    {name:"吸血", desc:"（被動）武力+1<br>・戰鬥中對其他玩家造成傷害時，回復該傷害一半（捨去小數）的生命<br>・每輪最多回復2點。", passive:true},
+    {name:"吸血", desc:"（被動）武力+1。<br>・戰鬥中對其他玩家造成傷害時，回復該傷害一半（捨去小數）的生命。<br>・每輪最多回復2點。", passive:true},
     {name:"畏光", desc:"（被動）結算時若停留在頂樓房間（基因庫、停機坪），生命-2。", passive:true}
   ]},
   assassin:{name:"刺客", skills:[
@@ -1116,7 +1138,7 @@ const PROFESSIONS = {
   // ---- 實體擴充職業（僅在「實體模式＋實體擴充」勾選時開放；見 PHYSICAL_EXP_PROFS）----
   sniper:{name:"狙擊手", skills:[
     {name:"一擊必中", desc:"（被動）背包內持有槍械（手槍／霰彈槍）時，武力額外+2（只加一次）。", passive:true},
-    {name:"遠距狙擊", desc:"（主動，整局限用2次）指定距離3步以內（不含自己所在房間）的1間房間：結算時，該房間內的所有存活玩家各受到2點傷害。<br>・使用後下一輪移動步數-2（至少為1）。", uses:2}
+    {name:"遠距狙擊", desc:"（主動，整局限用2次）指定距離3步以內（不含自己所在房間）的1間房間，結算時該房間內的所有存活玩家各受到2點傷害。<br>・使用後下一輪移動步數-2（至少為1）。", uses:2}
   ]},
   berserker:{name:"狂戰士", skills:[
     {name:"血怒", desc:"（被動）生命≤6時，武力+2。", passive:true},
@@ -1156,7 +1178,7 @@ const PROFESSIONS = {
     {name:"居高臨下", desc:"（被動）所在房間內有3人以上（含自己）時，武力+1。", passive:true}
   ]},
   cardsharp:{name:"老千", skills:[
-    {name:"手氣", desc:"（被動）抽取道具時擲骰：1～2 少抽1張（至少抽1張）、3～4 不變、5～6 多抽1張。", passive:true},
+    {name:"手氣", desc:"（被動）抽取道具時擲骰：<br>・1～2：少抽1張（至少抽1張）。<br>・3～4：數量不變。<br>・5～6：多抽1張。", passive:true},
     {name:"孤注一擲", desc:"（被動）生命≤3時，手氣的骰值一律視為6。", passive:true}
   ]},
   warden:{name:"看守長", skills:[
@@ -1168,7 +1190,7 @@ const PROFESSIONS = {
     {name:"廢物利用", desc:"（被動）結算時若持有2個以上垃圾，自動消耗2個並恢復1點生命（每輪最多1次）。", passive:true}
   ]},
   clerk:{name:"倉管員", skills:[
-    {name:"調貨", desc:"（被動）在金庫、武器庫、水塔、糧倉、垃圾場、酒窖、藥房、大倉庫使用房間功能時，可選擇改為抽取這8個房間中的任一個（依被選房間的抽取數量與庫存）；不可與上一回合抽取的房間相同。", passive:true},
+    {name:"調貨", desc:"（被動）在金庫、武器庫、水塔、糧倉、垃圾場、酒窖、藥房、大倉庫使用房間功能時，可改為抽取這8個房間中的任一個。<br>・依被選房間的抽取數量與庫存。<br>・不可與上一回合抽取的房間相同。", passive:true},
     {name:"庫存管理", desc:"（被動）背包上限永久+2。此加成不屬於負重素質，不會被重新分配素質、增減素質的效果影響。", passive:true}
   ]}
 };
@@ -2506,7 +2528,7 @@ Object.entries(PROFESSIONS).forEach(([id,p])=>{
     (EXPANSION_PROFS.has(id)?`<span class="tag">擴充</span>`:"")+
     (PHYSICAL_EXP_PROFS.has(id)?`<span class="tag">${PHYSICAL_EXP2_PROFS.has(id)?"實體擴充2":"實體擴充"}</span>`:"")+
     (SANGUO_PROFS.has(id)?`<span class="tag">${SANGUO_KINGDOM[id]}</span>`:"")+`</div>`+
-    p.skills.map(s=>`<div class="sk"><b>${s.name}</b>｜${s.desc}</div>`).join("");
+    p.skills.map(s=>{ const f=fmtSkill(s); return `<div class="sk"><b>${s.name}</b>${f.chip}<div class="skd">${f.body}</div></div>`; }).join("");
   div.addEventListener("click",()=>{
     document.querySelectorAll(".prof-card").forEach(c=>c.classList.remove("selected"));
     div.classList.add("selected"); selectedProf=id;
@@ -5881,7 +5903,7 @@ const SKILL_OPENS_OWN_MODAL=new Set(["bomb:1","tamer:0","oracle:0","detective:0"
 }
 function confirmAndUseSkill(p,idx){
   const s=PROFESSIONS[p.prof].skills[idx];
-  openModal(`<h3>發動技能：${s.name}</h3><div style="margin-bottom:12px;font-size:13px;line-height:1.6">${s.desc}</div>
+  openModal(`<h3>發動技能：${s.name}</h3><div style="margin-bottom:12px;font-size:13px;line-height:1.6">${fmtSkill(s).chip}<div class="skd">${fmtSkill(s).body}</div></div>
     <button class="btn small warn" id="skConfirmOk">確定發動</button> <button class="btn small ghost" id="skConfirmCancel">取消</button>`);
   document.getElementById("skConfirmOk").onclick=()=>{ closeModal(); useProfSkill(p,idx); };
   bindModalClose("skConfirmCancel");
@@ -7690,6 +7712,7 @@ function* settleRoundCore(){
   // 6) ghost drains
   STATE.players.forEach(g=>{
     if(!g.ghost) return;
+    if(g.deathRound===STATE.round) return; // 暗影吸血從「死亡的下一輪」才開始：死亡當輪（被搬進停屍間）即使遇到活人也不計吸血
     const victims=playersInRoom(g.room,true).filter(x=>!x.ghost);
     victims.forEach(v=>{
       if(v.prof==="shade"){
@@ -8380,7 +8403,7 @@ function renderAll(){
     const btn=document.createElement("button"); btn.className="skillbtn";
     const lim=SKILL_USE_LIMITS[p.prof+":"+idx];
     const usesLeft=lim?" ("+(lim.max-skillUsedCount(p,p.prof+":"+idx))+"/"+lim.max+")":"";
-    btn.innerHTML=`<b>${s.name}${usesLeft}</b>${s.desc}`;
+    { const f=fmtSkill(s); btn.innerHTML=`<b>${s.name}${usesLeft}${f.chip}</b><div class="skd">${f.body}</div>`; }
     if(p.prof==="hacker" && idx===0){
       // 系統監控 is a "permanent passive" in name, but it's an on-demand lookup, not something
       // that resolves itself — give it a real query button instead of disabling it like other passives.
