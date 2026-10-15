@@ -3698,6 +3698,11 @@ const SMUGGLER_BONUS_ROOMS=new Set(["B206","B107","B301","B503"]);
 // just because the bag happened to already be full.
 // 橡膠人 can never hold a 槍 (手槍/霰彈槍): anything that would hand him one is skipped/redrawn.
 function canHoldItem(p,item){ return !(p.prof==="bomb" && ITEMS[item].gun); }
+// 依庫存張數加權抽一種（像從牌堆抽牌：庫存多的更容易抽到）。例：垃圾場 20 垃圾＋5 樣特別道具 → 每張只有 5/25 是特別道具。
+function pickByStock(room,keys){
+  let r=Math.random()*keys.reduce((s,k)=>s+room.stock[k],0);
+  return keys.find(k=>(r-=room.stock[k])<0)||keys[keys.length-1];
+}
 function drawItemsFromStock(p,roomId,maxDraw){
   const room=ROOMS[roomId];
   const isDump=roomId==="B503";
@@ -3724,14 +3729,14 @@ function drawItemsFromStock(p,roomId,maxDraw){
       log("（"+(room.name||roomId)+"）庫存已無可抽物品，提早結束：預計抽"+maxDraw+"張，實際抽到"+drawnItems.length+"張；剩餘庫存 "+JSON.stringify(room.stock));
       break;
     }
-    let pick=stockKeys[Math.floor(Math.random()*stockKeys.length)];
+    let pick=pickByStock(room,stockKeys);
     if(!canHoldItem(p,pick)){
       // 橡膠人 drew a gun: it goes back untouched (not obtained) and he redraws one more from
       // the non-gun stock instead.
       log(p.name+"（橡膠人）抽到"+ITEMS[pick].name+"，無法持有，放回並補抽一張。");
       const okKeys=stockKeys.filter(k=>canHoldItem(p,k));
       if(!okKeys.length) continue;
-      pick=okKeys[Math.floor(Math.random()*okKeys.length)];
+      pick=pickByStock(room,okKeys);
     }
     room.stock[pick]--; drawnItems.push(pick);
     // 拾荒嗅覺: 50% chance extra trash from junkyard stock (deducted from B503), doesn't cost
@@ -3752,7 +3757,7 @@ function drawItemsFromStock(p,roomId,maxDraw){
     if(Math.random()<0.4){
       const stockKeys=Object.keys(room.stock).filter(k=>room.stock[k]>0);
       if(stockKeys.length){
-        const pick=stockKeys[Math.floor(Math.random()*stockKeys.length)];
+        const pick=pickByStock(room,stockKeys);
         room.stock[pick]--; drawnItems.push(pick);
         p.flags.smugglerBonusUsedThisRound=true;
         log(p.name+"（熟悉門路）額外多抽到1張道具。");
