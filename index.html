@@ -3690,7 +3690,10 @@ function drawItemsFromStock(p,roomId,maxDraw){
     // 垃圾場: once the non-trash cap is reached, only trash remains drawable (don't waste draws on
     // picking a capped item and skipping it).
     const stockKeys=Object.keys(room.stock).filter(k=>room.stock[k]>0 && !(isDump && k==="gold") && !(isDump && k!=="trash" && nonTrashGained>=room.dumpCap));
-    if(stockKeys.length===0) break;
+    if(stockKeys.length===0){
+      log("（"+(room.name||roomId)+"）庫存已無可抽物品，提早結束：預計抽"+maxDraw+"張，實際抽到"+drawnItems.length+"張；剩餘庫存 "+JSON.stringify(room.stock));
+      break;
+    }
     let pick=stockKeys[Math.floor(Math.random()*stockKeys.length)];
     if(!canHoldItem(p,pick)){
       // 橡膠人 drew a gun: it goes back untouched (not obtained) and he redraws one more from
