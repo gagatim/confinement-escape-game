@@ -219,7 +219,7 @@
   .flipCard.rare .flipFront .nm{color:#ffe08a;text-shadow:0 0 6px rgba(255,201,74,.7)}
   .flipCard.rare .flipFront::before{content:"";position:absolute;inset:0;background:linear-gradient(115deg,transparent 30%,rgba(255,244,200,.55) 48%,transparent 66%);transform:translateX(-120%);animation:rareSweep 1.8s ease-in-out infinite;pointer-events:none}
   .flipCard.rare .flipFront::after{content:"✦";position:absolute;top:4px;right:7px;color:#ffe08a;font-size:13px;line-height:1;text-shadow:0 0 6px rgba(255,201,74,.9);pointer-events:none;animation:rareTwinkle 1.2s ease-in-out infinite alternate}
-  /* 垃圾場五件特產：各自一種主色＋專屬動態（火箭筒火紅閃動／次元口袋紫色漩渦／循環回收裝置綠色旋轉／繩索琥珀掃光／防毒面具青綠霧氣） */
+  /* 垃圾場五件奇物：各自一種主色＋專屬動態（火箭筒火紅閃動／次元口袋紫色漩渦／循環回收裝置綠色旋轉／繩索琥珀掃光／防毒面具青綠霧氣） */
   .flipCard.sp .flipFront{border-width:3px;border-color:var(--sp);background:linear-gradient(160deg,color-mix(in srgb,var(--sp) 26%,var(--panel)) 0%,var(--panel) 75%);box-shadow:0 0 12px 2px color-mix(in srgb,var(--sp) 70%,transparent)}
   .flipCard.sp .flipFront .tag{color:var(--sp);border-color:var(--sp)}
   .flipCard.sp .flipFront .nm{color:var(--sp);text-shadow:0 0 6px color-mix(in srgb,var(--sp) 60%,transparent)}
@@ -4026,7 +4026,7 @@ function revealDrawnItems(drawnItems,roomId,next,lead){
   const headBusy=lead?lead+"…":"在「"+(room.name||roomId)+"」搜索中…", headDone=lead?lead+"：":"在「"+(room.name||roomId)+"」搜索到：";
   const JUNK_SPECIAL=new Set(["rope","gasmask","rocket","dimpocket","recycledevice"]);
   const tierOf=it=>RARE_REVEAL.has(it)?"rare":(JUNK_SPECIAL.has(it)?"sp":(it==="trash"?"trash":"normal"));
-  const tierLabel={rare:"稀有",sp:"特產",trash:"垃圾",normal:"普通"};
+  const tierLabel={rare:"稀有",sp:"奇物",trash:"垃圾",normal:"普通"};
   const cards=drawnItems.map((it,i)=>{
     const t=tierOf(it), ic=iconsOff()?"":`<span class="ic">${itemIconHTML(it)}</span>`;
     return `<div class="flipCard${t==="normal"?"":(t==="sp"?" sp sp-"+it:" "+t)}${({food:" food",water:" water",wine:" wine",pill:" pill"})[it]||""}" data-i="${i}"><div class="flipFace flipBack"><div class="flipEmblem"><i>?</i></div></div><div class="flipFace flipFront">${ic}<span class="nm">${ITEMS[it].name}</span><span class="tag">${tierLabel[t]}</span></div></div>`;
