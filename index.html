@@ -193,7 +193,7 @@
     animation:modalFade .15s ease}
   #modal{max-width:520px;width:100%;max-height:80vh;overflow-y:auto;animation:modalPop .18s cubic-bezier(.2,.9,.3,1.2)}
   .flipRow{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin:12px 0;perspective:800px}
-  .flipCard{width:84px;height:112px;position:relative;transform-style:preserve-3d;transition:transform .55s cubic-bezier(.3,.9,.3,1);cursor:pointer}
+  .flipCard{width:88px;height:128px;position:relative;transform-style:preserve-3d;transition:transform .55s cubic-bezier(.3,.9,.3,1);cursor:pointer}
   .flipCard.flipped{transform:rotateY(180deg)}
   .flipFace{position:absolute;inset:0;backface-visibility:hidden;-webkit-backface-visibility:hidden;border-radius:10px;overflow:hidden;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;text-align:center;font-weight:700;font-size:15px;padding:6px}
   .flipBack{background:radial-gradient(circle at 50% 38%,#2a6378 0%,#14303f 55%,#0a1824 100%);border:2px solid #4d9db3;box-shadow:inset 0 0 14px rgba(0,0,0,.55)}
@@ -207,6 +207,19 @@
   .flipCard.rare .flipFront{background:linear-gradient(160deg,rgba(255,201,74,.22) 0%,var(--panel) 70%);border-color:#ffc94a;box-shadow:0 0 14px 3px rgba(255,201,74,.75);animation:rareGlow 1.1s ease-in-out infinite alternate}
   .flipCard.rare .flipFront .tag{color:#ffc94a;border-color:#ffc94a}
   @keyframes rareGlow{from{box-shadow:0 0 8px 1px rgba(255,201,74,.5)}to{box-shadow:0 0 20px 6px rgba(255,201,74,.95)}}
+  /* 抽卡三階：垃圾（灰）／普通（青藍，預設）／稀有（金，多一層掃光＋閃爍星點＋圖示脈動） */
+  .flipFront .ic{font-size:30px;line-height:1;filter:drop-shadow(0 2px 3px rgba(0,0,0,.35))}
+  .flipCard.trash .flipFront{background:linear-gradient(160deg,#4a4e52 0%,#2b2e31 100%);border-color:#6b7075;color:#aeb3b8}
+  .flipCard.trash .flipFront .tag{color:#8c9196;border-color:#5a5f64}
+  .flipCard.trash .flipFront .ic{filter:grayscale(1) opacity(.8)}
+  .flipCard.rare .flipFront{border-width:3px}
+  .flipCard.rare .flipFront .ic{animation:rareIconPulse 1.1s ease-in-out infinite alternate;filter:drop-shadow(0 0 6px rgba(255,201,74,.95))}
+  .flipCard.rare .flipFront .nm{color:#ffe08a;text-shadow:0 0 6px rgba(255,201,74,.7)}
+  .flipCard.rare .flipFront::before{content:"";position:absolute;inset:0;background:linear-gradient(115deg,transparent 30%,rgba(255,244,200,.55) 48%,transparent 66%);transform:translateX(-120%);animation:rareSweep 1.8s ease-in-out infinite;pointer-events:none}
+  .flipCard.rare .flipFront::after{content:"✦";position:absolute;top:4px;right:7px;color:#ffe08a;font-size:13px;line-height:1;text-shadow:0 0 6px rgba(255,201,74,.9);pointer-events:none;animation:rareTwinkle 1.2s ease-in-out infinite alternate}
+  @keyframes rareSweep{0%{transform:translateX(-120%)}60%,100%{transform:translateX(120%)}}
+  @keyframes rareTwinkle{from{opacity:.25}to{opacity:1}}
+  @keyframes rareIconPulse{from{transform:scale(1)}to{transform:scale(1.18)}}
   @keyframes modalFade{from{opacity:0}to{opacity:1}}
   @keyframes modalPop{from{opacity:0;transform:scale(.96) translateY(6px)}to{opacity:1;transform:scale(1) translateY(0)}}
   /* ---- 激光室 screen shake: a brief jolt on the whole page when the human player's own
@@ -3917,13 +3930,21 @@ function resolveHumanDraw(p,roomId,maxDraw,animate){
 // 抽卡翻牌動畫：搜索到的道具先以牌背出現，依序翻面；稀有道具（槍／金條／腎上腺素／雙刀）會發光。
 // 只是在原本的收下流程前多一個展示步驟，翻完（或按跳過）才呼叫 next()，規則完全不變。
 const RARE_REVEAL=new Set(["pistol","shotgun","gold","adrenaline","knifeX2"]);
+const ITEM_ICON={water:"💧",food:"🍞",pill:"💊",adrenaline:"💉",wine:"🍷",gold:"🪙",knife:"🔪",knifeX2:"⚔️",waterfood:"🍱",
+  pistol:"🔫",shotgun:"💥",rope:"🪢",gasmask:"😷",rocket:"🚀",dimpocket:"👝",recycledevice:"♻️",trash:"🗑️",
+  mine:"💣",dart:"🎯",smoke:"🌫️",mysterydice:"🎲",coin:"🪙",oxygen:"🫧",teleportcharm:"🔮",medspray:"🧴"};
 function revealDrawnItems(drawnItems,roomId,next,lead){
   let off=false;
   try{ off=localStorage.getItem("noDrawAnim")==="1"; }catch(e){}
   if(!fxMode || off || !drawnItems.length){ next(); return; }
   const room=ROOMS[roomId]||{};
   const headBusy=lead?lead+"…":"在「"+(room.name||roomId)+"」搜索中…", headDone=lead?lead+"：":"在「"+(room.name||roomId)+"」搜索到：";
-  const cards=drawnItems.map((it,i)=>`<div class="flipCard${RARE_REVEAL.has(it)?" rare":""}" data-i="${i}"><div class="flipFace flipBack"><div class="flipEmblem"><i>?</i></div></div><div class="flipFace flipFront"><span class="nm">${ITEMS[it].name}</span><span class="tag">${RARE_REVEAL.has(it)?"稀有":"普通"}</span></div></div>`).join("");
+  const tierOf=it=>RARE_REVEAL.has(it)?"rare":(it==="trash"?"trash":"normal");
+  const tierLabel={rare:"稀有",trash:"垃圾",normal:"普通"};
+  const cards=drawnItems.map((it,i)=>{
+    const t=tierOf(it), ic=iconsOff()?"":`<span class="ic">${ITEM_ICON[it]||"📦"}</span>`;
+    return `<div class="flipCard${t==="normal"?"":" "+t}" data-i="${i}"><div class="flipFace flipBack"><div class="flipEmblem"><i>?</i></div></div><div class="flipFace flipFront">${ic}<span class="nm">${ITEMS[it].name}</span><span class="tag">${tierLabel[t]}</span></div></div>`;
+  }).join("");
   openModal(`<h3>${headBusy}</h3>
     <div class="flipRow">${cards}</div>
     <button class="btn small" id="flipSkip">跳過動畫</button>
