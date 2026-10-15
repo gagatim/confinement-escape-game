@@ -3729,7 +3729,7 @@ const SMUGGLER_BONUS_ROOMS=new Set(["B206","B107","B301","B503"]);
 // just because the bag happened to already be full.
 // 橡膠人 can never hold a 槍 (手槍/霰彈槍): anything that would hand him one is skipped/redrawn.
 function canHoldItem(p,item){ return !(p.prof==="bomb" && ITEMS[item].gun); }
-// 依庫存張數加權抽一種（像從牌堆抽牌：庫存多的更容易抽到）。例：垃圾場 20 垃圾＋5 樣特別道具 → 每張只有 5/25 是特別道具。
+// 依庫存張數加權抽一種（像從牌堆抽牌：庫存多的更容易抽到）。例：垃圾場 20 垃圾＋5 樣奇物 → 每張只有 5/25 是奇物。
 function pickByStock(room,keys){
   let r=Math.random()*keys.reduce((s,k)=>s+room.stock[k],0);
   return keys.find(k=>(r-=room.stock[k])<0)||keys[keys.length-1];
@@ -3756,10 +3756,7 @@ function drawItemsFromStock(p,roomId,maxDraw){
     // 垃圾場: any number of non-trash items can be DRAWN; the dumpCap limit only applies to how many
     // can be TAKEN (see applyDumpTakeLimit, called from resolveHumanKeep / resolveAIDraw).
     const stockKeys=Object.keys(room.stock).filter(k=>room.stock[k]>0 && !(isDump && k==="gold"));
-    if(stockKeys.length===0){
-      log("（"+(room.name||roomId)+"）庫存已無可抽物品，提早結束：預計抽"+maxDraw+"張，實際抽到"+drawnItems.length+"張；剩餘庫存 "+JSON.stringify(room.stock));
-      break;
-    }
+    if(stockKeys.length===0) break;
     let pick=pickByStock(room,stockKeys);
     if(!canHoldItem(p,pick)){
       // 橡膠人 drew a gun: it goes back untouched (not obtained) and he redraws one more from
@@ -4066,21 +4063,21 @@ const DUMP_SPECIALS=new Set(["rope","gasmask","rocket","dimpocket","recycledevic
 function applyDumpTakeLimit(p,drawnItems,roomId,next){
   const room=ROOMS[roomId], cap=room.dumpCap;
   if(!cap) return drawnItems;
-  const nt=drawnItems.filter(x=>DUMP_SPECIALS.has(x)); // 只限制五樣特別道具；垃圾與其他被丟進來的普通道具不受限
+  const nt=drawnItems.filter(x=>DUMP_SPECIALS.has(x)); // 只限制五樣奇物；垃圾與其他被丟進來的普通道具不受限
   if(nt.length<=cap) return drawnItems;
-  const priority=(it)=>(ITEMS[it].weapon?0:(it==="pill"||it==="adrenaline")?1:(it==="water"||it==="food")?2:3);
+  const ODDITY_RANK={rocket:0,dimpocket:1,rope:2,recycledevice:3,gasmask:4}; // AI 偏好：火箭筒 > 次元口袋 > 繩索 > 循環回收裝置 > 防毒面具
   const giveBack=(items)=>items.forEach(it=>{ room.stock[it]=(room.stock[it]||0)+1; });
   if(p.isAI || !next){
-    const back=nt.slice().sort((a,b)=>priority(a)-priority(b)).slice(cap); // the worst ones beyond the cap go back
+    const back=nt.slice().sort((a,b)=>ODDITY_RANK[a]-ODDITY_RANK[b]).slice(cap); // 超過上限的（偏好最低的）放回
     giveBack(back);
     const rest=drawnItems.slice();
     back.forEach(it=>rest.splice(rest.indexOf(it),1));
     return rest;
   }
-  log("在「"+(room.name||roomId)+"」搜索到: "+drawnItems.map(g=>ITEMS[g].name).join("、")+"（特別道具只能帶走"+cap+"件）");
+  log("在「"+(room.name||roomId)+"」搜索到: "+drawnItems.map(g=>ITEMS[g].name).join("、")+"（奇物只能帶走"+cap+"件）");
   const rows=nt.map((it,i)=>`<label style="display:block;margin:4px 0"><input type="checkbox" class="dumpChk" data-i="${i}"> ${ITEMS[it].name}</label>`).join("");
-  openModal(`<h3>${room.name||roomId}：特別道具只能帶走 ${cap} 件</h3>
-    <div class="muted" style="margin-bottom:8px;font-size:12.5px">抽到 ${nt.length} 件特別道具，請勾選要帶走的（最多 ${cap} 件），沒勾的會放回房間。垃圾與其他道具不受限制。</div>
+  openModal(`<h3>${room.name||roomId}：奇物只能帶走 ${cap} 件</h3>
+    <div class="muted" style="margin-bottom:8px;font-size:12.5px">抽到 ${nt.length} 件奇物，請勾選要帶走的（最多 ${cap} 件），沒勾的會放回房間。垃圾與其他道具不受限制。</div>
     <div>${rows}</div>
     <div class="mono muted" id="dumpCount" style="margin:8px 0"></div>
     <button class="btn small" id="dumpConfirm">確認</button>`);
