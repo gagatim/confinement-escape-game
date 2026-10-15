@@ -3929,7 +3929,7 @@ function resolveHumanDraw(p,roomId,maxDraw,animate){
 }
 // 抽卡翻牌動畫：搜索到的道具先以牌背出現，依序翻面；稀有道具（槍／金條／腎上腺素／雙刀）會發光。
 // 只是在原本的收下流程前多一個展示步驟，翻完（或按跳過）才呼叫 next()，規則完全不變。
-const RARE_REVEAL=new Set(["pistol","shotgun","gold","adrenaline","knifeX2"]);
+const RARE_REVEAL=new Set(["pistol","shotgun","gold","adrenaline"]);
 const ITEM_ICON={water:"💧",food:"🍞",pill:"💊",adrenaline:"💉",wine:"🍷",gold:"🪙",knife:"🔪",knifeX2:"⚔️",waterfood:"🍱",
   pistol:"🔫",shotgun:"💥",rope:"🪢",gasmask:"😷",rocket:"🚀",dimpocket:"👝",recycledevice:"♻️",trash:"🗑️",
   mine:"💣",dart:"🎯",smoke:"🌫️",mysterydice:"🎲",coin:"🪙",oxygen:"🫧",teleportcharm:"🔮",medspray:"🧴"};
