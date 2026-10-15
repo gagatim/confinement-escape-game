@@ -3707,7 +3707,6 @@ function drawItemsFromStock(p,roomId,maxDraw){
   // (地圖2) uses the same knob but also sets room.missItem so a miss hands back that item (垃圾)
   // instead of nothing — a shop visit is never a total whiff even when the rare goods don't hit.
   const successChance = room.drawSuccessChance===undefined ? 1 : room.drawSuccessChance;
-  let nonTrashGained=0;
   const drawnItems=[];
   // 拾荒嗅覺 rolls once per item actually drawn this search — tallied here and reported as one
   // summary line after the loop instead of one log line per roll, which would spam up to maxDraw
@@ -3718,9 +3717,9 @@ function drawItemsFromStock(p,roomId,maxDraw){
       if(room.missItem) drawnItems.push(room.missItem);
       continue;
     }
-    // 垃圾場: once the non-trash cap is reached, only trash remains drawable (don't waste draws on
-    // picking a capped item and skipping it).
-    const stockKeys=Object.keys(room.stock).filter(k=>room.stock[k]>0 && !(isDump && k==="gold") && !(isDump && k!=="trash" && nonTrashGained>=room.dumpCap));
+    // 垃圾場: any number of non-trash items can be DRAWN; the dumpCap limit only applies to how many
+    // can be TAKEN (see applyDumpTakeLimit, called from resolveHumanKeep / resolveAIDraw).
+    const stockKeys=Object.keys(room.stock).filter(k=>room.stock[k]>0 && !(isDump && k==="gold"));
     if(stockKeys.length===0){
       log("（"+(room.name||roomId)+"）庫存已無可抽物品，提早結束：預計抽"+maxDraw+"張，實際抽到"+drawnItems.length+"張；剩餘庫存 "+JSON.stringify(room.stock));
       break;
@@ -3734,9 +3733,7 @@ function drawItemsFromStock(p,roomId,maxDraw){
       if(!okKeys.length) continue;
       pick=okKeys[Math.floor(Math.random()*okKeys.length)];
     }
-    if(isDump && pick!=="trash" && nonTrashGained>=room.dumpCap) continue;
     room.stock[pick]--; drawnItems.push(pick);
-    if(pick!=="trash") nonTrashGained++;
     // 拾荒嗅覺: 50% chance extra trash from junkyard stock (deducted from B503), doesn't cost
     // carry — always kept immediately, it's never part of the keep/return choice below.
     if(p.prof==="scavenger" && ROOMS["B503"].stock.trash>0){
@@ -4021,7 +4018,50 @@ function revealDrawnItems(drawnItems,roomId,next,lead){
     closeModal(); next();
   };
 }
+// 垃圾場 (room.dumpCap): you may DRAW several non-trash items, but only take dumpCap of them home —
+// the rest go back into the stock. Trash is never limited. Returns the items to take, or null when a
+// human must choose first (the modal calls `next(keptItems)` once they confirm).
+const DUMP_SPECIALS=new Set(["rope","gasmask","rocket","dimpocket","recycledevice"]);
+function applyDumpTakeLimit(p,drawnItems,roomId,next){
+  const room=ROOMS[roomId], cap=room.dumpCap;
+  if(!cap) return drawnItems;
+  const nt=drawnItems.filter(x=>DUMP_SPECIALS.has(x)); // 只限制五樣特別道具；垃圾與其他被丟進來的普通道具不受限
+  if(nt.length<=cap) return drawnItems;
+  const priority=(it)=>(ITEMS[it].weapon?0:(it==="pill"||it==="adrenaline")?1:(it==="water"||it==="food")?2:3);
+  const giveBack=(items)=>items.forEach(it=>{ room.stock[it]=(room.stock[it]||0)+1; });
+  if(p.isAI || !next){
+    const back=nt.slice().sort((a,b)=>priority(a)-priority(b)).slice(cap); // the worst ones beyond the cap go back
+    giveBack(back);
+    const rest=drawnItems.slice();
+    back.forEach(it=>rest.splice(rest.indexOf(it),1));
+    return rest;
+  }
+  log("在「"+(room.name||roomId)+"」搜索到: "+drawnItems.map(g=>ITEMS[g].name).join("、")+"（特別道具只能帶走"+cap+"件）");
+  const rows=nt.map((it,i)=>`<label style="display:block;margin:4px 0"><input type="checkbox" class="dumpChk" data-i="${i}"> ${ITEMS[it].name}</label>`).join("");
+  openModal(`<h3>${room.name||roomId}：特別道具只能帶走 ${cap} 件</h3>
+    <div class="muted" style="margin-bottom:8px;font-size:12.5px">抽到 ${nt.length} 件特別道具，請勾選要帶走的（最多 ${cap} 件），沒勾的會放回房間。垃圾與其他道具不受限制。</div>
+    <div>${rows}</div>
+    <div class="mono muted" id="dumpCount" style="margin:8px 0"></div>
+    <button class="btn small" id="dumpConfirm">確認</button>`);
+  const boxes=[...document.querySelectorAll(".dumpChk")];
+  const picked=()=>boxes.filter(b=>b.checked).length;
+  const upd=()=>{ document.getElementById("dumpCount").textContent="已選 "+picked()+" / "+cap; };
+  boxes.forEach(b=>b.addEventListener("change",()=>{ if(picked()>cap){ b.checked=false; flashMsg("最多只能帶走"+cap+"件"); } upd(); }));
+  upd();
+  document.getElementById("dumpConfirm").onclick=()=>{
+    const keepIdx=new Set(boxes.filter(b=>b.checked).map(b=>+b.dataset.i));
+    const back=nt.filter((_,i)=>!keepIdx.has(i));
+    giveBack(back);
+    const rest=drawnItems.slice();
+    back.forEach(it=>rest.splice(rest.indexOf(it),1));
+    closeModal();
+    next(rest);
+    renderAll();
+  };
+  return null;
+}
 function resolveHumanKeep(p,drawnItems,roomId){
+  { const lim=applyDumpTakeLimit(p,drawnItems,roomId,(kept)=>resolveHumanKeep(p,kept,roomId)); if(lim===null) return; drawnItems=lim; }
   const room=ROOMS[roomId];
   const names=drawnItems.map(g=>ITEMS[g].name).join("、");
   // Costed as one combined batch (usedCarry diff) rather than filtering each item's standalone
@@ -4160,6 +4200,7 @@ function resolveAIDraw(p,roomId,maxDraw){
     drawnItems=drawnItems.slice();
     drawnItems.splice(drawnItems.indexOf(worst),1);
   }
+  drawnItems=applyDumpTakeLimit(p,drawnItems,roomId);
   const order=drawnItems.map((it,i)=>({it,i})).sort((a,b)=>priority(a.it)-priority(b.it));
   let remaining=carryRoom(p);
   order.forEach(({it})=>{
