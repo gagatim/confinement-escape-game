@@ -5468,7 +5468,7 @@ function tamerDispatch(p,target){
     p.flags.houndPending=(p.flags.houndPending||[]).concat(pick);
     log(p.name+" 派遣巡迴獵犬前往「"+target+" "+(ROOMS[target].name||"")+"」，從空投帶回: "+ITEMS[pick].name+"（結算階段才能使用）。");
   } else if(stockKeys.length && carryRoom(p)-houndPendingCost(p)>0){
-    const pick=stockKeys[Math.floor(Math.random()*stockKeys.length)];
+    const pick=pickByStock(ROOMS[target],stockKeys); // 依庫存張數加權，與房間搜索一致
     ROOMS[target].stock[pick]--;
     p.flags.houndPending=(p.flags.houndPending||[]).concat(pick);
     log(p.name+" 派遣巡迴獵犬前往「"+target+" "+(ROOMS[target].name||"")+"」，帶回: "+ITEMS[pick].name+"（結算階段才能使用）。");
