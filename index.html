@@ -963,7 +963,8 @@ const PROFESSIONS = {
     {name:"暗影親和", desc:"（被動）成為暗影時，移動速度永久+2。", passive:true}
   ]},
   tamer:{name:"馴獸師", skills:[
-    {name:"巡迴獵犬", desc:"武力與負重永久+1。<br>・（主動，整局限用4次）須在房間行動結束後才能使用（所在房間無功能可用時不受限）：<br>・指定距離5步以內、尚有庫存的房間（停機坪則看本輪空投袋是否還有道具），派遣獵犬隨機抽取1張道具（不可超過負重）。<br>・獵犬帶回的道具要到結算階段才能使用。", uses:4}
+    {name:"巡迴獵犬", desc:"（主動，整局限用4次）須在房間行動結束後才能使用（所在房間無功能可用時不受限）：指定距離5步以內、尚有庫存的房間（停機坪則看本輪空投袋是否還有道具），派遣獵犬隨機抽取1張道具。<br>・不可超過負重。<br>・獵犬帶回的道具要到結算階段才能使用。", uses:4},
+    {name:"獵犬夥伴", desc:"（被動）武力與負重永久+1。", passive:true}
   ]},
   merc:{name:"雇傭兵", skills:[
     {name:"武器精通", desc:"（被動）所有武器（刀／雙刀／手槍／霰彈槍）不佔負重。<br>・火箭筒不算武器，仍佔負重。<br>・你的刀與手槍效果相同，武力數值不變。", passive:true}
@@ -1161,17 +1162,18 @@ const PROFESSIONS = {
   ]},
   lobbyist:{name:"說客", skills:[
     {name:"拉票", desc:"（被動）你投毒氣樓層時，視為3票。", passive:true},
-    {name:"明哲保身", desc:"（被動）本輪你所投的樓層若淪為毒氣區域，你在該樓層不受毒氣傷害，且回復1點生命、速度永久+1（生命上限10，速度無上限）。", passive:true},
+    {name:"明哲保身", desc:"（被動）本輪你所投的樓層若淪為毒氣區域，你在該樓層不受毒氣傷害。<br>・且回復1點生命（生命上限10）。<br>・且速度永久+1（速度無上限）。", passive:true},
     {name:"精算風險", desc:"（被動）受到的毒氣傷害-1（最低0）。", passive:true}
   ]},
   leader:{name:"團長", skills:[
     {name:"自動標記", desc:"（被動）你背包中的道具都自動帶有你的標記，經交易、贈送、被偷等方式到了其他玩家手上後仍保留標記。<br>・結算時，若其他玩家消耗了你標記的道具（水／糧／水糧包／藥片／腎上腺素／酒），你恢復1點生命。", passive:true},
     {name:"物歸原主", desc:"（被動）持有你標記道具的玩家死亡時，該道具直接回到你的背包。", passive:true},
-    {name:"招攬團員", desc:"（被動）遊戲開始時，指定2名其他玩家為團員；你與團員之間無法互相造成戰鬥傷害。", passive:true}
+    {name:"招攬團員", desc:"（被動）遊戲開始時，指定2名其他玩家為團員。<br>・你與團員之間無法互相造成戰鬥傷害。", passive:true},
+    {name:"發薪水", desc:"（主動，每輪限用1次）可查看所有存活玩家目前剩餘的負重空間。<br>・強制把自己背包中的道具分發給其他玩家（不需同房、無視對方意願）。<br>・對方負重不足時，只能分發不佔負重的道具。<br>・分發出去的道具仍保有你的標記。"}
   ]},
   bountyhunter:{name:"賞金獵人", skills:[
     {name:"追獵", desc:"（被動）與生命≤5的玩家戰鬥時，自己武力+4。", passive:true},
-    {name:"戰利品", desc:"（被動）在戰鬥中擊殺玩家時，恢復2點生命，並取得對方的道具（受負重限制，裝不下的留在原地）。", passive:true}
+    {name:"戰利品", desc:"（被動）在戰鬥中擊殺玩家時：<br>・恢復2點生命。<br>・取得對方的道具（受負重限制，裝不下的留在原地）。", passive:true}
   ]},
   sentinel:{name:"哨兵", skills:[
     {name:"堅守崗位", desc:"（被動）本輪移動後仍在出發時的同一樓層時，受到的戰鬥傷害-2、毒氣傷害-2。", passive:true},
@@ -1182,11 +1184,11 @@ const PROFESSIONS = {
     {name:"孤注一擲", desc:"（被動）生命≤4時，手氣的骰值一律視為6。", passive:true}
   ]},
   warden:{name:"看守長", skills:[
-    {name:"禁足令", desc:"（主動，整局限用2次）同房間的所有其他玩家：其下一輪移動步數-3（至少為1）。", uses:2},
+    {name:"禁足令", desc:"（主動，整局限用2次）指定同房間的所有其他玩家。<br>・其下一輪移動步數-3（至少為1）。", uses:2},
     {name:"威壓", desc:"（被動）與你同房間的其他玩家，戰鬥時武力-2。", passive:true}
   ]},
   janitor:{name:"清潔工", skills:[
-    {name:"物盡其用", desc:"（被動）垃圾不佔負重；在垃圾場使用房間功能時，多抽1張。", passive:true},
+    {name:"物盡其用", desc:"（被動）垃圾不佔負重；在垃圾場使用房間功能時，多抽3張。", passive:true},
     {name:"廢物利用", desc:"（被動）結算時若持有2個以上垃圾，自動消耗2個並恢復1點生命（每輪最多1次）。", passive:true}
   ]},
   clerk:{name:"倉管員", skills:[
@@ -1985,6 +1987,7 @@ const SKILL_QUOTES={
   "hacker:1":"系統，由我接管。",
   "bomb:1":"手伸長一點，就拿到了。",
   "tamer:0":"去，把獵物叼回來。",
+  "leader:3":"這個月的薪水，拿去吧。",
   "geneFreak:1":"重新編碼，我還能更強。",
   "climber:0":"撐得住，就往上爬。",
   "climber:1":"餓一頓，死不了。",
@@ -3973,7 +3976,7 @@ function luckyApply(p,roll,src){ passiveFX(p,"lucky:0");
 }
 // 老千的手氣／清潔工的物盡其用: adjust how many cards a room search draws.
 function adjustDrawCount(p,roomId,n){
-  if(p.prof==="janitor" && roomId==="B503"){ n+=1; passiveFX(p,"janitor:0"); log(p.name+"（物盡其用）在垃圾場多抽1張。"); }
+  if(p.prof==="janitor" && roomId==="B503"){ n+=3; passiveFX(p,"janitor:0"); log(p.name+"（物盡其用）在垃圾場多抽3張。"); }
   if(p.prof==="cardsharp"){
     const roll=p.hp<=4 ? 6 : 1+Math.floor(Math.random()*6);
     passiveFX(p,p.hp<=4?"cardsharp:1":"cardsharp:0");
@@ -5625,6 +5628,43 @@ function sentinelHeldFloor(p){
   const a=ROOMS[p.room], b=ROOMS[p.roundStartRoom];
   return !!(a && b && a.floor===b.floor);
 }
+// 團長的發薪水: hand out items from his own bag to any living player, regardless of room. A recipient
+// can only take what fits (items that cost carry need free room); markTransfer keeps the 團長's mark.
+function payrollRecipients(p){ return STATE.players.filter(x=>x.alive && !x.ghost && x.id!==p.id); }
+function payrollGive(p,target,items){
+  const given=[];
+  items.forEach(it=>{
+    if(!canHoldItem(target,it)) return;
+    if(itemCostsCarry(target,it) && carryRoom(target)<=0) return;
+    if(!removeItem(p,it)) return;
+    target.inv.push(it); markTransfer(p,target,it); given.push(ITEMS[it].name);
+  });
+  if(!given.length) return false;
+  p.flags.skillUsedThisRound=true;
+  log(p.name+" 發薪水：強制分發給 "+target.name+"「"+given.join("、")+"」。");
+  speakSkill(p,"leader:3");
+  return true;
+}
+function openPayrollModal(p){
+  const ts=payrollRecipients(p);
+  if(!ts.length){ flashMsg("沒有可發薪水的對象。"); return; }
+  if(!p.inv.length){ flashMsg("你的背包是空的。"); return; }
+  const rows=ts.map(x=>`<option value="${x.id}">${x.name}（剩餘負重 ${Math.max(0,carryRoom(x))}）</option>`).join("");
+  const items=p.inv.map((it,i)=>`<label style="display:block"><input type="checkbox" class="payItem" value="${i}"> ${ITEMS[it].name}${itemCostsCarry(p,it)?"":"（不佔負重）"}</label>`).join("");
+  openModal(`<h3>發薪水：分發自己的道具</h3>
+    <div class="muted" style="font-size:12px;margin-bottom:6px">對象剩餘負重不足時，只能收下不佔負重的道具；放不下的會留在你身上。</div>
+    <select id="paySel">${rows}</select><br><br>${items}<br>
+    <button class="btn small warn" id="payOk">發放</button>
+    <button class="btn small ghost" id="payCancel">取消</button>`);
+  document.getElementById("payOk").onclick=()=>{
+    const t=STATE.players.find(x=>x.id==document.getElementById("paySel").value);
+    const picked=[...document.querySelectorAll(".payItem:checked")].map(c=>p.inv[+c.value]);
+    if(!t || !picked.length){ flashMsg("請選擇對象與道具。"); return; }
+    if(!payrollGive(p,t,picked)) flashMsg("對方放不下這些道具。");
+    closeModal(); renderAll();
+  };
+  bindModalClose("payCancel");
+}
 // 看守長的禁足令: slow every other same-room player's next round by 3 steps.
 function wardenTargets(p){ return playersInRoom(p.room,true).filter(x=>x.id!==p.id); }
 function wardenCommand(p){
@@ -5874,6 +5914,9 @@ function useProfSkill(p,idx){
     };
     bindModalClose("sniperCancel");
     return;
+  } else if(p.prof==="leader" && idx===3){
+    openPayrollModal(p);
+    return;
   } else if(p.prof==="warden" && idx===0){
     if(skillUseCapReached(p,"warden:0")){ flashMsg("已用完2次"); return; }
     const ts=wardenTargets(p);
@@ -5901,7 +5944,7 @@ function useProfSkill(p,idx){
 // nothing. Every OTHER active skill executes immediately on click, which is risky for a
 // limited-use skill (a stray click permanently burns one of only 1-4 charges) — those get a
 // confirm prompt naming the skill and its effect before anything happens.
-const SKILL_OPENS_OWN_MODAL=new Set(["bomb:1","tamer:0","oracle:0","detective:0","chemist:0","hacker:1","geneFreak:1","shopper:1","pickpocket:0","courier:1","mediocre:1","mediocre:2","collector:1","prepper:1","witch:0","sniper:1","warden:0",
+const SKILL_OPENS_OWN_MODAL=new Set(["bomb:1","tamer:0","oracle:0","detective:0","chemist:0","hacker:1","geneFreak:1","shopper:1","pickpocket:0","courier:1","mediocre:1","mediocre:2","collector:1","prepper:1","witch:0","sniper:1","warden:0","leader:3",
   // 三國模式：需要選目標玩家/房間的主動技能，跳過通用確認彈窗，直接進自己的選擇彈窗
   "zhangfei:0","weiyan:0","zhouyu:0","lusu:1","luxun:0","ganning:0","yuanshao:0","zhangjiao:0","zhangjiao:1","zhanghe:0","huanggai:1","huaxiong:0","sunquan:0","caopi:0"]);
 // 技能特效版 fallback: most skills already call speakSkill (which shows the effect), but a few
@@ -6545,6 +6588,14 @@ function aiConsiderSkillAfterMove(p){
       if(here.length>bestN){ best=r; bestN=here.length; }
     });
     if(best) sniperAim(p,best);
+    return;
+  }
+  if(p.prof==="leader"){
+    // 發薪水: pass a spare water/food to the neediest teammate who has room for it (once per round).
+    if(p.flags.skillUsedThisRound) return;
+    const mates=aiMates(p).filter(m=>m.alive && !m.ghost && m.hp<m.maxhp && carryRoom(m)>0);
+    const spare=["water","food"].find(k=>countItem(p,k)>1);
+    if(mates.length && spare){ mates.sort((a,b)=>a.hp-b.hp); payrollGive(p,mates[0],[spare]); }
     return;
   }
   if(p.prof==="warden"){
