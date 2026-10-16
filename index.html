@@ -6275,6 +6275,7 @@ function openWitchSprinkleModal(p){
 /* ===================== VOTE / TRADE ===================== */
 document.getElementById("voteBtn").addEventListener("click",()=>{
   const p=you();
+  if(p.ghost){ flashMsg("暗影沒有投票資格。"); return; }
   if(!isMyTurn()){ flashMsg("尚未輪到你的回合。"); return; }
   if(p.flags.votedThisRound){ flashMsg("本輪已投過票。"); return; }
   // 本輪只能從開局時隨機抽出的3個候選樓層中投票（避免一次性太多樓層淪為毒氣區）。
