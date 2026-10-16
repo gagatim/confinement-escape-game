@@ -981,10 +981,10 @@ const PROFESSIONS = {
     {name:"節食", desc:"（主動，整局限用1次）本回合不需支付水與糧。", uses:1}
   ]},
   engineer:{name:"工程師", skills:[
-    {name:"回收裝置A", desc:"（被動）不需持有循環回收裝置卡，每輪可直接使用1次回收功能。<br>・從棄牌堆隨機翻出2張，自己挑1張取得，另1張放回。<br>・取得道具（需有背包空位；垃圾不會被回收）。", passive:true}
+    {name:"回收裝置A", desc:"（被動）不需持有循環回收裝置卡，每輪可直接使用1次回收功能。<br>・從棄牌堆隨機翻出2張，自己挑1張取得，另1張放回。<br>・需有背包空位；垃圾不會被回收。", passive:true}
   ]},
   medic:{name:"醫官", skills:[
-    {name:"醫者仁心", desc:"（被動）手術室原本需恰好2人在場才會治療<br>・你1人在場即可觸發，結算時恢復4點生命。", passive:true},
+    {name:"醫者仁心", desc:"（被動）手術室原本需恰好2人在場才會治療。<br>・你1人在場即可觸發，結算時恢復4點生命。", passive:true},
     {name:"隨身醫療包", desc:"（被動）藥片與腎上腺素永久不佔負重。", passive:true}
   ]},
   pilot:{name:"飛行員", skills:[
@@ -1071,7 +1071,7 @@ const PROFESSIONS = {
   exorcist:{name:"還魂師", skills:[
     {name:"臨終祝禱", desc:"（被動）死亡變成暗影後，只要吸取1點生命就能復活（一般暗影需2點）。<br>・整局可發動兩次，復活後生命為3。", passive:true},
     {name:"安魂儀式", desc:"（被動）每次復活後，速度永久+1。", passive:true},
-    {name:"亡靈庇護", desc:"（被動）被暗影吸血時不會扣血<br>・暗影仍照常吸取（計入其復活所需的吸血量）。", passive:true}
+    {name:"亡靈庇護", desc:"（被動）被暗影吸血時不會扣血。<br>・暗影仍照常吸取（計入其復活所需的吸血量）。", passive:true}
   ]},
   suzhenchang:{name:"蘇貞昌", skills:[
     {name:"衝衝衝", desc:"（被動）第1輪速度+1，第2輪速度+2，以此類推（第N輪速度+N）。", passive:true}
@@ -1169,7 +1169,7 @@ const PROFESSIONS = {
     {name:"自動標記", desc:"（被動）你背包中的道具都自動帶有你的標記，經交易、贈送、被偷等方式到了其他玩家手上後仍保留標記。<br>・結算時，若其他玩家消耗了你標記的道具（水／糧／水糧包／藥片／腎上腺素／酒），你恢復1點生命。", passive:true},
     {name:"物歸原主", desc:"（被動）持有你標記道具的玩家死亡時，該道具直接回到你的背包。", passive:true},
     {name:"招攬團員", desc:"（被動）遊戲開始時，指定2名其他玩家為團員。<br>・你與團員之間無法互相造成戰鬥傷害。", passive:true},
-    {name:"發薪水", desc:"（主動，每輪限用1次）可查看所有存活玩家目前剩餘的負重空間。<br>・強制把自己背包中的道具分發給其他玩家（不需同房、無視對方意願）。<br>・對方負重不足時，只能分發不佔負重的道具。<br>・分發出去的道具仍保有你的標記。"}
+    {name:"發薪水", desc:"（主動，無次數限制）可查看所有存活玩家目前剩餘的負重空間。<br>・強制把自己背包中的道具分發給其他玩家（不需同房、無視對方意願）。<br>・對方負重不足時，只能分發不佔負重的道具。<br>・分發出去的道具仍保有你的標記。"}
   ]},
   bountyhunter:{name:"賞金獵人", skills:[
     {name:"追獵", desc:"（被動）與生命≤5的玩家戰鬥時，自己武力+4。", passive:true},
@@ -5665,7 +5665,6 @@ function payrollGive(p,target,items){
     target.inv.push(it); markTransfer(p,target,it); given.push(ITEMS[it].name);
   });
   if(!given.length) return false;
-  p.flags.skillUsedThisRound=true;
   log(p.name+" 發薪水：強制分發給 "+target.name+"「"+given.join("、")+"」。");
   speakSkill(p,"leader:3");
   return true;
@@ -6617,10 +6616,10 @@ function aiConsiderSkillAfterMove(p){
   }
   if(p.prof==="leader"){
     // 發薪水: pass a spare water/food to the neediest teammate who has room for it (once per round).
-    if(p.flags.skillUsedThisRound) return;
+    if(p.flags.payrollRound===STATE.round) return; // the skill itself is unlimited; the AI just pays out once per round
     const mates=aiMates(p).filter(m=>m.alive && !m.ghost && m.hp<m.maxhp && carryRoom(m)>0);
     const spare=["water","food"].find(k=>countItem(p,k)>1);
-    if(mates.length && spare){ mates.sort((a,b)=>a.hp-b.hp); payrollGive(p,mates[0],[spare]); }
+    if(mates.length && spare){ mates.sort((a,b)=>a.hp-b.hp); if(payrollGive(p,mates[0],[spare])) p.flags.payrollRound=STATE.round; }
     return;
   }
   if(p.prof==="warden"){
