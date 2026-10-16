@@ -311,36 +311,46 @@
   @keyframes fxTitle{0%{opacity:0;transform:scale(.6)}20%{opacity:1;transform:scale(1.08)}70%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(1.15)}}
   /* ---- 技能特效 v2: per-profession canvas particles (#fxCanvas), a glow on the caster's map chip,
      and a persistent aura on the human player's chip while a "this round" buff is active. ---- */
-  /* 戰鬥動畫：結算時的對決舞台（#cbStage），可點擊跳過本場 */
-  #cbStage{position:fixed;inset:0;z-index:60;background:rgba(5,8,14,.84);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;padding:16px;cursor:pointer;user-select:none}
+  /* 戰鬥動畫：人物小卡片互打（#cbStage），可點擊跳過本場 */
+  #cbStage{position:fixed;inset:0;z-index:60;background:rgba(5,8,14,.86);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;padding:16px;cursor:pointer;user-select:none}
   #cbStage.shake{animation:cbShake .35s}
   .cb-room{color:var(--muted);font-size:13px;letter-spacing:.12em}
-  .cb-arena{position:relative;width:min(92vw,560px);height:180px;display:flex;align-items:center;justify-content:space-between}
-  .cb-f{width:min(34vw,132px);text-align:center;transition:transform .4s cubic-bezier(.55,0,.85,.35)}
-  .cb-f .ic{font-size:52px;line-height:1.1;transition:filter .4s,opacity .4s,transform .4s}
-  .cb-f .nm{font-size:13px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .cb-f .pw{font-size:12px;opacity:.8}
-  .cb-hp{height:7px;background:#223;border-radius:4px;margin-top:6px;overflow:hidden}
-  .cb-hp i{display:block;height:100%;background:#4de08a;transition:width .6s ease .1s}
-  .cb-f.hit .ic{animation:cbHit .5s}
-  .cb-f.dead .ic{filter:grayscale(1);opacity:.35;transform:rotate(-24deg) scale(.9)}
-  .cb-num{position:absolute;top:18px;font-size:34px;font-weight:800;color:#ff5a5a;text-shadow:0 0 8px #000;animation:cbNum 1.1s ease-out forwards;pointer-events:none}
-  .cb-flash{position:absolute;left:50%;top:50%;width:110px;height:110px;margin:-55px 0 0 -55px;border-radius:50%;background:radial-gradient(#fff,#ffb54a 40%,transparent 70%);opacity:0;pointer-events:none}
-  .cb-flash.go{animation:cbFlash .5s ease-out}
-  .cb-beam{position:absolute;top:46%;height:4px;background:linear-gradient(90deg,#fff,#ffd36b);opacity:0;pointer-events:none}
+  .cb-arena{position:relative;width:min(94vw,580px);height:210px;display:flex;align-items:center;justify-content:space-between}
+  .cb-card{--c:#7fd0ff;position:relative;width:min(30vw,128px);padding:8px 6px 9px;border-radius:12px;border:2px solid var(--c);background:linear-gradient(165deg,#16213a,#0b1120);box-shadow:0 0 14px var(--cg,#7fd0ff55);text-align:center;transform:translate(var(--tx,0px),var(--ty,0px)) rotate(var(--rot,0deg));transition:transform .22s cubic-bezier(.3,.9,.4,1);animation:cbIn .35s ease-out both}
+  .cb-card.slow{transition-duration:.5s}
+  .cb-card .job{font-size:10px;color:var(--c);letter-spacing:.08em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .cb-card .ic{font-size:48px;line-height:1.15;transition:filter .4s,opacity .4s}
+  .cb-card .wp{position:absolute;top:4px;right:6px;font-size:17px}
+  .cb-card .nm{font-size:13px;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .cb-card .pw{font-size:12px;opacity:.85}
+  .cb-hp{height:7px;background:#223;border-radius:4px;margin-top:5px;overflow:hidden}
+  .cb-hp i{display:block;height:100%;background:#4de08a;transition:width .55s ease .08s}
+  .cb-card.hurt{border-color:#ff5a5a;box-shadow:0 0 16px #ff5a5a99}
+  .cb-card.dead{filter:grayscale(1) brightness(.6)}
+  .cb-card.dead::after{content:"💀";position:absolute;left:50%;top:38%;font-size:34px;transform:translate(-50%,-50%)}
+  .cb-num{position:absolute;top:-6px;font-size:34px;font-weight:800;color:#ff5a5a;text-shadow:0 0 8px #000;animation:cbNum 1.1s ease-out forwards;pointer-events:none;z-index:3}
+  .cb-star{position:absolute;left:50%;top:50%;font-size:64px;margin:-34px 0 0 -34px;opacity:0;pointer-events:none;z-index:2}
+  .cb-star.go{animation:cbFlash .55s ease-out}
+  .cb-slash{position:absolute;left:50%;top:50%;width:0;height:0;pointer-events:none;z-index:2}
+  .cb-slash i{position:absolute;left:-55px;top:-2px;width:110px;height:4px;border-radius:2px;background:linear-gradient(90deg,transparent,#fff,transparent);opacity:0}
+  .cb-slash i:nth-child(1){transform:rotate(38deg)} .cb-slash i:nth-child(2){transform:rotate(-38deg)}
+  .cb-slash.go i{animation:cbSlash .35s ease-out}
+  .cb-beam{position:absolute;top:44%;height:4px;background:linear-gradient(90deg,#fff,#ffd36b);opacity:0;pointer-events:none;z-index:2}
   .cb-beam.go{animation:cbBeam .3s ease-out}
-  .cb-tie{position:absolute;left:0;right:0;top:14px;text-align:center;font-size:20px;font-weight:700;color:var(--amber-bright);animation:cbNum 1.1s ease-out forwards}
+  .cb-tie{position:absolute;left:0;right:0;top:-4px;text-align:center;font-size:20px;font-weight:700;color:var(--amber-bright);animation:cbNum 1.1s ease-out forwards;z-index:3}
   .cb-skip{display:flex;gap:10px}
-  .cb-rows{width:min(92vw,520px);display:flex;flex-direction:column;gap:6px}
-  .cb-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 10px;border:1px solid #2a3550;border-radius:8px;background:#0c1220;font-size:14px;opacity:0;transform:translateY(8px);transition:opacity .25s,transform .25s}
-  .cb-row.on{opacity:1;transform:none}
-  .cb-row b.neg{color:#ff5a5a}
-  @keyframes cbHit{0%,100%{transform:translateX(0)}20%{transform:translateX(-10px) rotate(-6deg)}50%{transform:translateX(9px) rotate(5deg)}80%{transform:translateX(-5px)}}
+  .cb-melee{position:relative;width:min(94vw,560px);display:flex;flex-direction:column;align-items:center;gap:18px}
+  .cb-atk{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;width:100%}
+  .cb-atk .cb-card{width:min(26vw,100px);padding:5px 4px 6px}
+  .cb-atk .cb-card .ic{font-size:30px}
+  .cb-melee .cb-main{position:relative}
+  @keyframes cbIn{0%{opacity:0;transform:translate(var(--tx,0px),18px) scale(.85)}100%{opacity:1}}
   @keyframes cbShake{0%,100%{transform:translate(0)}25%{transform:translate(-6px,3px)}50%{transform:translate(5px,-3px)}75%{transform:translate(-3px,2px)}}
   @keyframes cbNum{0%{opacity:0;transform:translateY(12px) scale(.6)}20%{opacity:1;transform:translateY(0) scale(1.3)}100%{opacity:0;transform:translateY(-54px) scale(1)}}
-  @keyframes cbFlash{0%{opacity:.95;transform:scale(.4)}100%{opacity:0;transform:scale(1.5)}}
+  @keyframes cbFlash{0%{opacity:.95;transform:scale(.4)}100%{opacity:0;transform:scale(1.6)}}
+  @keyframes cbSlash{0%{opacity:1;transform:scaleX(0)}60%{opacity:1}100%{opacity:0;transform:scaleX(1)}}
   @keyframes cbBeam{0%{opacity:1;transform:scaleX(0)}100%{opacity:0;transform:scaleX(1)}}
-  @media (prefers-reduced-motion:reduce){#cbStage.shake,.cb-f.hit .ic{animation:none}}
+  @media (prefers-reduced-motion:reduce){#cbStage.shake{animation:none}.cb-card{animation:none}}
   #fxCanvas{position:fixed;inset:0;width:100vw;height:100vh;pointer-events:none;z-index:9998}
   .fx-title{color:var(--fxc,#fff);text-shadow:0 0 12px #000,0 0 28px var(--fxc,var(--gold,#e8c36a))}
   .room-chip.fx-hit{animation:fxChip 1.2s ease-out;position:relative;z-index:5}
@@ -7398,10 +7408,12 @@ function resolveRoomCombatsTeam(){
    resolveCombat 只負責把每場對決記進 STATE.__combatQ；結算在戰鬥步驟後 yield 一次，
    由 playCombatAnims 逐場播放（1v1 為對決舞台，同房多場為混戰列表），播完才繼續結算。
    純顯示，不改任何結算結果；全是 AI 的對局（模擬）不會 yield。 */
-function recordCombatAnim(roomId,a,b,hpA,hpB,dmgToA,dmgToB,aGun,bGun,aPow,bPow){
+// 手持武器的小圖示（在受傷前取，因為死亡會清空背包）
+function combatWeaponIcon(p,gun){ return gun?"🔫":(p.inv.includes("knifeX2")?"⚔️":(p.inv.includes("knife")?"🔪":"")); }
+function recordCombatAnim(roomId,a,b,hpA,hpB,dmgToA,dmgToB,aGun,bGun,aPow,bPow,wpA,wpB){
   if(!combatAnimMode || typeof document==="undefined" || !STATE.__combatQ) return;
-  const side=(p,hp0,took,gun,pw)=>({name:p.name,icon:PROF_ICON[p.prof]||"👤",maxhp:p.maxhp,hp0,hp1:(!p.alive||p.ghost)?0:Math.max(0,p.hp),took,gun:!!gun,pw,dead:!p.alive||!!p.ghost});
-  STATE.__combatQ.push({room:roomId,a:side(a,hpA,dmgToA,aGun,aPow),b:side(b,hpB,dmgToB,bGun,bPow)});
+  const side=(p,hp0,took,gun,pw,wp)=>({name:p.name,icon:PROF_ICON[p.prof]||"👤",job:(PROFESSIONS[p.prof]&&PROFESSIONS[p.prof].name)||"",color:(FX_STYLE[p.prof]&&FX_STYLE[p.prof].c)||"#7fd0ff",weapon:wp||"",maxhp:p.maxhp,hp0,hp1:(!p.alive||p.ghost)?0:Math.max(0,p.hp),took,gun:!!gun,pw,dead:!p.alive||!!p.ghost});
+  STATE.__combatQ.push({room:roomId,a:side(a,hpA,dmgToA,aGun,aPow,wpA),b:side(b,hpB,dmgToB,bGun,bPow,wpB)});
 }
 function combatAnimWanted(){
   return combatAnimMode && typeof document!=="undefined" && STATE.__combatQ && STATE.__combatQ.length>0 && STATE.players.some(p=>!p.isAI);
@@ -7425,56 +7437,84 @@ function playCombatAnims(done){
     stage.onclick=()=>{ if(sceneEnd) sceneEnd(); };
   };
   const hpPct=(s,v)=>Math.max(0,Math.min(100,Math.round(v/Math.max(1,s.maxhp)*100)));
+  const card=(S,id,hp)=>`<div class="cb-card" id="${id}" style="--c:${S.color};--cg:${S.color}66"><div class="job">${esc(S.job)}</div><div class="ic">${S.icon}</div>${S.weapon?`<div class="wp">${S.weapon}</div>`:""}<div class="nm">${esc(S.name)}</div><div class="pw">武力 ${S.pw}</div><div class="cb-hp"><i style="width:${hpPct(S,hp)}%"></i></div></div>`;
+  const floatNum=(parent,text,left,right)=>{
+    const n=document.createElement("div"); n.className="cb-num"; n.textContent=text;
+    if(left!=null) n.style.left=left; if(right!=null) n.style.right=right;
+    parent.appendChild(n);
+  };
+  const setCard=(el,tx,rot,ty)=>{ el.style.setProperty("--tx",tx+"px"); el.style.setProperty("--rot",rot+"deg"); el.style.setProperty("--ty",(ty||0)+"px"); };
+  function hitCard(el,S){
+    el.querySelector(".cb-hp i").style.width=hpPct(S,S.hp1)+"%";
+    if(S.took>0) el.classList.add("hurt");
+    if(S.dead) el.classList.add("dead");
+  }
+  // 1v1：兩張人物卡先蓄力，再互相衝撞；吃虧的一方被撞飛，持槍者原地射擊
   function duel(e,n,total,next){
     const A=e.a,B=e.b;
     stage.innerHTML=`<div class="cb-room">「${esc(e.room)}」${esc((ROOMS[e.room]&&ROOMS[e.room].name)||"")} ・ 戰鬥</div>
-      <div class="cb-arena" id="cbArena">
-        <div class="cb-f" id="cbA"><div class="ic">${A.icon}${A.gun?"🔫":""}</div><div class="nm">${esc(A.name)}</div><div class="pw">武力 ${A.pw}</div><div class="cb-hp"><i style="width:${hpPct(A,A.hp0)}%"></i></div></div>
-        <div class="cb-flash" id="cbFlash"></div><div class="cb-beam" id="cbBeam"></div>
-        <div class="cb-f" id="cbB"><div class="ic">${B.icon}${B.gun?"🔫":""}</div><div class="nm">${esc(B.name)}</div><div class="pw">武力 ${B.pw}</div><div class="cb-hp"><i style="width:${hpPct(B,B.hp0)}%"></i></div></div>
-      </div>${skipBtns(n,total)}`;
+      <div class="cb-arena" id="cbArena">${card(A,"cbA",A.hp0)}<div class="cb-star" id="cbStar">💥</div><div class="cb-slash" id="cbSlash"><i></i><i></i></div><div class="cb-beam" id="cbBeam"></div>${card(B,"cbB",B.hp0)}</div>${skipBtns(n,total)}`;
     wire();
     const ar=stage.querySelector("#cbArena"), fa=stage.querySelector("#cbA"), fb=stage.querySelector("#cbB");
     let over=false;
     sceneEnd=()=>{ if(over) return; over=true; clearTimers(); next(); };
-    later(()=>{ // 衝刺（持槍者原地開火）
-      const shift=Math.max(10,(ar.clientWidth-fa.clientWidth-fb.clientWidth)/2-8);
-      if(!A.gun) fa.style.transform=`translateX(${shift}px)`;
-      if(!B.gun) fb.style.transform=`translateX(${-shift}px)`;
-      const beam=stage.querySelector("#cbBeam");
+    const shift=Math.max(14,(ar.clientWidth-fa.clientWidth-fb.clientWidth)/2-6);
+    later(()=>{ if(!A.gun) setCard(fa,-14,-6); if(!B.gun) setCard(fb,14,6); },450);          // 蓄力後仰
+    later(()=>{                                                                                // 衝撞
+      if(!A.gun) setCard(fa,shift,8); else setCard(fa,-8,-3);
+      if(!B.gun) setCard(fb,-shift,-8); else setCard(fb,8,3);
       if(A.gun || B.gun){
-        const ra=ar.getBoundingClientRect(), aR=fa.getBoundingClientRect(), bR=fb.getBoundingClientRect();
-        const left=aR.right-ra.left;
-        beam.style.left=left+"px"; beam.style.width=Math.max(10,(bR.left-ra.left)-left)+"px";
+        const beam=stage.querySelector("#cbBeam"), ra=ar.getBoundingClientRect(), aR=fa.getBoundingClientRect(), bR=fb.getBoundingClientRect();
+        const left=aR.right-ra.left; beam.style.left=left+"px"; beam.style.width=Math.max(10,(bR.left-ra.left)-left)+"px";
         beam.style.transformOrigin=A.gun?"left":"right"; beam.classList.add("go");
       }
-    },350);
-    later(()=>{ // 命中
-      stage.classList.add("shake"); stage.querySelector("#cbFlash").classList.add("go");
-      [[A,fa],[B,fb]].forEach(([S,f])=>{
-        f.style.transform="";
-        f.querySelector(".cb-hp i").style.width=hpPct(S,S.hp1)+"%";
-        if(S.took>0){
-          f.classList.add("hit");
-          const num=document.createElement("div"); num.className="cb-num"; num.textContent="-"+S.took;
-          num.style[f===fa?"left":"right"]="14%"; ar.appendChild(num);
-        }
-        if(S.dead) f.classList.add("dead");
-      });
-      if(A.took===0 && B.took===0){ const t=document.createElement("div"); t.className="cb-tie"; t.textContent="平手"; ar.appendChild(t); }
-    },800);
-    later(()=>{ if(!over){ over=true; next(); } },2100);
+    },760);
+    later(()=>{                                                                                // 命中
+      stage.classList.add("shake");
+      stage.querySelector("#cbStar").classList.add("go");
+      if(!A.gun && !B.gun) stage.querySelector("#cbSlash").classList.add("go");
+      hitCard(fa,A); hitCard(fb,B);
+      if(A.took>0) floatNum(fa,"-"+A.took,"50%",null);
+      if(B.took>0) floatNum(fb,"-"+B.took,"50%",null);
+      if(A.took===0 && B.took===0){
+        const t=document.createElement("div"); t.className="cb-tie"; t.textContent="平手"; ar.appendChild(t);
+        if(!A.gun) setCard(fa,shift-34,-5); if(!B.gun) setCard(fb,-(shift-34),5);
+      } else {
+        // 吃到較多傷害的一方被撞飛，另一方站穩
+        const aLoses=A.took>B.took, bLoses=B.took>A.took;
+        fa.classList.add("slow"); fb.classList.add("slow");
+        setCard(fa, aLoses?-40:(bLoses?shift-8:-6), aLoses?-16:(bLoses?5:-4), A.dead?34:0);
+        setCard(fb, bLoses?40:(aLoses?-(shift-8):6), bLoses?16:(aLoses?-5:4), B.dead?34:0);
+      }
+    },1010);
+    later(()=>{ if(!over){ over=true; next(); } },2500);
   }
+  // 混戰：被圍攻的目標卡在中央，其他玩家的小卡依序上前出手
   function melee(list,n,total,next){
-    const room=list[0].room;
+    const room=list[0].room, cnt={};
+    list.forEach(e=>{ cnt[e.a.name]=(cnt[e.a.name]||0)+1; cnt[e.b.name]=(cnt[e.b.name]||0)+1; });
+    const tname=Object.keys(cnt).sort((x,y)=>cnt[y]-cnt[x] || (x===list[0].a.name?-1:0))[0];
+    const view=list.map(e=>e.a.name===tname?{t:e.a,k:e.b}:{t:e.b,k:e.a});
+    const T0=view[0].t;
     stage.innerHTML=`<div class="cb-room">「${esc(room)}」${esc((ROOMS[room]&&ROOMS[room].name)||"")} ・ 混戰</div>
-      <div class="cb-rows">${list.map(e=>`<div class="cb-row"><span>${e.a.icon}${e.a.gun?"🔫":""} ${esc(e.a.name)} <b${e.a.took>0?' class="neg"':""}>${e.a.took>0?"-"+e.a.took:"±0"}${e.a.dead?" 💀":""}</b></span><span>⚔</span><span><b${e.b.took>0?' class="neg"':""}>${e.b.took>0?"-"+e.b.took:"±0"}${e.b.dead?" 💀":""}</b> ${esc(e.b.name)} ${e.b.icon}${e.b.gun?"🔫":""}</span></div>`).join("")}</div>${skipBtns(n,total)}`;
+      <div class="cb-melee"><div class="cb-main">${card(T0,"cbT",T0.hp0)}</div>
+        <div class="cb-atk">${view.map((v,i)=>card(v.k,"cbK"+i,v.k.hp0)).join("")}</div></div>${skipBtns(n,total)}`;
     wire();
     let over=false;
     sceneEnd=()=>{ if(over) return; over=true; clearTimers(); next(); };
-    const rows=[...stage.querySelectorAll(".cb-row")];
-    rows.forEach((r,i)=>later(()=>{ r.classList.add("on"); stage.classList.remove("shake"); void stage.offsetWidth; stage.classList.add("shake"); },250+i*450));
-    later(()=>{ if(!over){ over=true; next(); } },450+rows.length*450+900);
+    const tEl=stage.querySelector("#cbT");
+    view.forEach((v,i)=>{
+      const kEl=stage.querySelector("#cbK"+i);
+      later(()=>{ setCard(kEl,0,0,-46); setCard(tEl,0,0,0); },400+i*620);                       // 上前出手
+      later(()=>{
+        stage.classList.remove("shake"); void stage.offsetWidth; stage.classList.add("shake");
+        tEl.classList.remove("hurt"); hitCard(tEl,v.t); if(v.t.took>0) floatNum(tEl,"-"+v.t.took,"50%",null);
+        hitCard(kEl,v.k); if(v.k.took>0) floatNum(kEl,"-"+v.k.took,"30%",null);
+        setCard(tEl,(i%2?1:-1)*8,(i%2?1:-1)*3,0);
+        later(()=>{ setCard(kEl,0,0,0); setCard(tEl,0,0,0); },260);
+      },400+i*620+230);
+    });
+    later(()=>{ if(!over){ over=true; next(); } },400+view.length*620+800);
   }
   let i=0;
   const step=()=>{
@@ -7482,7 +7522,7 @@ function playCombatAnims(done){
     if(skipAll || i>=scenes.length){ finish(); return; }
     const list=scenes[i][1], n=++i;
     stage.classList.remove("shake"); sceneEnd=null;
-    try{ (list.length===1?duel:melee)(list.length===1?list[0]:list,n,scenes.length,step); }
+    try{ if(list.length===1) duel(list[0],n,scenes.length,step); else melee(list,n,scenes.length,step); }
     catch(err){ console.error("[combatAnim]",err); finish(); }
   };
   step();
@@ -8126,13 +8166,13 @@ function resolveCombat(a,b,roomId,frozenA){
     const gc=damageWard(p,d); d=gc.dmg; note+=gc.note;
     return {d,note};
   };
-  const hpA0=a.hp, hpB0=b.hp;
+  const hpA0=a.hp, hpB0=b.hp, wpA=combatWeaponIcon(a,aGun), wpB=combatWeaponIcon(b,bGun);
   const ra=reduce(a,dmgToA,bGun), rb=reduce(b,dmgToB,aGun);
   dmgToA=ra.d; dmgToB=rb.d;
   if(dmgToA>0){ damagePlayer(a,dmgToA,"與"+b.name+"戰鬥",b.id); log(a.name+" 在「"+roomId+"」戰鬥中受到 "+dmgToA+" 點傷害（對手 "+b.name+"）"+ra.note+"。","dmg"); }
   if(dmgToB>0){ damagePlayer(b,dmgToB,"與"+a.name+"戰鬥",a.id); log(b.name+" 在「"+roomId+"」戰鬥中受到 "+dmgToB+" 點傷害（對手 "+a.name+"）"+rb.note+"。","dmg"); }
   if(dmgToA===0 && dmgToB===0) log(a.name+" 與 "+b.name+" 在「"+roomId+"」武力相同，未分勝負。");
-  recordCombatAnim(roomId,a,b,hpA0,hpB0,dmgToA,dmgToB,aGun,bGun,aPower,bPower);
+  recordCombatAnim(roomId,a,b,hpA0,hpB0,dmgToA,dmgToB,aGun,bGun,aPower,bPower,wpA,wpB);
   // 吸血鬼的吸血: heals half of the combat damage he actually dealt (rounded down), capped at 2 per round.
   // 屠夫的鮮血盛宴: dealing combat damage heals 1, at most once per round.
   [[a,dmgToB],[b,dmgToA]].forEach(([v,dealt])=>{
