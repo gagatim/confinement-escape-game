@@ -1161,7 +1161,7 @@ const PROFESSIONS = {
   ]},
   lobbyist:{name:"說客", skills:[
     {name:"拉票", desc:"（被動）你投毒氣樓層時，視為3票。", passive:true},
-    {name:"明哲保身", desc:"（被動）本輪你所投的樓層若淪為毒氣區域，你在該樓層不受毒氣傷害。", passive:true},
+    {name:"明哲保身", desc:"（被動）本輪你所投的樓層若淪為毒氣區域，你在該樓層不受毒氣傷害，且回復1點生命、速度永久+1（生命上限10，速度無上限）。", passive:true},
     {name:"精算風險", desc:"（被動）受到的毒氣傷害-1（最低0）。", passive:true}
   ]},
   leader:{name:"團長", skills:[
@@ -1170,19 +1170,19 @@ const PROFESSIONS = {
     {name:"招攬團員", desc:"（被動）遊戲開始時，指定2名其他玩家為團員；你與團員之間無法互相造成戰鬥傷害。", passive:true}
   ]},
   bountyhunter:{name:"賞金獵人", skills:[
-    {name:"追獵", desc:"（被動）與生命≤5的玩家戰鬥時，自己武力+1。", passive:true},
+    {name:"追獵", desc:"（被動）與生命≤5的玩家戰鬥時，自己武力+4。", passive:true},
     {name:"戰利品", desc:"（被動）在戰鬥中擊殺玩家時，恢復2點生命，並取得對方的道具（受負重限制，裝不下的留在原地）。", passive:true}
   ]},
   sentinel:{name:"哨兵", skills:[
-    {name:"堅守崗位", desc:"（被動）本輪沒有離開出發房間時，受到的戰鬥傷害-2。", passive:true},
-    {name:"居高臨下", desc:"（被動）所在房間內有3人以上（含自己）時，武力+1。", passive:true}
+    {name:"堅守崗位", desc:"（被動）本輪移動後仍在出發時的同一樓層時，受到的戰鬥傷害-2、毒氣傷害-2。", passive:true},
+    {name:"居高臨下", desc:"（被動）所在房間內有3人以上（含自己）時，武力+3。", passive:true}
   ]},
   cardsharp:{name:"老千", skills:[
-    {name:"手氣", desc:"（被動）抽取道具時擲骰：<br>・1～2：少抽1張（至少抽1張）。<br>・3～4：數量不變。<br>・5～6：多抽1張。", passive:true},
-    {name:"孤注一擲", desc:"（被動）生命≤3時，手氣的骰值一律視為6。", passive:true}
+    {name:"手氣", desc:"（被動）抽取道具時擲骰：<br>・1：少抽1張（至少抽1張）。<br>・2～3：數量不變。<br>・4～5：多抽1張。<br>・6：多抽2張。", passive:true},
+    {name:"孤注一擲", desc:"（被動）生命≤4時，手氣的骰值一律視為6。", passive:true}
   ]},
   warden:{name:"看守長", skills:[
-    {name:"禁足令", desc:"（主動，整局限用2次）指定同房間的1名玩家：其下一輪移動步數-2（至少為1）。", uses:2},
+    {name:"禁足令", desc:"（主動，整局限用2次）同房間的所有其他玩家：其下一輪移動步數-3（至少為1）。", uses:2},
     {name:"威壓", desc:"（被動）與你同房間的其他玩家，戰鬥時武力-2。", passive:true}
   ]},
   janitor:{name:"清潔工", skills:[
@@ -2867,7 +2867,7 @@ function combatPower(p){
   // ---- 實體擴充職業 ----
   if(p.prof==="sniper" && hasGun(p)) base+=2; // 狙擊手的一擊必中
   if(p.prof==="berserker" && p.hp<=6) base+=2; // 狂戰士的血怒
-  if(p.prof==="sentinel" && playersInRoom(p.room,true).length>=3) base+=1; // 哨兵的居高臨下
+  if(p.prof==="sentinel" && playersInRoom(p.room,true).length>=3) base+=3; // 哨兵的居高臨下
   // 看守長的威壓: every other player sharing a room with a living 看守長 fights at -2.
   if(STATE && STATE.players && p.prof!=="warden" && STATE.players.some(x=>x.alive && !x.ghost && x.prof==="warden" && x.id!==p.id && x.room===p.room)) base-=2;
   // (保鑣的壯碩體格 +1 武力 is applied once at startGame, like 馴獸師)
@@ -3360,11 +3360,11 @@ function beginRound(){
       const before=p.stepsLeft; p.stepsLeft=Math.min(before,Math.max(1,before-2));
       log(p.name+"（遠距狙擊後座力）本輪移動步數-2（共"+p.stepsLeft+"步，至少1步）。");
     }
-    // 看守長的禁足令: the slowed target loses 2 steps this round, never dropping below 1.
+    // 看守長的禁足令: the slowed target loses 3 steps this round, never dropping below 1.
     if(p.flags.wardenSlowNext){
       p.flags.wardenSlowNext=false;
-      const before=p.stepsLeft; p.stepsLeft=Math.min(before,Math.max(1,before-2));
-      log(p.name+"（禁足令）本輪移動步數-2（共"+p.stepsLeft+"步，至少1步）。");
+      const before=p.stepsLeft; p.stepsLeft=Math.min(before,Math.max(1,before-3));
+      log(p.name+"（禁足令）本輪移動步數-3（共"+p.stepsLeft+"步，至少1步）。");
     }
     // 偵察兵的疾行／輕裝上陣
     if(p.prof==="scout"){
@@ -3966,10 +3966,11 @@ function luckyApply(p,roll,src){ passiveFX(p,"lucky:0");
 function adjustDrawCount(p,roomId,n){
   if(p.prof==="janitor" && roomId==="B503"){ n+=1; passiveFX(p,"janitor:0"); log(p.name+"（物盡其用）在垃圾場多抽1張。"); }
   if(p.prof==="cardsharp"){
-    const roll=p.hp<=3 ? 6 : 1+Math.floor(Math.random()*6);
-    passiveFX(p,p.hp<=3?"cardsharp:1":"cardsharp:0");
-    if(roll<=2){ n=Math.max(1,n-1); log(p.name+"（手氣）擲出"+roll+"：少抽1張（至少1張）。"); }
-    else if(roll>=5){ n+=1; log(p.name+"（手氣）擲出"+roll+(p.hp<=3?"（孤注一擲）":"")+"：多抽1張。"); }
+    const roll=p.hp<=4 ? 6 : 1+Math.floor(Math.random()*6);
+    passiveFX(p,p.hp<=4?"cardsharp:1":"cardsharp:0");
+    if(roll===1){ n=Math.max(1,n-1); log(p.name+"（手氣）擲出"+roll+"：少抽1張（至少1張）。"); }
+    else if(roll===6){ n+=2; log(p.name+"（手氣）擲出"+roll+(p.hp<=4?"（孤注一擲）":"")+"：多抽2張。"); }
+    else if(roll>=4){ n+=1; log(p.name+"（手氣）擲出"+roll+"：多抽1張。"); }
     else log(p.name+"（手氣）擲出"+roll+"：抽取數量不變。");
   }
   return n;
@@ -5610,12 +5611,18 @@ function sniperAim(p,roomId){
   log(p.name+" 使用遠距狙擊，瞄準「"+roomId+" "+(ROOMS[roomId].name||"")+"」（結算時該房間所有玩家各受2點傷害）。");
   speakSkill(p,"sniper:1");
 }
-// 看守長的禁足令: slow a same-room player's next round by 2 steps.
+// 哨兵的堅守崗位: still on the floor the round started on (after moving).
+function sentinelHeldFloor(p){
+  const a=ROOMS[p.room], b=ROOMS[p.roundStartRoom];
+  return !!(a && b && a.floor===b.floor);
+}
+// 看守長的禁足令: slow every other same-room player's next round by 3 steps.
 function wardenTargets(p){ return playersInRoom(p.room,true).filter(x=>x.id!==p.id); }
-function wardenCommand(p,target){
+function wardenCommand(p){
   p.flags.wardenUses=(p.flags.wardenUses||0)+1; p.flags.skillUsedThisRound=true;
-  target.flags.wardenSlowNext=true;
-  log(p.name+" 對 "+target.name+" 下達禁足令：其下一輪移動步數-2（至少為1）。");
+  const ts=wardenTargets(p);
+  ts.forEach(t=>{ t.flags.wardenSlowNext=true; });
+  log(p.name+" 下達禁足令："+ts.map(t=>t.name).join("、")+" 下一輪移動步數-3（至少為1）。");
   speakSkill(p,"warden:0");
 }
 function tamerReady(p){
@@ -5862,14 +5869,12 @@ function useProfSkill(p,idx){
     if(skillUseCapReached(p,"warden:0")){ flashMsg("已用完2次"); return; }
     const ts=wardenTargets(p);
     if(!ts.length){ flashMsg("同房間沒有其他玩家。"); return; }
-    openModal(`<h3>禁足令：指定同房間的1名玩家</h3>
-      <div class="muted" style="font-size:12px;margin-bottom:6px">其下一輪移動步數-2（至少為1）。</div>
-      <select id="wardenSel">${ts.map(x=>`<option value="${x.id}">${x.name}（HP${x.hp}）</option>`).join("")}</select><br><br>
+    openModal(`<h3>禁足令：同房間的所有其他玩家</h3>
+      <div class="muted" style="font-size:12px;margin-bottom:6px">下列玩家下一輪移動步數-3（至少為1）：${ts.map(x=>x.name).join("、")}</div>
       <button class="btn small warn" id="wardenOk">下令</button>
       <button class="btn small ghost" id="wardenCancel">取消</button>`);
     document.getElementById("wardenOk").onclick=()=>{
-      const t=STATE.players.find(x=>x.id==document.getElementById("wardenSel").value);
-      if(t) wardenCommand(p,t);
+      wardenCommand(p);
       closeModal(); renderAll();
     };
     bindModalClose("wardenCancel");
@@ -6534,11 +6539,11 @@ function aiConsiderSkillAfterMove(p){
     return;
   }
   if(p.prof==="warden"){
-    // 禁足令: slow the strongest non-mate sharing the room (once per round).
+    // 禁足令: slows everyone else in the room, so only use it when no mate would be caught (once per round).
     if(skillUseCapReached(p,"warden:0") || p.flags.skillUsedThisRound) return;
     const mates=aiMates(p).map(m=>m.id);
-    const foes=wardenTargets(p).filter(x=>!mates.includes(x.id) && !x.flags.wardenSlowNext);
-    if(foes.length){ foes.sort((a,b)=>combatPower(b)-combatPower(a)); wardenCommand(p,foes[0]); }
+    const all=wardenTargets(p);
+    if(all.length && !all.some(x=>mates.includes(x.id)) && all.some(x=>!x.flags.wardenSlowNext)) wardenCommand(p);
     return;
   }
   if(p.prof==="tamer"){ if(!skillUseCapReached(p,"tamer:0")) useProfSkill(p,0); return; }
@@ -7631,8 +7636,11 @@ function* settleRoundCore(){
       if(p.prof==="chemist" && dmg>0){ dmg=Math.max(0,dmg-1); note+="〔抗毒 -1〕"; }
       if(p.prof==="oracle" && dmg>0){ dmg=Math.max(0,dmg-1); note+="〔毒氣適應 -1〕"; }
       if(p.prof==="mole" && dmg>0){ dmg=Math.max(0,dmg-1); note+="〔地底適應 -1〕"; }
+      if(p.prof==="sentinel" && dmg>0 && sentinelHeldFloor(p)){ const before=dmg; dmg=Math.max(0,dmg-2); passiveFX(p,"sentinel:0"); note+="〔堅守崗位 -"+(before-dmg)+"〕"; }
       if(p.prof==="lobbyist" && dmg>0){ dmg=Math.max(0,dmg-1); note+="〔精算風險 -1〕"; }
-      if(p.prof==="lobbyist" && dmg>0 && (STATE.voteLog||[]).some(v=>v.name===p.name && v.floor===ROOMS[p.room].floor)){ dmg=0; passiveFX(p,"lobbyist:1"); note+="〔明哲保身 免傷〕"; }
+      if(p.prof==="lobbyist" && dmg>0 && (STATE.voteLog||[]).some(v=>v.name===p.name && v.floor===ROOMS[p.room].floor)){ dmg=0; passiveFX(p,"lobbyist:1"); note+="〔明哲保身 免傷"; // 回血+1（上限10）、速度永久+1（無上限）
+        if(p.hp<p.maxhp){ p.hp=Math.min(Math.min(10,p.maxhp),p.hp+1); note+="、回血+1"; }
+        p.speed+=1; note+="、速度+1〕"; }
       if(p.prof==="oracle" && p.flags.oracleHit && dmg>0){ dmg=Math.max(0,dmg-2); note+="〔精準預測 -2〕"; }
       if(p.prof==="witch" && dmg>0){ const before=dmg; const cut=STATE.round<=3?2:1; dmg=Math.max(0,dmg-cut); note+="〔毒氣防護 -"+(before-dmg)+"〕"; }
       if(p.prof==="survivor" && p.flags.survivorFirstAidActive && dmg>0){ dmg=Math.max(0,dmg-1); note+="〔野戰急救 -1〕"; }
@@ -7843,7 +7851,7 @@ function resolveCombat(a,b,roomId,frozenA){
   // 顏良的斬將 (+3 vs 生命較高者)、張遼的突襲 (+2, 本輪第一次攻擊且本輪有進入新房間).
   const sgBonus=(p,opp)=>{
     let x=0;
-    if(p.prof==="bountyhunter" && opp.hp<=5){ x+=1; passiveFX(p,"bountyhunter:0"); } // 賞金獵人的追獵
+    if(p.prof==="bountyhunter" && opp.hp<=5){ x+=4; passiveFX(p,"bountyhunter:0"); } // 賞金獵人的追獵
     if(p.prof==="yanliang" && p.flags.yanliangActive && opp.hp>p.hp) x+=3;
     if(p.prof==="zhangliao" && !p.flags.zhangliaoRaidUsed && p.roundStartRoom!==p.room) x+=2;
     return x;
@@ -7879,7 +7887,7 @@ function resolveCombat(a,b,roomId,frozenA){
     if(p.prof==="scout" && d>0){ d=Math.max(0,d-1); note+="〔靈活閃避 -1〕"; }
     if(p.prof==="bodyguard" && d>0){ const before=d; d=Math.max(0,d-2); note+="〔鐵壁 -"+(before-d)+"〕"; }
     if(p.prof==="berserker" && p.hp<=3 && d>0){ const before=d; d=Math.max(0,d-2); passiveFX(p,"berserker:1"); note+="〔困獸之鬥 -"+(before-d)+"〕"; }
-    if(p.prof==="sentinel" && p.roundStartRoom===p.room && d>0){ const before=d; d=Math.max(0,d-2); passiveFX(p,"sentinel:0"); note+="〔堅守崗位 -"+(before-d)+"〕"; }
+    if(p.prof==="sentinel" && sentinelHeldFloor(p) && d>0){ const before=d; d=Math.max(0,d-2); passiveFX(p,"sentinel:0"); note+="〔堅守崗位 -"+(before-d)+"〕"; }
     // 隱士的離群索居: included for completeness (the skill's own wording lists 戰鬥 alongside
     // 中毒/飢餓), though combat inherently requires an opponent sharing the room, so "truly
     // alone" can never actually be true here — this branch is a structural no-op.
