@@ -831,8 +831,9 @@ const ADJ = {
   "B501":["B502","B601"], "B401":["B402","B304"],
   "B402":["B401","B503"], "B403":["B404"],
   "B404":["B403","B405","B307"], "B405":["B404","B505"],
-  "B502":["B501","B503"], "B503":["B502","B402"],
-  "B504":["B505","B604"], "B505":["B504","B405"],
+  // B503<->B504: drawn with a gap between them, but per user correction they connect in one step (living and 暗影 alike — GHOST_ADJ merges ADJ in both directions).
+  "B502":["B501","B503"], "B503":["B502","B402","B504"],
+  "B504":["B505","B604","B503"], "B505":["B504","B405"],
   "B601":["B602","B501"], "B602":["B601","B603","B701"], "B603":["B602","B604"],
   "B604":["B603","B504"], "B701":["B602"]
 };
@@ -1023,7 +1024,7 @@ const PROFESSIONS = {
     {name:"邊緣存在感", desc:"（被動）所在房間存活玩家3人以上時：<br>・你不參與戰鬥結算（火箭筒傷害仍有效），並自動恢復1點生命（固定）。", passive:true}
   ]},
   climber:{name:"攀岩者", skills:[
-    {name:"垂直攀爬", desc:"（主動）發動後，本回合可直接移動到正上方或正下方一層、位置重疊的房間，每次消耗1步。", uses:99},
+    {name:"垂直攀爬", desc:"（被動）移動時可隨時直接移動到正上方或正下方一層、位置重疊的房間，每次消耗1步。<br>・常駐生效，不需發動，次數不限。", passive:true},
     {name:"節食", desc:"（主動，整局限用1次）本回合不需支付水與糧。", uses:1}
   ]},
   engineer:{name:"工程師", skills:[
@@ -5876,10 +5877,6 @@ function useProfSkill(p,idx){
     if(skillUseCapReached(p,"geneFreak:1")){ flashMsg("已用完2次"); return; }
     p.flags.geneUses++; p.flags.skillUsedThisRound=true; speakSkill(p,"geneFreak:1");
     openRespecModal(p);
-  } else if(p.prof==="climber" && idx===0){
-    if(p.flags.climberVertical){ flashMsg("本輪已發動垂直攀爬。"); return; }
-    p.flags.climberVertical=true;
-    log(p.name+" 發動垂直攀爬。"); speakSkill(p,"climber:0");
   } else if(p.prof==="climber" && idx===1){
     if(skillUseCapReached(p,"climber:1")){ flashMsg("已用完"); return; }
     p.flags.climberDietUsed=true; p.flags.dietThisRound=true;
@@ -6625,7 +6622,7 @@ function aiConsiderSkillAfterMove(p){
     if(aiThinksPoisoned(room) && p.stepsLeft>=1){
       const dests=Object.values(ROOMS).filter(r=>(r.floor===room.floor-1||r.floor===room.floor+1) && !aiThinksPoisoned(r));
       if(dests.length){
-        useProfSkill(p,0); // sets climberVertical + skillUsedThisRound
+        speakSkill(p,"climber:0"); // 垂直攀爬 is a standing ability now: no activation, no once-per-round budget
         p.room=dests[Math.floor(Math.random()*dests.length)].id; p.stepsLeft--;
         log(p.name+" 使用垂直攀爬逃離毒氣樓層，前往 "+p.room+"。");
       }
@@ -8790,7 +8787,7 @@ function renderAll(){
       undoBtn.onclick=undoMovement;
       raEl.appendChild(undoBtn);
     }
-    if(p.prof==="climber" && p.flags.climberVertical){
+    if(p.prof==="climber"){
       const climbBtn=document.createElement("button"); climbBtn.className="btn small";
       climbBtn.textContent=(iconsOff()?"":"🧗 ")+"垂直攀爬（直接上下樓，消耗1步）";
       climbBtn.onclick=()=>openClimberVerticalModal(p);
