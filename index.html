@@ -981,7 +981,7 @@ const PROFESSIONS = {
     {name:"節食", desc:"（主動，整局限用1次）本回合不需支付水與糧。", uses:1}
   ]},
   engineer:{name:"工程師", skills:[
-    {name:"回收裝置A", desc:"（被動）不需持有循環回收裝置卡，每輪可直接使用1次回收功能。<br>・從棄牌堆隨機取得1張道具（需有背包空位；垃圾不會被回收）。", passive:true}
+    {name:"回收裝置A", desc:"（被動）不需持有循環回收裝置卡，每輪可直接使用1次回收功能。<br>・從棄牌堆隨機翻出2張，自己挑1張取得，另1張放回。<br>・取得道具（需有背包空位；垃圾不會被回收）。", passive:true}
   ]},
   medic:{name:"醫官", skills:[
     {name:"醫者仁心", desc:"（被動）手術室原本需恰好2人在場才會治療<br>・你1人在場即可觸發，結算時恢復4點生命。", passive:true},
@@ -1209,7 +1209,7 @@ function clerkBlockedRoom(p){ const l=p.flags.clerkLast; return (l && l.round===
 // 實體擴充2: the second batch (a separate checkbox). PHYSICAL_EXP_PROFS below is the UNION of both
 // batches, used for hiding/counting; each checkbox only unlocks its own batch.
 const PHYSICAL_EXP2_PROFS=new Set(["bountyhunter","sentinel","cardsharp","warden","janitor"]);
-const PHYSICAL_EXP_PROFS=new Set(["bountyhunter","sentinel","cardsharp","warden","janitor","sniper","berserker","paramedic","mole","clerk","scout","lobbyist","leader"]);
+const PHYSICAL_EXP_PROFS=new Set(["bountyhunter","sentinel","cardsharp","warden","janitor","medic","sniper","berserker","paramedic","mole","clerk","scout","lobbyist","leader"]);
 // One small emoji "portrait" per profession — shown on the selection card and anywhere a player's
 // profession is listed in-game, so each of the 16 is visually distinct at a glance, not just by name.
 const PROF_ICON={
@@ -5038,9 +5038,34 @@ function useRecycleDevice(p){
   lockUsedItem(p,"recycledevice");
   doRecycle(p);
 }
+// 工程師的回收裝置A: look at 2 random recyclable cards from the discard pile, keep 1, the other stays in the pile.
+function engineerTake(p,idx){
+  const item=STATE.discardPile.splice(idx,1)[0];
+  p.inv.push(item);
+  p.flags.recycleUsedThisRound=true;
+  passiveFX(p,"engineer:0");
+  log(p.name+" 使用回收裝置A，獲得: "+ITEMS[item].name);
+  renderAll();
+  if(!p.isAI) revealDrawnItems([item],null,()=>{},"回收裝置A回收");
+}
 function useEngineerRecycle(p){
   if(!recycleChecks(p)) return;
-  doRecycle(p);
+  const pool=recycleableIndices().slice();
+  const picks=[];
+  while(picks.length<2 && pool.length) picks.push(pool.splice(Math.floor(Math.random()*pool.length),1)[0]);
+  if(p.isAI){
+    // AI keeps the more useful card: ration/medical/weapon over the rest.
+    const score=it=>(it==="water"||it==="food")?3:(it==="pill"||ITEMS[it].weapon||ITEMS[it].gun)?2:1;
+    picks.sort((a,b)=>score(STATE.discardPile[b])-score(STATE.discardPile[a]));
+    engineerTake(p,picks[0]); return;
+  }
+  if(picks.length===1){ engineerTake(p,picks[0]); return; }
+  openModal(`<h3>回收裝置A：選擇1張</h3>
+    <div class="muted" style="font-size:12px;margin-bottom:6px">從棄牌堆翻出2張，選1張帶走，另1張放回。</div>
+    ${picks.map((i,n)=>`<button class="btn small warn" id="engPick${n}" style="margin:4px">${ITEMS[STATE.discardPile[i]].name}</button>`).join("")}<br><br>
+    <button class="btn small ghost" id="engCancel">取消</button>`);
+  picks.forEach((i,n)=>{ document.getElementById("engPick"+n).onclick=()=>{ closeModal(); engineerTake(p,i); }; });
+  bindModalClose("engCancel");
 }
 
 /* ===================== 神秘商店道具 (地圖2) ===================== */
@@ -6920,7 +6945,7 @@ function resolveAITurn(p){
   // any use of the physical item either): just use it whenever there's something to pull back and
   // room to carry it. 垃圾 never shows up as a result (see recycleableIndices).
   if(p.prof==="engineer" && !p.flags.recycleUsedThisRound && carryRoom(p)>0 && recycleableIndices().length>0){
-    doRecycle(p);
+    useEngineerRecycle(p);
   }
   // 劉備的仁德 is no longer an AI decision at all — it's a forced automatic trigger resolved in
   // settleRound() for every 劉備 (human or AI) alike, so there's nothing to consider here.
