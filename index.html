@@ -1510,7 +1510,7 @@ function iconsOff(){ return document.documentElement.hasAttribute("data-no-icons
 const AVATAR_PROFS=new Set(["arsonist", "assassin", "bartender", "berserker", "bodyguard", "bomb", "boss", "bountyhunter", "butcher", "cardsharp", "chef", "chemist", "clerk", "climber", "collector", "courier", "demolitions", "detective", "diver", "embalmer", "engineer", "exorcist", "farmer", "fatty", "gambler", "geneFreak", "gourmet", "guardian", "hacker", "herbalist", "hermit", "hunter", "janitor", "jiangwanan", "laiqingde", "leader", "lobbyist", "lucky", "medic", "mediocre", "merc", "miner", "mole", "oracle", "outsider", "paramedic", "pickpocket", "pilot", "prepper", "runner", "scavenger", "scout", "sentinel", "shade", "shenboyang", "shopper", "smuggler", "sniper", "survivor", "suzhenchang", "tamer", "toxic", "trucker", "tycoon", "vampire", "veteran", "warden", "witch"]);
 function profAvatarHtml(id){
   if(iconsOff()||!AVATAR_PROFS.has(id)) return profIcon(id);
-  return `<img class="prof-av" src="images/avatars/${id}.png" alt="" draggable="false">`;
+  return `<img class="prof-av" src="images/avatars/${id}.webp" alt="" draggable="false">`;
 }
 function profIcon(id){
   if(!iconsOff()) return PROF_ICON[id]||"❔";

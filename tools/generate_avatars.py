@@ -8,7 +8,7 @@ AVATARS_DIR = "images/avatars"
 os.makedirs(CARDS_DIR, exist_ok=True)
 os.makedirs(AVATARS_DIR, exist_ok=True)
 
-def create_rounded_avatar(img, size=(256, 256), radius=36, border_color=(76, 214, 224, 220), border_width=3):
+def create_rounded_avatar(img, size=(512, 512), radius=72, border_color=(76, 214, 224, 220), border_width=5):
     """Takes an image, resizes/crops to square size, applies rounded corners and glowing border."""
     # Resize and crop to square
     w, h = img.size
@@ -67,7 +67,7 @@ for r, row in enumerate(phys_grid1):
         av_w = int(cw1 - margin * 2)
         av_crop = img1.crop((x0 + margin, y0 + y_offset, x1 - margin, y0 + y_offset + av_w))
         av = create_rounded_avatar(av_crop)
-        av.save(f"{AVATARS_DIR}/{prof_id}.png")
+        av.save(f"{AVATARS_DIR}/{prof_id}.webp", quality=88, method=6)
         print(f"  Saved {name} ({prof_id})")
 
 for r, row in enumerate(phys_grid2):
@@ -83,7 +83,7 @@ for r, row in enumerate(phys_grid2):
         av_w = int(cw2 - margin * 2)
         av_crop = img2.crop((x0 + margin, y0 + y_offset, x1 - margin, y0 + y_offset + av_w))
         av = create_rounded_avatar(av_crop)
-        av.save(f"{AVATARS_DIR}/{prof_id}.png")
+        av.save(f"{AVATARS_DIR}/{prof_id}.webp", quality=88, method=6)
         print(f"  Saved {name} ({prof_id})")
 
 # 2. Process Classic Expansion Roles from aa205b77-8e49-4a00-8d91-5d756831caec.png (1024 x 1536)
@@ -113,7 +113,7 @@ for prof_id, (name, r, c, y_off) in classic_roles.items():
     av_w = int(cw_c - margin * 2)
     av_crop = img_classic.crop((x0 + margin, y0 + y_off, x1 - margin, y0 + y_off + av_w))
     av = create_rounded_avatar(av_crop, border_color=(255, 180, 50, 220))
-    av.save(f"{AVATARS_DIR}/{prof_id}.png")
+    av.save(f"{AVATARS_DIR}/{prof_id}.webp", quality=88, method=6)
     print(f"  Saved {name} ({prof_id})")
 
 # 3. Process Newly AI-Generated Chibi Characters from images/characters/
@@ -138,7 +138,7 @@ for prof_id, (name, fpath, top_offset) in ai_generated.items():
         top = top_offset
         av_crop = src_img.crop((left, top, left + side, top + side))
         av = create_rounded_avatar(av_crop, border_color=(76, 214, 224, 240))
-        av.save(f"{AVATARS_DIR}/{prof_id}.png")
+        av.save(f"{AVATARS_DIR}/{prof_id}.webp", quality=88, method=6)
         print(f"  Saved {name} ({prof_id})")
 
 # 4. StockCake mappings for remaining roles
@@ -155,7 +155,7 @@ for prof_id, (name, fpath, top, side) in stock_roles.items():
         left = (w - side) // 2
         av_crop = src_img.crop((left, top, left + side, top + side))
         av = create_rounded_avatar(av_crop, border_color=(255, 206, 107, 240))
-        av.save(f"{AVATARS_DIR}/{prof_id}.png")
+        av.save(f"{AVATARS_DIR}/{prof_id}.webp", quality=88, method=6)
         print(f"  Saved {name} ({prof_id})")
 
 # 5. Q版 sheet (2 rows x 4 cols, 1536 x 1024): expansion roles, name banner at the bottom of each cell
@@ -171,7 +171,7 @@ for i, (prof_id, name) in enumerate(q_roles):
     card = q_sheet.crop((x0, y0, x0 + qw, y0 + 410))  # above the name banner
     card.save(f"{CARDS_DIR}/{prof_id}.png")
     av = create_rounded_avatar(q_sheet.crop((x0, y0, x0 + qw, y0 + qw)), border_color=(255, 206, 107, 240))
-    av.save(f"{AVATARS_DIR}/{prof_id}.png")
+    av.save(f"{AVATARS_DIR}/{prof_id}.webp", quality=88, method=6)
     print(f"  Saved {name} ({prof_id})")
 
 # 6. Q版 sheets (1024 x 559, 4 x 2 characters each): general / special roles. Boxes are hand-placed
@@ -198,7 +198,7 @@ for fname in sorted(os.listdir(Q_DIR)):
         box = (cx - SZ // 2, top, cx + SZ // 2, top + SZ)
         crop = sheet.crop(box).resize((512, 512), Image.Resampling.LANCZOS)
         crop.save(f"{CARDS_DIR}/{prof_id}.png")
-        create_rounded_avatar(crop, border_color=(255, 206, 107, 240)).save(f"{AVATARS_DIR}/{prof_id}.png")
+        create_rounded_avatar(crop, border_color=(255, 206, 107, 240)).save(f"{AVATARS_DIR}/{prof_id}.webp", quality=88, method=6)
         print(f"  Saved {prof_id}")
 
 print("\nAll avatars and cards generated successfully!")
