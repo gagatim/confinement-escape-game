@@ -532,6 +532,15 @@
   html[data-premium] .btn.ghost{background:rgba(255,255,255,.6);border-color:rgba(200,212,235,.95)}
   html[data-premium] .btn.ghost:hover:not(:disabled){background:#fff}
   html[data-premium] .cb-card{background:linear-gradient(165deg,#fff,#eef2fb);color:var(--ink)}
+
+  /* ---- 大圖模式: character portraits drawn 4x as large (32px -> 128px on profession cards). ---- */
+  html[data-bigav] .prof-card .prof-head{display:grid;grid-template-columns:auto 1fr;align-items:center;gap:6px 8px}
+  html[data-bigav] .prof-card .prof-icon{grid-column:1/-1;justify-self:center;width:128px;height:128px;flex:0 0 128px;
+    border-radius:16px;font-size:64px}
+  html[data-bigav] .prof-card .prof-head .tag{justify-self:start}
+  html[data-bigav] .prof-icon .prof-av{border-radius:15px}
+  html[data-bigav] #youProf .prof-av{width:112px;height:112px;display:block;margin-bottom:4px;border-radius:14px}
+  html[data-bigav] .cb-card .ic .prof-av{width:100%;height:auto;aspect-ratio:1;border-radius:12px}
 </style>
 
 <div class="wrap">
@@ -548,6 +557,7 @@
     <button class="btn small ghost" id="statsBtn" title="查看各職業的對局數據與強弱分析">📊 職業數據</button>
     <button class="btn small ghost" id="themeBtn"title="切換明亮/暗黑介面">🌙 暗色介面</button>
     <button class="btn small ghost" id="premiumBtn" title="高質感模式：白色清爽介面、毛玻璃面板與淡淡的平面圖背景">✨ 高質感模式</button>
+    <button class="btn small ghost" id="bigAvBtn" title="大圖模式：職業頭像放大四倍">🔍 大圖模式</button>
     <button class="btn small ghost" id="muteBtn" title="開關音效">🔊 音效</button>
     <button class="btn small ghost" id="voiceMuteBtn" title="開關角色語音">🗣 語音</button>
     <button class="btn small warn hidden" id="abandonBtn">放棄測試，重新開始</button>
@@ -2052,6 +2062,20 @@ function showHowTo(){
   new MutationObserver(label).observe(root,{attributes:true,attributeFilter:["data-no-icons"]});
   let saved="0"; try{ saved=localStorage.getItem(KEY)||"0"; }catch(e){}
   if(saved==="1") set(true,false); else label();
+})();
+
+/* ---------- 大圖模式: portraits at 4x size, persisted ---------- */
+(()=>{
+  const KEY="confinement_escape_bigav", root=document.documentElement, btn=document.getElementById("bigAvBtn");
+  const label=()=>{ btn.textContent=(iconsOff()?"":"🔍 ")+(root.hasAttribute("data-bigav")?"大圖模式：開":"大圖模式"); };
+  btn.addEventListener("click",()=>{
+    const on=!root.hasAttribute("data-bigav");
+    root.toggleAttribute("data-bigav",on); label();
+    try{ localStorage.setItem(KEY,on?"1":"0"); }catch(e){}
+  });
+  new MutationObserver(label).observe(root,{attributes:true,attributeFilter:["data-no-icons"]});
+  try{ if(localStorage.getItem(KEY)==="1") root.setAttribute("data-bigav",""); }catch(e){}
+  label();
 })();
 
 /* ---------- 低調模式 (boss key): instantly cover the game with a fake spreadsheet ---------- */
