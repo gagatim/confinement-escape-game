@@ -93,6 +93,7 @@
   .prof-card .prof-icon{width:32px;height:32px;flex:0 0 32px;border-radius:8px;background:var(--panel);
     border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:18px;line-height:1}
   .prof-icon .prof-av{width:100%;height:100%;object-fit:cover;border-radius:7px;display:block}
+  #youProf .prof-av{width:28px;height:28px;object-fit:cover;border-radius:7px;vertical-align:middle}
   .cb-card .ic .prof-av{width:64px;height:64px;object-fit:cover;border-radius:10px;vertical-align:top}
   .prof-card.selected .prof-icon{border-color:var(--cyan-bright);background:#0e2226}
   html[data-no-icons] .prof-card .prof-icon{font-size:12px;font-family:"JetBrains Mono",monospace}
@@ -8578,7 +8579,7 @@ function renderAll(){
   EL.poisonedFloors.textContent=[...STATE.poisoned].map(f=>FLOOR_LABEL[f]).join("、")||"無";
   EL.voteBallotFloors.textContent=(STATE.voteBallot||[]).filter(f=>!STATE.poisoned.has(f)).map(f=>FLOOR_LABEL[f]).join("、")||"無";
   EL.youName.textContent=p.name;
-  EL.youProf.textContent=profIcon(p.prof)+" "+PROFESSIONS[p.prof].name;
+  EL.youProf.innerHTML=profAvatarHtml(p.prof)+" "+PROFESSIONS[p.prof].name;
   // 黑社會老大的你們先上: shows how many 小弟 charges are left to soak a hit for him — 0 means
   // the skill has stopped doing anything and damage is back to hitting him directly.
   // 蔣萬安的作秀: everyone can see where he is at all times.
