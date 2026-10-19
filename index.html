@@ -3591,7 +3591,7 @@ function beginRound(){
   // 順序牌: a fresh random turn order each round, over everyone still taking turns — alive
   // players AND 暗影 (ghosts get a real turn to move, not an auto-skip).
   STATE.turnOrder=shuffleArr(STATE.players.filter(p=>p.alive||p.ghost).map(p=>p.id));
-  // 賴清德的萊爾校長: a living 賴清德 decides the whole turn order. AI puts himself first, everyone else stays shuffled.
+  // 青鳥王的萊爾校長: a living 青鳥王 decides the whole turn order. AI puts himself first, everyone else stays shuffled.
   const lai=STATE.players.find(x=>x.prof==="laiqingde" && x.alive && !x.ghost);
   const startTurns=()=>{ STATE.turnIndex=0; STATE.phase="positioning"; advanceTurn(); };
   if(lai){
