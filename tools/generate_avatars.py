@@ -174,4 +174,31 @@ for i, (prof_id, name) in enumerate(q_roles):
     av.save(f"{AVATARS_DIR}/{prof_id}.png")
     print(f"  Saved {name} ({prof_id})")
 
+# 6. Q版 sheets (1024 x 559, 4 x 2 characters each): general / special roles. Boxes are hand-placed
+# (cx, top) squares of SZ px around each head+torso so the printed labels stay out of frame.
+SZ = 165
+Q_DIR = '職業Q版圖片未條整'
+Q_SHEETS = {  # filename prefix -> {prof_id: (cx, top)}
+    "飛行員": {"pilot": (158, 68), "demolitions": (402, 68), "chef": (645, 68), "smuggler": (887, 68),
+             "survivor": (180, 300), "runner": (415, 300), "herbalist": (655, 300), "veteran": (885, 300)},
+    "神偷": {"pickpocket": (155, 68), "diver": (405, 68), "gourmet": (645, 68), "farmer": (870, 68),
+           "miner": (185, 300), "hunter": (420, 300), "boss": (655, 300), "collector": (885, 300)},
+    "守護者": {"guardian": (150, 68), "hermit": (395, 68), "prepper": (640, 68), "witch": (870, 68),
+             "toxic": (180, 300)},
+    "毒域": {"oracle": (162, 68), "arsonist": (415, 68), "assassin": (665, 68), "bodyguard": (890, 68),
+           "suzhenchang": (182, 300), "jiangwanan": (410, 300), "shenboyang": (655, 300), "laiqingde": (885, 290)},
+}
+print("\nProcessing Q-version general/special sheets...")
+for fname in sorted(os.listdir(Q_DIR)):
+    key = next((k for k in Q_SHEETS if fname.startswith(k)), None)
+    if not key:
+        continue
+    sheet = Image.open(f"{Q_DIR}/{fname}").convert("RGB")
+    for prof_id, (cx, top) in Q_SHEETS[key].items():
+        box = (cx - SZ // 2, top, cx + SZ // 2, top + SZ)
+        crop = sheet.crop(box).resize((512, 512), Image.Resampling.LANCZOS)
+        crop.save(f"{CARDS_DIR}/{prof_id}.png")
+        create_rounded_avatar(crop, border_color=(255, 206, 107, 240)).save(f"{AVATARS_DIR}/{prof_id}.png")
+        print(f"  Saved {prof_id}")
+
 print("\nAll avatars and cards generated successfully!")
