@@ -589,6 +589,7 @@
     <button class="btn small ghost" id="premiumBtn" title="高質感模式：白色清爽介面、毛玻璃面板與淡淡的平面圖背景">✨ 高質感模式</button>
     <button class="btn small ghost" id="bigAvBtn" title="大圖模式：職業頭像放大四倍">🔍 大圖模式</button>
     <button class="btn small ghost" id="muteBtn" title="開關音效">🔊 音效</button>
+    <button class="btn small ghost" id="sfxModeBtn" title="戰鬥音效版本：真實錄音取樣 / AI 程式合成音（Claude 設計）">🎚 戰鬥音：錄音版</button>
     <button class="btn small ghost" id="voiceMuteBtn" title="開關角色語音">🗣 語音</button>
     <button class="btn small warn hidden" id="abandonBtn">放棄測試，重新開始</button>
   </div>
@@ -1829,6 +1830,7 @@ const SFX=(()=>{
   const rnd=()=>Math.random();
   const J=(x,p)=>x*(1+(rnd()*2-1)*p);              // +-p random variation
   const sampleBufs={}; let samplesLoading=false;
+  let useSamples=localStorage.getItem("sfxSynth")!=="1";   // false -> 程式合成的戰鬥音效版本
   function loadSamples(){
     if(samplesLoading||!ctx) return; samplesLoading=true;
     Object.keys(SFX_SAMPLES).forEach(kind=>{
@@ -1843,7 +1845,7 @@ const SFX=(()=>{
   }
   // plays one random decoded sample of `kind` on the combat bus; false -> caller falls back to synth
   function playSample(kind,vol){
-    const arr=sampleBufs[kind]; if(!ctx||!arr||!arr.length) return false;
+    const arr=sampleBufs[kind]; if(!useSamples||!ctx||!arr||!arr.length) return false;
     const src=ctx.createBufferSource(); src.buffer=arr[Math.floor(rnd()*arr.length)];
     src.playbackRate.value=J(1,0.06);
     const g=ctx.createGain(); g.gain.value=vol; src.connect(g); g.connect(buses.combat); src.start();
@@ -1917,6 +1919,8 @@ const SFX=(()=>{
   }
   return {
     isMuted:()=>muted,
+    usingSamples:()=>useSamples,
+    setSamples(v){ useSamples=v; try{ localStorage.setItem("sfxSynth",v?"0":"1"); }catch(e){} },
     setMuted(v){
       muted=v; localStorage.setItem("sfxMuted",v?"1":"0");
       if(master && ctx){ master.gain.cancelScheduledValues(ctx.currentTime); master.gain.setTargetAtTime(v?0:0.85,ctx.currentTime,0.02); }
@@ -2153,6 +2157,18 @@ function showHowTo(){
   });
   new MutationObserver(label).observe(root,{attributes:true,attributeFilter:["data-no-icons"]});
   try{ if(localStorage.getItem(KEY)==="1") root.setAttribute("data-bigav",""); }catch(e){}
+  label();
+})();
+
+/* ---------- 戰鬥音效版本: recorded CC0 samples vs. the procedurally synthesized (AI-designed) set ---------- */
+(()=>{
+  const btn=document.getElementById("sfxModeBtn");
+  const label=()=>{ btn.textContent=(iconsOff()?"":"🎚 ")+"戰鬥音："+(SFX.usingSamples()?"錄音版":"AI合成版"); };
+  btn.addEventListener("click",()=>{
+    SFX.setSamples(!SFX.usingSamples()); label();
+    SFX.hit(); setTimeout(()=>SFX.whoosh(),260); setTimeout(()=>SFX.shot(),520); setTimeout(()=>SFX.crit(),800);   // 試聽
+  });
+  new MutationObserver(label).observe(document.documentElement,{attributes:true,attributeFilter:["data-no-icons"]});
   label();
 })();
 
