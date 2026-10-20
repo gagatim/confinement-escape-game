@@ -1,0 +1,5 @@
+node_modules/
+tools/sim_out/
+tools/sim_*.json
+tools/profs*.json
+tools/analysis_*.txt
