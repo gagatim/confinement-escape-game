@@ -924,36 +924,23 @@ const SPAWN_ROOMS = ["103","B103","B303","B307","B402","B603"]; // 紅色出生�
 const ROCKET_AI_AVOID_ROOMS = new Set(["102","B102","B602","B104","B405","B302","B206","B403","B105"]);
 const AIRDROP_SCHEDULE = [null,["knifeX2"],["wine","wine"],["waterfood"],["pistol"],["adrenaline"],["pill"]];
 
-function bfsPath(from,to,maxSteps){
-  if(from===to) return [from];
-  let q=[[from]], seen=new Set([from]);
-  while(q.length){
-    const path=q.shift();
-    const node=path[path.length-1];
-    if(path.length-1>=maxSteps) continue;
-    for(const n of (ADJ[node]||[])){
-      if(seen.has(n)) continue;
-      seen.add(n);
-      const np=[...path,n];
-      if(n===to) return np;
-      q.push(np);
-    }
-  }
-  return null;
-}
+// ADJ is a static table, so one BFS per source room covers every later bfsDist call from it.
+const BFS_DIST_CACHE={};
 function bfsDist(from,to){
   if(from===to) return 0;
-  let q=[[from,0]], seen=new Set([from]);
-  while(q.length){
-    const [node,d]=q.shift();
-    for(const n of (ADJ[node]||[])){
-      if(seen.has(n)) continue;
-      seen.add(n);
-      if(n===to) return d+1;
-      q.push([n,d+1]);
+  let m=BFS_DIST_CACHE[from];
+  if(!m){
+    m=BFS_DIST_CACHE[from]={[from]:0};
+    const q=[from];
+    for(let i=0;i<q.length;i++){
+      const node=q[i];
+      for(const n of (ADJ[node]||[])){
+        if(n in m) continue;
+        m[n]=m[node]+1; q.push(n);
+      }
     }
   }
-  return Infinity;
+  return to in m ? m[to] : Infinity;
 }
 // Returns the actual shortest room-by-room route (incl. both endpoints) rather than just the
 // step count bfsDist gives — used to show players the corridors/ladders their move actually
@@ -1270,7 +1257,7 @@ const PROFESSIONS = {
   berserker:{name:"狂戰士", skills:[
     {name:"血怒", desc:"（被動）生命≤6時，武力+2。", passive:true},
     {name:"困獸之鬥", desc:"（被動）生命≤3時，受到的戰鬥傷害-2。", passive:true},
-    {name:"嗜殺", desc:"（被動）在戰鬥中擊殺其他玩家後，武力永久+1（最多累積2次）。", passive:true}
+    {name:"嗜殺", desc:"（被動）在戰鬥中對其他玩家造成傷害後，武力永久+1，下回合移動步數+3。", passive:true}
   ]},
   paramedic:{name:"急救員", skills:[
     {name:"戰地急救", desc:"（被動）上一輪結束時生命≤6，本輪開始時恢復1點生命。", passive:true},
@@ -3630,6 +3617,11 @@ function beginRound(){
       log(p.name+"（無聲離場）上輪擊殺了玩家，本輪移動步數+3（共"+p.stepsLeft+"步）。");
     }
     // ---- 三國模式：每輪開局固定/條件式速度加成 ----
+    // 狂戰士的嗜殺: the +3 steps earned by last round's combat damage (see berserkerBloodlust).
+    if(p.prof==="berserker" && p.flags.berserkSpeedNext){
+      p.flags.berserkSpeedNext=false; p.stepsLeft+=3;
+      log(p.name+"（嗜殺）上輪戰鬥造成了傷害，本輪移動步數+3（共"+p.stepsLeft+"步）。");
+    }
     if(p.prof==="xiahouyuan") p.stepsLeft+=1; // 神速
     if(p.prof==="gongsunzan") p.stepsLeft+=2; // 白馬義從
     if(p.prof==="machao" && p.hp<p.maxhp/2) p.stepsLeft+=1; // 西涼血脈
@@ -7266,6 +7258,12 @@ function screenShake(){
 // killerId is optional and only ever passed from resolveCombat's two 1v1 hits — every other
 // damage source (rocket, poison, hunger, ambush, ...) has no single clean "who gets credit"
 // answer, so it's left undefined there and 屠夫's 鮮血盛宴 simply never triggers off them.
+// 狂戰士的嗜殺: every time he actually deals combat damage to a player (killerId path only), power +1 permanently.
+function berserkerBloodlust(atk,target,dealt){
+  if(!atk || !atk.alive || atk.prof!=="berserker" || dealt<=0) return;
+  atk.power++; atk.flags.berserkSpeedNext=true; passiveFX(atk,"berserker:2");
+  log(atk.name+"（嗜殺）對 "+target.name+" 造成傷害，武力永久+1（現為"+atk.power+"），下回合移動步數+3。");
+}
 function damagePlayer(p,amount,cause,killerId){
   if(amount<=0) return;
   p.roundEvents=p.roundEvents||[];
@@ -7320,7 +7318,7 @@ function damagePlayer(p,amount,cause,killerId){
      (/^與.*戰鬥$/.test(cause) && STATE.players.some(x=>x.prof==="jiangwanan" && x.alive && !x.ghost && x.room===p.room)))){
     const lost=Math.min(amount,Math.max(0,p.hp-1));
     p.dmgTaken=(p.dmgTaken||0)+lost;
-    if(killerId!==undefined && lost>0){ const atk=STATE.players.find(x=>x.id===killerId); if(atk) atk.dmgDealt=(atk.dmgDealt||0)+lost; }
+    if(killerId!==undefined && lost>0){ const atk=STATE.players.find(x=>x.id===killerId); if(atk) atk.dmgDealt=(atk.dmgDealt||0)+lost; berserkerBloodlust(atk,p,lost); }
     p.hp-=lost; p.roundEvents.push({room:p.room,cause:cause+"〔廢死：保留1血〕",amount:lost});
     return;
   }
@@ -7333,6 +7331,7 @@ function damagePlayer(p,amount,cause,killerId){
   if(killerId!==undefined){
     const atk=STATE.players.find(x=>x.id===killerId);
     if(atk) atk.dmgDealt=(atk.dmgDealt||0)+Math.min(amount,p.hp);
+    berserkerBloodlust(atk,p,Math.min(amount,p.hp));
   }
   p.hp-=amount;
   p.roundEvents.push({room:p.room,cause,amount});
@@ -7356,10 +7355,6 @@ function killPlayer(p,cause,killerId){
   if(killerId!==undefined){
     const killer=STATE.players.find(x=>x.id===killerId);
     if(killer && killer.alive && killer.prof==="assassin") killer.flags.assassinSpeedNext=true; // 無聲離場
-    if(killer && killer.alive && killer.prof==="berserker" && (killer.flags.berserkKills||0)<2){ // 狂戰士的嗜殺
-      killer.flags.berserkKills=(killer.flags.berserkKills||0)+1; killer.power++; passiveFX(killer,"berserker:2");
-      log(killer.name+"（嗜殺）擊殺 "+p.name+"，武力永久+1（"+killer.flags.berserkKills+"/2）。");
-    }
     if(killer && killer.alive && killer.prof==="bountyhunter"){ // 賞金獵人的戰利品
       killer.hp=Math.min(killer.maxhp,killer.hp+2); passiveFX(killer,"bountyhunter:1");
       const got=[];
