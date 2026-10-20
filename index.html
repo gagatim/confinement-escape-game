@@ -144,6 +144,8 @@
   .room-chip.reachable{border-color:var(--cyan);box-shadow:0 0 8px rgba(76,214,224,.3)}
   .room-chip.here{border-width:2px;border-color:var(--amber-bright);background:#2a2410;
     box-shadow:0 0 12px 1px rgba(255,206,107,.55)}
+  .room-chip.boss{outline:2px solid var(--ember);box-shadow:0 0 10px var(--ember)}
+  .room-chip.boss::after{content:"👹";position:absolute;top:-8px;right:-4px;font-size:13px;line-height:1}
   .room-chip.poison{border-color:var(--toxic);background:#122313;color:var(--toxic-bright)}
   .room-chip.dead{opacity:.35;cursor:default}
   .room-chip.dead:hover{transform:none;border-color:var(--line)}
@@ -608,6 +610,8 @@
         <input type="checkbox" id="map2Toggle"> 啟用地圖2（B104／B405／B302 變為樂透房：使用時隨機獲得屬性加成、回血、本輪躲避毒氣或永久免疫毒氣其中一種；B102／B602 變為配給站：各有5份水+5份糧，可搜索3次、每次70%機率取得1份，第6輪起各補給1份；B305／B308 變為神秘商店：共用同一份庫存（地雷/麻醉鏢/煙霧彈/神秘骰子/幸運銅板/氧氣瓶/傳送符/急救噴霧各2份），可搜索2次、每次1/3機率取得道具，未取得時改拿1份垃圾）</label>
       <label class="muted" style="display:block;font-size:13px">
         <input type="checkbox" id="bountyToggle"> 啟用懸賞機制（第3輪起隨機1名存活玩家成為懸賞目標，全體公告；擊殺者可獲得2枚金條＋1張隨機神秘商店道具〔地雷/麻醉鏢/煙霧彈/神秘骰子/幸運銅板/氧氣瓶/傳送符/急救噴霧其中1張，憑空獲得不佔負重〕；目標死於非戰鬥原因則獎勵作廢，撐過第5輪未被擊殺則懸賞失效；可與地圖2獨立開關，不需同時啟用）</label>
+      <label class="muted" style="display:block;font-size:13px;margin-top:8px">
+        <input type="checkbox" id="bossToggle"> 啟用魔王模式（第3輪起地圖上出現魔王，每輪結算時朝人最多的房間移動2步；同房玩家合力攻擊它、並各受3點傷害。擊殺魔王：傷害最高者武力+2、回復3點生命）</label>
     </div>
     <div class="card" style="margin-top:12px">
       <h2 style="font-size:16px;color:var(--cyan-bright)">1. 選擇職業</h2>
@@ -2690,6 +2694,7 @@ let map2Mode=false;
 // map2 room conversions (lottery/ration/mystery shop), and vice versa. See beginRound() for
 // assignment/expiry and killPlayer() for the payout.
 let bountyMode=false;
+let bossMode=false; // 魔王模式：見 spawnBoss／bossAct
 // 三國模式: off by default — swaps the ENTIRE profession roster (both the human's card grid and
 // the AI's random-pick pool in startGame()) to the 40 三國 武將 instead of the normal 45. Unlike
 // 擴充模式 this isn't additive: while it's on, the base/擴充 cards are hidden, not just supplemented.
@@ -2777,6 +2782,7 @@ Object.entries(PROFESSIONS).forEach(([id,p])=>{
 });
 document.getElementById("map2Toggle").addEventListener("change",(e)=>{ map2Mode=e.target.checked; });
 document.getElementById("bountyToggle").addEventListener("change",(e)=>{ bountyMode=e.target.checked; });
+document.getElementById("bossToggle").addEventListener("change",(e)=>{ bossMode=e.target.checked; });
 // Single source of truth for which profession cards show, given sanguoMode / physicalMode /
 // expansionMode — and drops the current selection if it just got hidden.
 function syncProfCards(){
@@ -3203,7 +3209,7 @@ function startGame(){
       players.push(makePlayer(i,true,pid,rollAIStats(pid)));
     }
   }
-  STATE={round:1, phase:"positioning", players, poisoned:new Set(), detoxedRooms:new Set(), voteCounts:{}, voteLog:[], voteBallot:[], discardPile:[], gameOver:false, roundHistory:[], bountyTargetId:null, sanguoDisabledRooms:new Set(), sanguoTeamMode};
+  STATE={round:1, phase:"positioning", players, poisoned:new Set(), detoxedRooms:new Set(), voteCounts:{}, voteLog:[], voteBallot:[], discardPile:[], gameOver:false, roundHistory:[], bountyTargetId:null, boss:null, sanguoDisabledRooms:new Set(), sanguoTeamMode};
   // profession init effects
   players.forEach(p=>{
     if(p.prof==="tamer"){ p.power+=1; p.carry+=1; }
@@ -3752,6 +3758,7 @@ function beginRound(){
       STATE.bountyTargetId=null;
     }
   }
+  if(bossMode && STATE.round===3 && !STATE.boss) spawnBoss();
   // Stock this round's airdrop schedule into the shared bag exactly once — collectAirdrop()
   // only draws from it, so several pickups this round don't each re-add the whole schedule.
   const airdropSched=AIRDROP_SCHEDULE[STATE.round];
@@ -6689,6 +6696,7 @@ function aiChooseTarget(p){
     // 本輪候選毒氣樓層會在本輪結算立即生效：停留在候選樓層有機率吃毒，按傷害折算期望扣分。
     if(!aiThinksPoisoned(room) && !room.poisonRequires && ballotFloors.includes(room.floor)) score-=poisonDmgNow*1.5/ballotFloors.length;
     if(room.draw>0) score+=1.5;
+    if(STATE.boss){ const bd=bfsDist(r,STATE.boss.room); if(bd<=BOSS_STEPS) score-=(BOSS_STEPS+1-bd)*1.5; } // 魔王每輪走2步，離得越近越危險
     // Drift bonuses: same needs as above, but scored by distance-to-nearest-match across the
     // WHOLE map (not just this round's reachable set) so the AI still leans toward a useful room
     // even when it's out of range this turn, instead of wandering randomly until it happens to be
@@ -7260,6 +7268,63 @@ function resolveAITurn(p){
 }
 
 /* ===================== SETTLEMENT ===================== */
+/* ---------- 魔王模式（方案A最小版）----------
+   第3輪起出現，位置公開。每輪結算（戰鬥、毒氣之後）：先朝「存活玩家最多的房間」移動2步，
+   再由同房玩家各以戰力攻擊它；魔王若沒死，對同房每位玩家造成3點傷害（走 damageWard）。
+   擊殺：傷害最高者武力永久+2並回復3點生命。血量＝8＋3×出現時存活人數。 */
+const BOSS_DMG=3, BOSS_STEPS=2;
+function spawnBoss(){
+  const alive=alivePlayers().filter(x=>!x.ghost);
+  if(!alive.length) return;
+  const rooms=Object.keys(ROOMS).filter(r=>r!=="B701");
+  const room=rooms[Math.floor(Math.random()*rooms.length)];
+  const hp=8+3*alive.length;
+  STATE.boss={room,hp,maxhp:hp,dmg:{}};
+  log("👹 <b>魔王降臨</b>：出現在「"+room+" "+(ROOMS[room].name||"")+"」（血量 "+hp+"）！每輪結算會朝人最多的房間移動2步，同房者各受"+BOSS_DMG+"點傷害。","dmg");
+}
+function bossAct(){
+  const B=STATE.boss; if(!B) return;
+  const living=()=>STATE.players.filter(x=>x.alive && !x.ghost);
+  // 移動：目標＝存活玩家最多的房間（同數隨機）；每步走向讓距離最小的相鄰房間
+  const cnt={}; living().forEach(x=>{ cnt[x.room]=(cnt[x.room]||0)+1; });
+  const best=Math.max(0,...Object.values(cnt));
+  if(best>0){
+    const tops=Object.keys(cnt).filter(r=>cnt[r]===best && r!=="B701");
+    const target=tops.length?tops[Math.floor(Math.random()*tops.length)]:null;
+    if(target){
+      const from=B.room;
+      for(let i=0;i<BOSS_STEPS && B.room!==target;i++){
+        const nbs=(ADJ[B.room]||[]).filter(n=>n!=="B701");
+        if(!nbs.length) break;
+        let bd=Infinity, pick=[];
+        nbs.forEach(n=>{ const d=bfsDist(n,target); if(d<bd){ bd=d; pick=[n]; } else if(d===bd) pick.push(n); });
+        B.room=pick[Math.floor(Math.random()*pick.length)];
+      }
+      if(B.room!==from) log("👹 魔王從「"+from+"」移動到「"+B.room+" "+(ROOMS[B.room].name||"")+"」。","dmg");
+    }
+  }
+  const here=living().filter(x=>x.room===B.room);
+  if(!here.length){ log("👹 魔王停在「"+B.room+"」，這裡沒有人（剩餘血量 "+B.hp+"/"+B.maxhp+"）。"); return; }
+  // 玩家反擊：每人造成自己的戰力（至少1）
+  here.forEach(x=>{ const d=Math.max(1,combatPower(x)); B.hp-=d; B.dmg[x.id]=(B.dmg[x.id]||0)+d; });
+  log("⚔️ "+here.map(x=>x.name).join("、")+" 合力攻擊魔王，魔王剩餘血量 "+Math.max(0,B.hp)+"/"+B.maxhp+"。");
+  if(B.hp<=0){
+    const topId=Object.keys(B.dmg).map(Number).sort((a,b)=>B.dmg[b]-B.dmg[a])[0];
+    const top=STATE.players.find(x=>x.id===topId);
+    log("👹 <b>魔王被擊倒了！</b>","heal");
+    if(top && top.alive){
+      top.power+=2; top.hp=Math.min(top.maxhp,top.hp+3);
+      log("🏆 "+top.name+" 對魔王造成最多傷害（"+B.dmg[top.id]+"），武力永久+2（現"+top.power+"）並回復3點生命（HP→"+top.hp+"）。","heal");
+    }
+    STATE.boss=null;
+    return;
+  }
+  here.forEach(x=>{
+    const gc=damageWard(x,BOSS_DMG);
+    damagePlayer(x,gc.dmg,"魔王");
+    log("👹 魔王襲擊 "+x.name+"，造成 "+gc.dmg+" 點傷害"+(gc.note||"")+"。","dmg");
+  });
+}
 function applyLaser(p){
   p.pendingLaser=true;
 }
@@ -8173,6 +8238,8 @@ function* settleRoundCore(){
     log(p.name+"（畏光）停留在頂樓房間，受到 "+gc.dmg+" 點傷害"+(gc.note||"")+"。","dmg"); passiveFX(p,"vampire:1");
   });
 
+  bossAct();
+
   // 結算流程 3.3 步驟4：此時才詢問玩家是否繳交水糧（戰鬥、毒氣結果已公示）。
   if(humansToPay().length) yield {ask:askPayModals};
   // 4) hunger (round>=2)
@@ -8955,6 +9022,7 @@ function renderAll(){
     const here=r.id===p.room;
     chip.classList.toggle("here", here);
     chip.classList.toggle("reachable", !here && reach[r.id]!==undefined);
+    chip.classList.toggle("boss", !!(STATE.boss && STATE.boss.room===r.id));
     chip.classList.toggle("poison", r.id!=="202" && roomIsPoisoned(r)); // 停機坪不會中毒（結算毒氣傷害歸零），不顯示毒氣綠色
     const occAlive=STATE.players.filter(x=>x.room===r.id && x.alive && !x.ghost);
     const fattyHere=STATE.players.find(x=>x.prof==="fatty" && x.alive && x.room===r.id);
@@ -9042,7 +9110,8 @@ function renderAll(){
   const bountyTarget=STATE.bountyTargetId!=null? STATE.players.find(x=>x.id===STATE.bountyTargetId) : null;
   EL.topStatus.innerHTML=`<span class="badge">回合 ${STATE.round}/6</span>`+
     (turnPos>0? `<span class="badge">本輪順序：第 ${turnPos}/${STATE.turnOrder.length} 位行動</span>` : "")+
-    (bountyTarget? `<span class="badge">🎯 懸賞：${bountyTarget.name}</span>` : "");
+    (bountyTarget? `<span class="badge">🎯 懸賞：${bountyTarget.name}</span>` : "")+
+    (STATE.boss? `<span class="badge">👹 魔王：${STATE.boss.room} ・ HP ${Math.max(0,STATE.boss.hp)}/${STATE.boss.maxhp}</span>` : "");
   renderHpHistory();
   saveGame();
 }
