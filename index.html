@@ -7525,6 +7525,7 @@ function aiThinksPoisoned(room){
   return STATE.poisoned.has(room.floor);
 }
 function roomIsPoisoned(room){
+  if(room.id==="202") return false; // 停機坪不會中毒（即使 2F 整層中毒）
   if(STATE.detoxedRooms && STATE.detoxedRooms.has(room.id)) return false;
   if(room.poisonRequires) return room.poisonRequires.every(f=>STATE.poisoned.has(f));
   return STATE.poisoned.has(room.floor);
