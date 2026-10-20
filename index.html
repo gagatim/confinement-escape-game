@@ -56,6 +56,12 @@
   .wrap{max-width:1180px;margin:0 auto}
   .eyebrow{font-family:"JetBrains Mono",monospace;font-size:11px;letter-spacing:.22em;color:var(--violet)}
   .hidden{display:none !important}
+  #toast{position:fixed;left:50%;bottom:72px;transform:translate(-50%,8px);z-index:900;max-width:min(90vw,420px);
+    padding:var(--space-2) var(--space-4);border-radius:var(--radius-md);background:var(--panel);color:var(--amber-bright);
+    border:1px solid var(--amber);box-shadow:var(--shadow-md);font-size:13px;pointer-events:none;opacity:0;
+    transition:opacity var(--t-normal) var(--ease),transform var(--t-normal) var(--ease)}
+  #toast.show{opacity:1;transform:translate(-50%,0)}
+  @media (prefers-reduced-motion:reduce){ #toast{transition:none} }
   button{font-family:inherit;cursor:pointer}
   input[type=range]{accent-color:var(--cyan)}
   input[type=number],input[type=text],select{font-family:inherit;background:var(--panel-2);color:var(--ink);
@@ -3989,7 +3995,15 @@ function undoMovement(){
   log(p.name+" 回手：取消本輪移動，回到「"+p.room+" "+(ROOMS[p.room].name||"")+"」。");
   renderAll();
 }
-function flashMsg(m){ log(`<i class="muted">${m}</i>`); }
+// Also floats a short toast: the log panel is busy enough that "步數不足"-style refusals got missed.
+let TOAST_TIMER=0;
+function flashMsg(m){
+  log(`<i class="muted">${m}</i>`);
+  let t=document.getElementById("toast");
+  if(!t){ t=document.createElement("div"); t.id="toast"; t.setAttribute("role","status"); document.body.appendChild(t); }
+  t.textContent=m; t.classList.add("show");
+  clearTimeout(TOAST_TIMER); TOAST_TIMER=setTimeout(()=>t.classList.remove("show"),2200);
+}
 
 /* ===================== ROOM ACTIONS (human) ===================== */
 // 走私客's 熟悉門路 only triggers at these 4 rooms: 金庫, 武器庫, 藥房, 垃圾場.
