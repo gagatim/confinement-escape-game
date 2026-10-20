@@ -107,7 +107,7 @@
   .prof-card .sk{font-size:11.5px;color:var(--muted);margin-top:6px;line-height:1.55}
   .prof-card .sk b{color:var(--amber-bright)}
   /* 技能說明排版：名稱＋被動/主動標籤，一句話摘要，細項用縮排條列 */
-  .skchip{display:inline-block;margin-left:6px;padding:0 7px;border-radius:999px;border:1px solid currentColor;font-size:10px;font-weight:600;letter-spacing:.06em;line-height:1.5;vertical-align:1px}
+  .skchip{display:inline-block;margin-left:6px;padding:0 7px;border-radius:999px;border:1px solid currentColor;font-size:11px;font-weight:600;letter-spacing:.06em;line-height:1.5;vertical-align:1px}
   .skchip.pas{color:var(--cyan-bright)} .skchip.act{color:var(--amber-bright)}
   .skd{font-weight:400;margin-top:2px}
   .skd .skl{display:block}
@@ -134,7 +134,7 @@
   .inv-item:hover{border-color:var(--cyan)}
   .inv-item .actions{display:flex;gap:4px}
   .floor-row{display:flex;flex-wrap:wrap;gap:5px;margin:4px 0;align-items:center}
-  .floor-label{width:32px;font-size:10px;color:var(--muted);font-family:"JetBrains Mono",monospace}
+  .floor-label{width:32px;font-size:11px;color:var(--muted);font-family:"JetBrains Mono",monospace}
   .room-chip{border:1px solid var(--line);background:var(--panel-2);border-radius:6px;padding:5px 7px;font-size:11px;
     cursor:pointer;position:relative;min-width:52px;text-align:center;line-height:1.3;
     transition:border-color .12s ease,border-width .12s ease,box-shadow .12s ease,transform .12s ease}
@@ -226,7 +226,7 @@
   .flipEmblem i{transform:rotate(-45deg);font-style:normal;color:#bff3fb;font-size:18px;line-height:1}
   .flipFront{transform:rotateY(180deg);color:var(--ink);background:linear-gradient(160deg,var(--panel) 30%,color-mix(in srgb,var(--cyan-bright) 16%,var(--panel)) 100%);border:2px solid var(--line)}
   .flipFront .nm{font-size:16px;letter-spacing:.04em}
-  .flipFront .tag{font-size:10px;font-weight:600;letter-spacing:.12em;color:var(--muted);border-top:1px solid var(--line);padding-top:4px;width:70%}
+  .flipFront .tag{font-size:11px;font-weight:600;letter-spacing:.12em;color:var(--muted);border-top:1px solid var(--line);padding-top:4px;width:70%}
   .flipCard.rare .flipFront{background:linear-gradient(160deg,rgba(255,201,74,.22) 0%,var(--panel) 70%);border-color:#ffc94a;box-shadow:0 0 14px 3px rgba(255,201,74,.75);animation:rareGlow 1.1s ease-in-out infinite alternate}
   .flipCard.rare .flipFront .tag{color:#ffc94a;border-color:#ffc94a}
   @keyframes rareGlow{from{box-shadow:0 0 8px 1px rgba(255,201,74,.5)}to{box-shadow:0 0 20px 6px rgba(255,201,74,.95)}}
@@ -333,7 +333,7 @@
   .cb-arena{position:relative;width:min(96vw,640px);height:290px;display:flex;align-items:center;justify-content:space-between}
   .cb-card{--c:#7fd0ff;position:relative;width:min(38vw,190px);padding:8px 8px 9px;border-radius:12px;border:2px solid var(--c);background:linear-gradient(165deg,#16213a,#0b1120);box-shadow:0 0 14px var(--cg,#7fd0ff55);text-align:center;transform:translate(var(--tx,0px),var(--ty,0px)) rotate(var(--rot,0deg));transition:transform .22s cubic-bezier(.3,.9,.4,1);animation:cbIn .35s ease-out both}
   .cb-card.slow{transition-duration:.5s}
-  .cb-card .job{font-size:10px;color:var(--c);letter-spacing:.08em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .cb-card .job{font-size:11px;color:var(--c);letter-spacing:.08em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .cb-card .ic{font-size:72px;line-height:1.15;transition:filter .4s,opacity .4s}
   .cb-card .ic .prof-av{display:block;width:100%;height:auto;aspect-ratio:1;object-fit:cover;border-radius:10px;margin-bottom:4px}
   .cb-card .job{font-size:11px}
@@ -412,7 +412,7 @@
   @keyframes fxAura{0%,100%{box-shadow:0 0 4px 1px var(--fxc)}50%{box-shadow:0 0 16px 5px var(--fxc)}}
   .room-chip.fx-floor{animation:fxFloor 1.6s ease-out}
   @keyframes fxFloor{0%{filter:none}25%{filter:drop-shadow(0 0 10px var(--fxc)) brightness(1.5)}100%{filter:none}}
-  .tag{display:inline-block;font-size:10px;padding:1px 6px;border-radius:4px;background:var(--panel-2);border:1px solid var(--line);margin-left:4px}
+  .tag{display:inline-block;font-size:11px;padding:1px 6px;border-radius:4px;background:var(--panel-2);border:1px solid var(--line);margin-left:4px}
 
   /* ---- 低調模式 (boss key): a fake spreadsheet that covers the whole viewport above
      everything (even the modal), styled to read as a boring Office app rather than "a game
@@ -420,7 +420,7 @@
   #stealthOverlay{position:fixed;inset:0;z-index:999;background:#fff;color:#1a1a1a;
     font-family:Calibri,Arial,"Microsoft JhengHei",sans-serif;overflow:auto;cursor:default;
     -webkit-font-smoothing:auto;text-rendering:auto}
-  #stealthOverlay .sr-hint{position:fixed;top:6px;right:10px;font-size:10px;color:#bbb;z-index:1}
+  #stealthOverlay .sr-hint{position:fixed;top:6px;right:10px;font-size:11px;color:#bbb;z-index:1}
   .sr-ribbon{background:#f3f2f1;border-bottom:1px solid #d0d0d0;padding:6px 14px;font-size:13px;color:#444}
   .sr-ribbon .sr-tabs{display:flex;gap:18px;margin-bottom:6px}
   .sr-ribbon .sr-tabs span{padding-bottom:4px}
@@ -467,7 +467,7 @@
   html[data-fx-tier="low"] .room-chip.fx-floor{animation:none}
   /* selection must not rely on colour alone */
   .prof-card{position:relative}
-  .prof-card.selected::after{content:"✓ 已選";position:absolute;top:8px;right:10px;font-size:10.5px;font-weight:700;
+  .prof-card.selected::after{content:"✓ 已選";position:absolute;top:8px;right:10px;font-size:11px;font-weight:700;
     font-family:"JetBrains Mono",monospace;color:var(--cyan-bright)}
   /* poison also gets a glyph so colour-blind players can tell green (毒) from amber (你) */
   .room-chip.poison::before{content:"☠";position:absolute;top:-7px;left:-5px;font-size:10px;line-height:1;
@@ -493,6 +493,15 @@
   html[data-theme="light"] .btn.toxic:active:not(:disabled){box-shadow:0 1px 0 #14481a}
   html[data-theme="light"] .btn.gold:active:not(:disabled){box-shadow:0 1px 0 #8a6200}
   html[data-theme="light"] .hpbar-inner[data-level="mid"]{background:var(--amber)}
+
+  /* setup options: short title + wrapped description; toolbar settings menu */
+  .opt-t{color:var(--ink);font-weight:600}
+  .opt-d{display:block;margin:2px 0 0 24px;font-size:12px;line-height:1.6}
+  .tools-menu{position:relative}
+  .tools-menu>summary{list-style:none;display:inline-block;user-select:none}
+  .tools-menu>summary::-webkit-details-marker{display:none}
+  .tools-panel{position:absolute;right:0;top:calc(100% + 6px);z-index:60;display:flex;flex-direction:column;gap:6px;padding:10px;min-width:190px;background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow-md)}
+  .tools-panel .btn{width:100%;text-align:left}
 
   /* touch devices: 44px minimum targets (WCAG 2.5.5 / Apple HIG) */
   @media (pointer:coarse){
@@ -591,19 +600,22 @@
     <div>
       <span class="eyebrow">CONFINEMENT ESCAPE · 禁閉逃殺</span>
       <h1 style="font-size:22px">禁閉逃殺</h1>
-      <div class="muted mono" style="font-size:10.5px;margin-top:2px">葉晉廷製作 · 請勿隨意分享</div>
+      <div class="muted mono" style="font-size:11px;margin-top:2px">葉晉廷製作 · 請勿隨意分享</div>
     </div>
     <div id="topStatus" class="row"></div>
     <button class="btn small ghost" id="howtoBtn" title="一分鐘看懂玩法：目標、每輪流程、毒氣與飢餓傷害、排名規則">📖 玩法速覽</button>
     <button class="btn small ghost" id="stealthBtn" title="老闆鍵：一鍵偽裝成報表（快捷鍵：按住 Alt 再按 ` 鍵可隨時觸發，不用把滑鼠移過來）">🥷 低調模式</button>
-    <button class="btn small ghost" id="iconsBtn" title="常駐低調：把介面上的 emoji 圖示換成純文字，平時看起來更像內部系統">🖼 去圖示模式</button>
     <button class="btn small ghost" id="statsBtn" title="查看各職業的對局數據與強弱分析">📊 職業數據</button>
-    <button class="btn small ghost" id="themeBtn"title="切換明亮/暗黑介面">🌙 暗色介面</button>
-    <button class="btn small ghost" id="premiumBtn" title="高質感模式：白色清爽介面、毛玻璃面板與淡淡的平面圖背景">✨ 高質感模式</button>
-    <button class="btn small ghost" id="bigAvBtn" title="大圖模式：職業頭像放大四倍">🔍 大圖模式</button>
-    <button class="btn small ghost" id="muteBtn" title="開關音效">🔊 音效</button>
-    <button class="btn small ghost" id="sfxModeBtn" title="戰鬥音效版本：真實錄音取樣 / AI 程式合成音（Claude 設計）">🎚 戰鬥音：錄音版</button>
-    <button class="btn small ghost" id="voiceMuteBtn" title="開關角色語音">🗣 語音</button>
+    <details class="tools-menu" id="toolsMenu"><summary class="btn small ghost" title="介面外觀與音效設定">⚙ 介面與音效</summary>
+      <div class="tools-panel">
+        <button class="btn small ghost" id="themeBtn"title="切換明亮/暗黑介面">🌙 暗色介面</button>
+        <button class="btn small ghost" id="premiumBtn" title="高質感模式：白色清爽介面、毛玻璃面板與淡淡的平面圖背景">✨ 高質感模式</button>
+        <button class="btn small ghost" id="bigAvBtn" title="大圖模式：職業頭像放大四倍">🔍 大圖模式</button>
+        <button class="btn small ghost" id="iconsBtn" title="常駐低調：把介面上的 emoji 圖示換成純文字，平時看起來更像內部系統">🖼 去圖示模式</button>
+        <button class="btn small ghost" id="muteBtn" title="開關音效">🔊 音效</button>
+        <button class="btn small ghost" id="voiceMuteBtn" title="開關角色語音">🗣 語音</button>
+        <button class="btn small ghost" id="sfxModeBtn" title="戰鬥音效版本：真實錄音取樣 / AI 程式合成音（Claude 設計）">🎚 戰鬥音：錄音版</button>
+      </div></details>
     <button class="btn small warn hidden" id="abandonBtn">放棄測試，重新開始</button>
   </div>
 
@@ -612,31 +624,31 @@
     <div class="card">
       <h2 style="font-size:16px;color:var(--cyan-bright)">0. 特殊規則</h2>
       <label class="muted" style="display:block;font-size:13px;margin-bottom:8px">
-        <input type="checkbox" id="map2Toggle"> 啟用地圖2（B104／B405／B302 變為樂透房：使用時隨機獲得屬性加成、回血、本輪躲避毒氣或永久免疫毒氣其中一種；B102／B602 變為配給站：各有5份水+5份糧，可搜索3次、每次70%機率取得1份，第6輪起各補給1份；B305／B308 變為神秘商店：共用同一份庫存（地雷/麻醉鏢/煙霧彈/神秘骰子/幸運銅板/氧氣瓶/傳送符/急救噴霧各2份），可搜索2次、每次1/3機率取得道具，未取得時改拿1份垃圾）</label>
+        <input type="checkbox" id="map2Toggle"> <b class="opt-t">啟用地圖2</b><span class="opt-d">（B104／B405／B302 變為樂透房：使用時隨機獲得屬性加成、回血、本輪躲避毒氣或永久免疫毒氣其中一種；B102／B602 變為配給站：各有5份水+5份糧，可搜索3次、每次70%機率取得1份，第6輪起各補給1份；B305／B308 變為神秘商店：共用同一份庫存（地雷/麻醉鏢/煙霧彈/神秘骰子/幸運銅板/氧氣瓶/傳送符/急救噴霧各2份），可搜索2次、每次1/3機率取得道具，未取得時改拿1份垃圾）</span></label>
       <label class="muted" style="display:block;font-size:13px">
-        <input type="checkbox" id="bountyToggle"> 啟用懸賞機制（第3輪起隨機1名存活玩家成為懸賞目標，全體公告；擊殺者可獲得2枚金條＋1張隨機神秘商店道具〔地雷/麻醉鏢/煙霧彈/神秘骰子/幸運銅板/氧氣瓶/傳送符/急救噴霧其中1張，憑空獲得不佔負重〕；目標死於非戰鬥原因則獎勵作廢，撐過第5輪未被擊殺則懸賞失效；可與地圖2獨立開關，不需同時啟用）</label>
+        <input type="checkbox" id="bountyToggle"> <b class="opt-t">啟用懸賞機制</b><span class="opt-d">（第3輪起隨機1名存活玩家成為懸賞目標，全體公告；擊殺者可獲得2枚金條＋1張隨機神秘商店道具〔地雷/麻醉鏢/煙霧彈/神秘骰子/幸運銅板/氧氣瓶/傳送符/急救噴霧其中1張，憑空獲得不佔負重〕；目標死於非戰鬥原因則獎勵作廢，撐過第5輪未被擊殺則懸賞失效；可與地圖2獨立開關，不需同時啟用）</span></label>
       <label class="muted" style="display:block;font-size:13px;margin-top:8px">
-        <input type="checkbox" id="bossToggle"> 啟用魔王模式（第3輪起地圖上出現魔王，每輪結算時朝人最多的房間移動2步；同房玩家合力攻擊它、並各受3點傷害。擊殺魔王：傷害最高者武力+2、回復3點生命）</label>
+        <input type="checkbox" id="bossToggle"> <b class="opt-t">啟用魔王模式</b><span class="opt-d">（第3輪起地圖上出現魔王，每輪結算時朝人最多的房間移動2步；同房玩家合力攻擊它、並各受3點傷害。擊殺魔王：傷害最高者武力+2、回復3點生命）</span></label>
     </div>
     <div class="card" style="margin-top:12px">
       <h2 style="font-size:16px;color:var(--cyan-bright)">1. 選擇職業</h2>
       <div class="muted mono" id="profCountInfo" style="font-size:12px;margin-bottom:6px"></div>
       <label class="muted" style="display:block;margin-bottom:6px;font-size:13px">
-        <input type="checkbox" id="combatAnimToggle" checked> 啟用戰鬥動畫（結算時依序播放每場戰鬥的對決畫面：雙方衝撞或槍擊、傷害數字、血條；同房多人混戰以列表呈現；可隨時點擊跳過；預設開啟）</label>
+        <input type="checkbox" id="combatAnimToggle" checked> <b class="opt-t">啟用戰鬥動畫</b><span class="opt-d">（結算時依序播放每場戰鬥的對決畫面：雙方衝撞或槍擊、傷害數字、血條；同房多人混戰以列表呈現；可隨時點擊跳過；預設開啟）</span></label>
       <label class="muted" style="display:block;margin-bottom:6px;font-size:13px">
-        <input type="checkbox" id="fxToggle"> 啟用技能特效版（技能發動時依職業出現專屬粒子特效、地圖房間光效與技能名稱；對目標房間或樓層施放時會有飛行軌跡與衝擊；不勾選就是基本版）</label>
+        <input type="checkbox" id="fxToggle"> <b class="opt-t">啟用技能特效版</b><span class="opt-d">（技能發動時依職業出現專屬粒子特效、地圖房間光效與技能名稱；對目標房間或樓層施放時會有飛行軌跡與衝擊；不勾選就是基本版）</span></label>
       <label class="muted" style="display:block;margin-bottom:6px;font-size:13px">
-        <input type="checkbox" id="expansionToggle"> 啟用擴充模式（新增擴充職業，AI也可能隨機選到，實際數量見上方統計）</label>
+        <input type="checkbox" id="expansionToggle"> <b class="opt-t">啟用擴充模式</b><span class="opt-d">（新增擴充職業，AI也可能隨機選到，實際數量見上方統計）</span></label>
       <label class="muted" style="display:block;margin-bottom:6px;font-size:13px">
-        <input type="checkbox" id="sanguoToggle"> 啟用三國模式（角色全面替換為40位三國武將〔魏／蜀／吳／群雄各10人〕，AI也只會從這40人中選取；取消勾選則恢復一般職業）</label>
+        <input type="checkbox" id="sanguoToggle"> <b class="opt-t">啟用三國模式</b><span class="opt-d">（角色全面替換為40位三國武將〔魏／蜀／吳／群雄各10人〕，AI也只會從這40人中選取；取消勾選則恢復一般職業）</span></label>
       <label class="muted" style="display:block;margin-bottom:6px;font-size:13px">
-        <input type="checkbox" id="physicalToggle" checked> 啟用實體模式（遊戲方式與一般版本相同，但職業只開放精選的16位，AI也只會從這16位中選取；玩家人數改為8~12人，可重複選同一個出生點；與擴充模式、三國模式互斥）</label>
+        <input type="checkbox" id="physicalToggle" checked> <b class="opt-t">啟用實體模式</b><span class="opt-d">（遊戲方式與一般版本相同，但職業只開放精選的16位，AI也只會從這16位中選取；玩家人數改為8~12人，可重複選同一個出生點；與擴充模式、三國模式互斥）</span></label>
       <label class="muted" id="physicalExpLabel" style="display:none;margin:0 0 6px 22px;font-size:13px">
-        <input type="checkbox" id="physicalExpToggle"> 實體擴充（需先啟用實體模式；額外開放8位新職業：狙擊手、狂戰士、急救員、地鼠、倉管員、偵察兵、說客、團長，AI也可能選到；預設關閉）</label>
+        <input type="checkbox" id="physicalExpToggle"> <b class="opt-t">實體擴充</b><span class="opt-d">（需先啟用實體模式；額外開放8位新職業：狙擊手、狂戰士、急救員、地鼠、倉管員、偵察兵、說客、團長，AI也可能選到；預設關閉）</span></label>
       <label class="muted" id="physicalExp2Label" style="display:none;margin:0 0 6px 22px;font-size:13px">
-        <input type="checkbox" id="physicalExp2Toggle"> 實體擴充2（需先啟用實體模式；額外開放5位新職業：賞金獵人、哨兵、老千、看守長、清潔工，AI也可能選到；預設關閉）</label>
+        <input type="checkbox" id="physicalExp2Toggle"> <b class="opt-t">實體擴充2</b><span class="opt-d">（需先啟用實體模式；額外開放5位新職業：賞金獵人、哨兵、老千、看守長、清潔工，AI也可能選到；預設關閉）</span></label>
       <label class="muted" style="display:block;margin-bottom:10px;font-size:13px">
-        <input type="checkbox" id="sanguoTeamToggle"> 啟用三國陣營戰（需先啟用三國模式；限定9或12人，依國家分成3～4隊，每隊3人，同國家不互相傷害，房內混戰只計較國家間的代表武力，結算比較各國總血量）</label>
+        <input type="checkbox" id="sanguoTeamToggle"> <b class="opt-t">啟用三國陣營戰</b><span class="opt-d">（需先啟用三國模式；限定9或12人，依國家分成3～4隊，每隊3人，同國家不互相傷害，房內混戰只計較國家間的代表武力，結算比較各國總血量）</span></label>
       <div class="prof-grid" id="profGrid"></div>
     </div>
     <div class="card" style="margin-top:12px">
@@ -4331,7 +4343,7 @@ function revealDrawnItems(drawnItems,roomId,next,lead){
     <div class="flipRow">${cards}</div>
     <button class="btn small" id="flipSkip">跳過動畫</button>
     <button class="btn small" id="flipOk" style="display:none">收下</button>
-    <label class="muted" style="display:block;margin-top:8px;font-size:12px"><input type="checkbox" id="flipOff"> 以後不再播放抽卡動畫</label><div class="muted" style="font-size:10px;margin-top:4px">圖示：game-icons.net（CC BY 3.0）</div>`);
+    <label class="muted" style="display:block;margin-top:8px;font-size:12px"><input type="checkbox" id="flipOff"> 以後不再播放抽卡動畫</label><div class="muted" style="font-size:11px;margin-top:4px">圖示：game-icons.net（CC BY 3.0）</div>`);
   const els=[...document.querySelectorAll("#modal .flipCard")];
   const timers=[];
   let done=false;
@@ -9154,4 +9166,6 @@ function log_once(p,key,fn){
 }
 
 restoreGame();
+document.addEventListener("click",e=>{const d=document.getElementById("toolsMenu");if(d&&d.open&&!d.contains(e.target))d.open=false});
+document.addEventListener("keydown",e=>{const d=document.getElementById("toolsMenu");if(e.key==="Escape"&&d&&d.open){d.open=false;d.querySelector("summary").focus()}});
 </script>
