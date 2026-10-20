@@ -54,6 +54,7 @@
     padding:16px; padding-bottom:60px; line-height:1.5; -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;}
   h1,h2,h3{font-family:"Orbitron","Noto Sans TC",sans-serif; margin:0}
   .wrap{max-width:1180px;margin:0 auto}
+  .wrap.wide{max-width:1400px} /* 遊戲畫面三欄（地圖本身約710px寬）需要比設定畫面更寬的容器 */
   .eyebrow{font-family:"JetBrains Mono",monospace;font-size:11px;letter-spacing:.22em;color:var(--violet)}
   .hidden{display:none !important}
   #toast{position:fixed;left:50%;bottom:72px;transform:translate(-50%,8px);z-index:900;max-width:min(90vw,420px);
@@ -120,7 +121,10 @@
   .pill{background:var(--panel-2);border:1px solid var(--line);border-radius:999px;padding:3px 10px;font-size:12px}
 
   /* ---- game layout ---- */
-  #game{display:grid;grid-template-columns:300px 1fr 300px;gap:14px}
+  /* minmax(0,1fr): a bare 1fr has an implicit min-content floor, so the wide map pushed the log column past the viewport at 1000–1450px. */
+  #game{display:grid;grid-template-columns:300px minmax(0,1fr) 300px;gap:14px}
+  @media (max-width:1450px){#game{grid-template-columns:260px minmax(0,1fr) 260px}}
+  @media (max-width:1360px){#game{grid-template-columns:230px minmax(0,1fr) 230px}}
   @media (max-width:1000px){#game{grid-template-columns:1fr}}
   .panel-title{font-size:13px;letter-spacing:.08em;color:var(--violet);margin-bottom:8px;font-family:"Orbitron",sans-serif}
   .hpbar-outer{background:#1a2333;border-radius:6px;height:10px;overflow:hidden;border:1px solid var(--line)}
@@ -172,6 +176,7 @@
      a lone overflow-x on the grid does nothing since the grid never overflows itself. */
   .map-scroll{overflow-x:auto}
   .map-scroll-hint{display:none}
+  @media (min-width:1001px) and (max-width:1279px){ .map-scroll-hint{display:block;font-size:11px;color:var(--muted);margin-top:4px} } /* 三欄＋地圖在這個寬度放不下，地圖框內可左右捲動 */
   @media (max-width:700px){ .map-scroll-hint{display:block;font-size:11px;color:var(--muted);margin-top:4px} }
   .room-chip.vlink{border-style:dashed}
   .room-chip .vmark{position:absolute;bottom:-6px;left:50%;transform:translateX(-50%);font-size:8px;
@@ -1720,6 +1725,7 @@ function setAbandonBtnVisible(v){
   document.getElementById("abandonBtn").classList.toggle("hidden", !v);
 }
 function showScreen(screen){
+  document.querySelector(".wrap").classList.toggle("wide",screen==="game");
   ["setup","spawnSelect","bossSelect","game","endScreen"].forEach(id=>document.getElementById(id).classList.add("hidden"));
   setAbandonBtnVisible(screen==="spawnSelect" || screen==="bossSelect" || screen==="game");
   if(screen==="bossSelect"){
