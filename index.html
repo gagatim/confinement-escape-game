@@ -2118,6 +2118,44 @@ function showHowTo(){
   });
 })();
 
+/* ---------- keyboard: arrow keys move the selection, Enter confirms ---------- */
+(()=>{
+  const FOCUSABLE="button:not(:disabled), a[href], summary, [tabindex]:not([tabindex='-1']), input[type=checkbox]:not(:disabled)";
+  // Fields where arrows already mean something (caret, value, option) are left alone.
+  const OWN_ARROWS="textarea, select, input:not([type=checkbox]):not([type=button])";
+  const visible=el=>{ const r=el.getBoundingClientRect(); return r.width>0 && r.height>0 && getComputedStyle(el).visibility!=="hidden"; };
+  document.addEventListener("keydown",e=>{
+    if(e.altKey||e.ctrlKey||e.metaKey) return;
+    const dir={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,-1],ArrowDown:[0,1]}[e.key];
+    const t=e.target;
+    if(e.key==="Enter"){
+      // buttons/links/summary already activate natively; checkboxes don't
+      if(t.matches && t.matches("input[type=checkbox]")){ e.preventDefault(); t.click(); }
+      return;
+    }
+    if(!dir || (t.matches && t.matches(OWN_ARROWS))) return;
+    const modalOpen=!MODAL_BG_EL.classList.contains("hidden");
+    const root=modalOpen?MODAL_EL:document.body;
+    const items=[...root.querySelectorAll(FOCUSABLE)].filter(visible);
+    if(!items.length) return;
+    e.preventDefault();
+    const cur=items.includes(t)?t:null;
+    if(!cur){ items[0].focus(); items[0].scrollIntoView({block:"nearest"}); return; }
+    const c=cur.getBoundingClientRect(), cx=c.left+c.width/2, cy=c.top+c.height/2;
+    let best=null, bestScore=Infinity;
+    for(const el of items){
+      if(el===cur) continue;
+      const r=el.getBoundingClientRect(), dx=r.left+r.width/2-cx, dy=r.top+r.height/2-cy;
+      const along=dx*dir[0]+dy*dir[1];            // distance in the pressed direction
+      if(along<=0) continue;
+      const across=Math.abs(dx*dir[1])+Math.abs(dy*dir[0]);   // sideways drift, weighted heavier
+      const score=along+across*2;
+      if(score<bestScore){ bestScore=score; best=el; }
+    }
+    if(best){ best.focus(); best.scrollIntoView({block:"nearest",inline:"nearest"}); }
+  });
+})();
+
 /* ---------- light/dark theme toggle, persisted across sessions ---------- */
 (()=>{
   const THEME_KEY="confinement_escape_theme";
