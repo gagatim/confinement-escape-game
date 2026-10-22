@@ -54,7 +54,7 @@
     padding:16px; padding-bottom:60px; line-height:1.5; -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;}
   h1,h2,h3{font-family:"Orbitron","Noto Sans TC",sans-serif; margin:0}
   .wrap{max-width:1180px;margin:0 auto}
-  .wrap.wide{max-width:1400px} /* 遊戲畫面三欄（地圖本身約710px寬）需要比設定畫面更寬的容器 */
+  .wrap.wide{max-width:1840px} /* 遊戲畫面三欄：大螢幕盡量撐開，多出來的寬度給中間地圖（fitMapToBox 會放大地圖） */
   .eyebrow{font-family:"JetBrains Mono",monospace;font-size:11px;letter-spacing:.22em;color:var(--violet)}
   .hidden{display:none !important}
   #toast{position:fixed;left:50%;bottom:72px;transform:translate(-50%,8px);z-index:900;max-width:min(90vw,420px);
@@ -123,6 +123,7 @@
   /* ---- game layout ---- */
   /* minmax(0,1fr): a bare 1fr has an implicit min-content floor, so the wide map pushed the log column past the viewport at 1000–1450px. */
   #game{display:grid;grid-template-columns:300px minmax(0,1fr) 300px;gap:14px}
+  @media (min-width:1700px){#game{grid-template-columns:340px minmax(0,1fr) 340px}}
   @media (max-width:1450px){#game{grid-template-columns:260px minmax(0,1fr) 260px}}
   @media (max-width:1360px){#game{grid-template-columns:230px minmax(0,1fr) 230px}}
   @media (max-width:1000px){#game{grid-template-columns:1fr}}
@@ -175,8 +176,9 @@
      (map-scroll, the actual parent with overflow-x:auto) that needs to scroll, not the grid —
      a lone overflow-x on the grid does nothing since the grid never overflows itself. */
   .map-scroll{overflow-x:auto}
+  .map-scroll.map-fit{overflow-x:hidden}
   .map-scroll-hint{display:none}
-  @media (min-width:1001px) and (max-width:1279px){ .map-scroll-hint{display:block;font-size:11px;color:var(--muted);margin-top:4px} } /* 三欄＋地圖在這個寬度放不下，地圖框內可左右捲動 */
+  /* 電腦版（>1000px）由 fitMapToBox() 把地圖縮放塞進框內，不需要捲動提示 */
   @media (max-width:700px){ .map-scroll-hint{display:block;font-size:11px;color:var(--muted);margin-top:4px} }
   .room-chip.vlink{border-style:dashed}
   .room-chip .vmark{position:absolute;bottom:-6px;left:50%;transform:translateX(-50%);font-size:8px;
@@ -3589,6 +3591,39 @@ function renderStaticMap(containerId, highlightIds){
     });
   });
 }
+// 電腦版（>1000px）地圖整張縮放塞進框內，不用左右捲動：量出地圖原始需要的寬度，比框寬就用
+// CSS zoom 等比例縮小（zoom 會影響排版，點擊位置不會偏）；框比地圖寬很多（大螢幕）就等比例
+// 放大（最多 1.35 倍），免得格子被拉寬但字還是很小。手機版維持原本可滑動的行為。
+// 遊戲畫面的地圖（#mapArea）另外配合視窗高度縮小，讓頁面捲到最上面時整張地圖（到 B7）都在畫面內；
+// 高度造成的縮小最多到 0.75 倍，再矮的螢幕就寧可往下捲，不讓字小到看不清。
+// ResizeObserver 掛在 .map-scroll 上，所以畫面切換（hidden→顯示）、視窗縮放都會自動重算。
+function fitMapToBox(box){
+  const grid=box.querySelector(".floor-plan"); if(!grid) return;
+  grid.style.zoom=""; grid.style.width="";
+  box.classList.remove("map-fit");
+  const avail=box.clientWidth-2; // 留 2px：zoom 換算有小數誤差，貼齊邊緣時最右邊房間的框線會被裁掉
+  if(window.innerWidth<=1000 || avail<=0) return;
+  const need=grid.scrollWidth;
+  let z = need>avail+1 ? Math.max(0.55, avail/need) : Math.min(1.35, avail/760);
+  if(grid.id==="mapArea"){
+    const maxH=window.innerHeight-(box.getBoundingClientRect().top+window.scrollY)-12;
+    if(maxH>0 && grid.offsetHeight) z=Math.min(z, Math.max(0.75, maxH/grid.offsetHeight));
+  }
+  if(need<=avail+1 && Math.abs(z-1)<0.03) return;
+  grid.style.width=Math.max(need, avail/z)+"px";
+  grid.style.zoom=String(z);
+  box.classList.add("map-fit");
+}
+(function(){
+  const boxes=document.querySelectorAll(".map-scroll");
+  if(window.ResizeObserver){
+    // 延到下一個 frame 再改 zoom：直接在 callback 裡改會讓框的高度跟著變，瀏覽器丟出
+    // 「ResizeObserver loop completed with undelivered notifications」被錯誤視窗抓到。
+    const ro=new ResizeObserver(entries=>requestAnimationFrame(()=>entries.forEach(e=>fitMapToBox(e.target))));
+    boxes.forEach(b=>ro.observe(b));
+  }
+  window.addEventListener("resize",()=>boxes.forEach(fitMapToBox));
+})();
 document.getElementById("confirmSpawnBtn").addEventListener("click",()=>{
   document.getElementById("spawnSelect").classList.add("hidden");
   document.getElementById("game").classList.remove("hidden");
